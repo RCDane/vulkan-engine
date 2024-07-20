@@ -8,7 +8,7 @@ add_library(stb_image INTERFACE)
 
 add_subdirectory(fastgltf)
 add_subdirectory(fmt EXCLUDE_FROM_ALL)
-add_subdirectory(SDL EXCLUDE_FROM_ALL)
+# add_subdirectory(SDL EXCLUDE_FROM_ALL)
 
 target_sources(vkbootstrap PRIVATE 
   vkbootstrap/VkBootstrap.h
@@ -24,12 +24,21 @@ target_include_directories(vma INTERFACE vma)
 
 target_include_directories(glm INTERFACE glm)
 
-#add_library(sdl2 INTERFACE)
+option(ENABLE_CPM "Enable CPM" ON)
+set(CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake/")
 
-#target_include_directories(sdl2 INTERFACE $ENV{VULKAN_SDK}/Include/SDL2 )
-#target_link_directories(sdl2 INTERFACE $ENV{VULKAN_SDK}/Lib )
+if(ENABLE_CPM)
+  include(CPM)
+  CPMAddPackage("gh:libsdl-org/SDL#release-2.30.4")
 
-#target_link_libraries(sdl2 INTERFACE SDL2 SDL2main)
+endif()
+
+add_library(sdl2 INTERFACE)
+
+target_include_directories(sdl2 INTERFACE $ENV{VULKAN_SDK}/Include/SDL2 )
+target_link_directories(sdl2 INTERFACE $ENV{VULKAN_SDK}/Lib )
+
+target_link_libraries(sdl2 INTERFACE SDL2 SDL2main)
 
 add_library(imgui STATIC)
 
@@ -38,7 +47,6 @@ target_include_directories(imgui PUBLIC imgui)
 target_sources(imgui PRIVATE 
   imgui/imgui.h
   imgui/imgui.cpp
-
   imgui/imgui_demo.cpp
   imgui/imgui_draw.cpp
   imgui/imgui_widgets.cpp

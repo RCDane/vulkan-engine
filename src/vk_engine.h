@@ -5,7 +5,7 @@
 
 #include <vk_types.h>
 #include <vulkan/vulkan_core.h>
-
+#include <vk_descriptors.h>
 
 struct DeletionQueue
 {
@@ -25,7 +25,22 @@ struct DeletionQueue
 	}
 };
 
+struct ComputePushConstants {
+	glm::vec4 data1;
+	glm::vec4 data2;
+	glm::vec4 data3;
+	glm::vec4 data4;
+};
 
+
+struct ComputeEffect {
+    const char* name;
+
+	VkPipeline pipeline;
+	VkPipelineLayout layout;
+
+	ComputePushConstants data;
+};
 
 struct FrameData {
 	VkCommandPool _commandPool;
@@ -69,10 +84,27 @@ public:
 	VkExtent2D _drawExtent;
 
 
+	// Descriptor related
+	DescriptorAllocator globalDescriptorAllocator;
+
+	VkDescriptorSet _drawImageDescriptors;
+	VkDescriptorSetLayout _drawImageDescriptorLayout;
+
+	VkPipeline _gradientPipeline;
+	VkPipelineLayout _gradientPipelineLayout;
+
+	// immediate submit structures
+    VkFence _immFence;
+    VkCommandBuffer _immCommandBuffer;
+    VkCommandPool _immCommandPool;
+
+	std::vector<ComputeEffect> backgroundEffects;
+	int currentBackgroundEffect{0};
+
 	bool _isInitialized{ false };
 	int _frameNumber {0};
 	bool stop_rendering{ false };
-	VkExtent2D _windowExtent{ 1700 , 900 };
+	VkExtent2D _windowExtent{ 1600 , 900 };
 
 	struct SDL_Window* _window{ nullptr };
 
@@ -90,6 +122,10 @@ public:
 	//run main loop
 	void run();
 
+	// used for IMGUI
+	void immediate_submit(std::function<void(VkCommandBuffer cmd)>&& function);
+
+
 
 private:
 
@@ -106,6 +142,15 @@ private:
 
 	void draw_background(VkCommandBuffer cmd);
 
-};
+	void draw_imgui(VkCommandBuffer cmd, VkImageView targetImageView);
 
+	void init_descriptors();
+
+	void init_pipelines();
+	void init_background_pipelines();
+
+	void init_imgui();
+
+
+};
 
