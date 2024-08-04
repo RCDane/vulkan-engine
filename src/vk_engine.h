@@ -6,6 +6,7 @@
 #include <vk_types.h>
 #include <vulkan/vulkan_core.h>
 #include <vk_descriptors.h>
+#include <vk_loader.h>
 
 struct DeletionQueue
 {
@@ -48,6 +49,17 @@ struct FrameData {
 	VkSemaphore _swapchainSemaphore, _renderSemaphore;
 	VkFence _renderFence;
 	DeletionQueue _deletionQueue;
+	DescriptorAllocatorGrowable _frameDescriptors;
+
+};
+
+struct GPUSceneData {
+    glm::mat4 view;
+    glm::mat4 proj;
+    glm::mat4 viewproj;
+    glm::vec4 ambientColor;
+    glm::vec4 sunlightDirection; // w for sun power
+    glm::vec4 sunlightColor;
 };
 
 constexpr unsigned int FRAME_OVERLAP = 2;
@@ -80,9 +92,8 @@ public:
 	VkQueue _graphicsQueue;
 	uint32_t _graphicsQueueFamily;
 
-	AllocatedImage _drawImage;
 	VkExtent2D _drawExtent;
-
+	float renderScale = 1.f;
 
 	// Descriptor related
 	DescriptorAllocator globalDescriptorAllocator;
@@ -109,10 +120,23 @@ public:
 	std::vector<ComputeEffect> backgroundEffects;
 	int currentBackgroundEffect{0};
 
+	std::vector<std::shared_ptr<MeshAsset>> testMeshes;
+
+	AllocatedImage _drawImage;
+	AllocatedImage _depthImage;
+
+	GPUSceneData sceneData;
+
+	VkDescriptorSetLayout _gpuSceneDataDescriptorLayout;
+
+	bool resize_requested; 
+
 	bool _isInitialized{ false };
 	int _frameNumber {0};
 	bool stop_rendering{ false };
 	VkExtent2D _windowExtent{ 1600 , 900 };
+
+
 
 	struct SDL_Window* _window{ nullptr };
 
@@ -133,6 +157,7 @@ public:
 	// used for IMGUI
 	void immediate_submit(std::function<void(VkCommandBuffer cmd)>&& function);
 
+	GPUMeshBuffers uploadMesh(std::span<uint32_t> indices, std::span<Vertex>);
 
 
 private:
@@ -167,11 +192,12 @@ private:
 
 	void init_default_data();
 
+	void resize_swapchain();
+
 	AllocatedBuffer create_buffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage);
 
 	void destroy_buffer(const AllocatedBuffer& buffer);
 
-	GPUMeshBuffers uploadMesh(std::span<uint32_t> indices, std::span<Vertex>);
 
 };
 
