@@ -26,6 +26,13 @@ struct DeletionQueue
 		deletors.clear();
 	}
 };
+struct EngineStats {
+    float frametime;
+    int triangle_count;
+    int drawcall_count;
+    float scene_update_time;
+    float mesh_draw_time;
+};
 
 struct ComputePushConstants {
 	glm::vec4 data1;
@@ -186,7 +193,7 @@ public:
 	bool stop_rendering{ false };
 	VkExtent2D _windowExtent{ 1600 , 900 };
 
-
+	std::unordered_map<std::string, std::shared_ptr<LoadedGLTF>> loadedScenes;
 
 	struct SDL_Window* _window{ nullptr };
 
@@ -208,8 +215,14 @@ public:
 	void immediate_submit(std::function<void(VkCommandBuffer cmd)>&& function);
 
 	GPUMeshBuffers uploadMesh(std::span<uint32_t> indices, std::span<Vertex>);
-
-
+	AllocatedBuffer create_buffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage);
+	AllocatedImage create_image(VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped = false);
+	AllocatedImage create_image(void* data, VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped = false);
+	void destroy_buffer(const AllocatedBuffer& buffer);
+	void destroy_image(const AllocatedImage& img);
+	
+	EngineStats stats;
+	
 private:
 
 	// general initialization
@@ -244,12 +257,8 @@ private:
 
 	void resize_swapchain();
 
-	AllocatedBuffer create_buffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage);
 
-	void destroy_buffer(const AllocatedBuffer& buffer);
-	AllocatedImage create_image(VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped = false);
-	AllocatedImage create_image(void* data, VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped = false);
-	void destroy_image(const AllocatedImage& img);
+
 
 	void update_scene();
 

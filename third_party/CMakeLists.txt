@@ -30,7 +30,10 @@ set(CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake/")
 if(ENABLE_CPM)
   include(CPM)
   CPMAddPackage("gh:libsdl-org/SDL#release-2.30.4")
+  CPMAddPackage("gh:wolfpld/tracy#v0.11.0")
 
+  option ( TRACY_ENABLE " " OFF )
+  option ( TRACY_ON_DEMAND " " OFF )
 endif()
 
 add_library(sdl2 INTERFACE)
@@ -38,7 +41,7 @@ add_library(sdl2 INTERFACE)
 target_include_directories(sdl2 INTERFACE $ENV{VULKAN_SDK}/Include/SDL2 )
 target_link_directories(sdl2 INTERFACE $ENV{VULKAN_SDK}/Lib )
 
-target_link_libraries(sdl2 INTERFACE SDL2 SDL2main)
+target_link_libraries(sdl2 INTERFACE SDL2 SDL2main Tracy::TracyClient)
 
 add_library(imgui STATIC)
 
