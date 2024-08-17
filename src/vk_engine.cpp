@@ -13,6 +13,7 @@
 #include <glm/gtx/transform.hpp>
 
 
+#include "glm/ext/vector_float3.hpp"
 #include "imgui.h"
 #include "imgui_impl_sdl2.h"
 #include "imgui_impl_vulkan.h"
@@ -78,7 +79,7 @@ void VulkanEngine::init()
 	mainCamera.pitch = 0;
 	mainCamera.yaw = 0;
 
-	std::string structurePath = { "../../assets//structure.glb"};
+	std::string structurePath = { "../../assets/sponza.glb"};
 
 
     auto structureFile = loadGltf(this,structurePath);
@@ -472,6 +473,17 @@ void VulkanEngine::run()
 			ImGui::InputFloat4("data4", (float*)& selected.data.data4);
 
 		}
+
+		ImGui::Begin("Scene Data");
+		ImGui::Text("Directional Light");
+		GPUSceneData& tmpData = sceneData;
+		ImGui::InputFloat4("Intensity", (float*)&   	tmpData.sunlightColor);
+		ImGui::InputFloat4("Direction", (float*)&    	tmpData.sunlightDirection);
+		ImGui::InputFloat4("Ambient Color", (float*)&	tmpData.ambientColor);
+		ImGui::End();
+		
+
+
 		ImGui::Begin("Stats");
 
         ImGui::Text("frametime %f ms", stats.frametime);
@@ -1229,8 +1241,7 @@ void VulkanEngine::init_default_data(){
 		destroy_image(_errorCheckerboardImage);
 	});
 
-	testMeshes = loadGltfMeshes(this,"../../assets/basicmesh.glb").value();
-
+	
 
 	//delete the rectangle data on engine shutdown
 	_mainDeletionQueue.push_function([&](){
@@ -1275,7 +1286,13 @@ void VulkanEngine::init_default_data(){
 
 		loadedNodes[m->name] = std::move(newNode);
 	}
+	
 
+
+	//some default lighting parameters
+	sceneData.ambientColor = glm::vec4(.05f);
+	sceneData.sunlightColor = glm::vec4(1.f);
+	sceneData.sunlightDirection = glm::vec4(0,1,0.5,1.f);
 }
 
 void VulkanEngine::resize_swapchain()
@@ -1510,10 +1527,7 @@ void VulkanEngine::update_scene()
 	sceneData.proj[1][1] *= -1;
 	sceneData.viewproj = sceneData.proj * sceneData.view;
 
-	//some default lighting parameters
-	sceneData.ambientColor = glm::vec4(.1f);
-	sceneData.sunlightColor = glm::vec4(1.f);
-	sceneData.sunlightDirection = glm::vec4(0,1,0.5,1.f);
+	
 	auto end = std::chrono::system_clock::now();
 
     //convert to microseconds (integer), and then come back to miliseconds
