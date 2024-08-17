@@ -40,7 +40,11 @@ struct ComputePushConstants {
 	glm::vec4 data3;
 	glm::vec4 data4;
 };
-
+struct PointLight {
+	glm::vec3 position;
+	glm::vec4 color;
+	float intensity;
+};
 
 struct ComputeEffect {
     const char* name;
@@ -182,6 +186,7 @@ public:
 
 	VkDescriptorSetLayout _singleImageDescriptorLayout;
 	VkDescriptorSetLayout _gpuSceneDataDescriptorLayout;
+	VkDescriptorSetLayout _lightingDescriptorLayout;
 
 	bool resize_requested; 
 
@@ -222,6 +227,7 @@ public:
 	void destroy_image(const AllocatedImage& img);
 	
 	EngineStats stats;
+	PointLight pointLight = {};
 	
 private:
 

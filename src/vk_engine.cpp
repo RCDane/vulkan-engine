@@ -17,6 +17,7 @@
 #include "imgui.h"
 #include "imgui_impl_sdl2.h"
 #include "imgui_impl_vulkan.h"
+#include "vk_descriptors.h"
 #define STB_IMAGE_IMPLEMENTATION
 #include <vk_loader.h>
 
@@ -272,7 +273,7 @@ void VulkanEngine::draw_geometry(VkCommandBuffer cmd)
 	VkRenderingInfo renderInfo = vkinit::rendering_info(_windowExtent, &colorAttachment, &depthAttachment);
 	vkCmdBeginRendering(cmd, &renderInfo);
 
-	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _trianglePipeline);
+	// vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _trianglePipeline);
 
 
 	//set dynamic viewport and scissor
@@ -738,9 +739,15 @@ void VulkanEngine::init_descriptors(){
 	}
 	{
 		DescriptorLayoutBuilder builder;
+		builder.add_binding(3, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC);
+		_lightingDescriptorLayout = builder.build(_device, VK_SHADER_STAGE_FRAGMENT_BIT);
+	}
+	{
+		DescriptorLayoutBuilder builder;
 		builder.add_binding(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 		_singleImageDescriptorLayout = builder.build(_device, VK_SHADER_STAGE_FRAGMENT_BIT);
 	}
+	
 	_drawImageDescriptors = globalDescriptorAllocator.allocate(_device,_drawImageDescriptorLayout);	
 
 	DescriptorWriter writer;
@@ -779,7 +786,7 @@ void VulkanEngine::init_pipelines(){
 	init_background_pipelines();
 
 	
-	init_triangle_pipeline();
+	// init_triangle_pipeline();
 	init_mesh_pipeline();
 
     metalRoughMaterial.build_pipelines(this);
@@ -1293,6 +1300,10 @@ void VulkanEngine::init_default_data(){
 	sceneData.ambientColor = glm::vec4(.05f);
 	sceneData.sunlightColor = glm::vec4(1.f);
 	sceneData.sunlightDirection = glm::vec4(0,1,0.5,1.f);
+
+	pointLight.color = glm::vec4(1.f);
+ 	pointLight.position = glm::vec3(30.f, -00.f, -085.f);
+	pointLight.intensity = 10.f;
 }
 
 void VulkanEngine::resize_swapchain()
@@ -1415,11 +1426,13 @@ void GLTFMetallic_Roughness::build_pipelines(VulkanEngine* engine)
 
     materialLayout = layoutBuilder.build(engine->_device, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
 
-	VkDescriptorSetLayout layouts[] = { engine->_gpuSceneDataDescriptorLayout,
-        materialLayout };
+	VkDescriptorSetLayout layouts[] = { 
+		engine->_gpuSceneDataDescriptorLayout,
+        materialLayout,
+		engine->_lightingDescriptorLayout};
 
 	VkPipelineLayoutCreateInfo mesh_layout_info = vkinit::pipeline_layout_create_info();
-	mesh_layout_info.setLayoutCount = 2;
+	mesh_layout_info.setLayoutCount = 3;
 	mesh_layout_info.pSetLayouts = layouts;
 	mesh_layout_info.pPushConstantRanges = &matrixRange;
 	mesh_layout_info.pushConstantRangeCount = 1;
