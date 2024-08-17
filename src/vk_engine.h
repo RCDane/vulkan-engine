@@ -4,6 +4,7 @@
 #pragma once
 
 #include <vk_types.h>
+#include "camera.h"
 #include <vulkan/vulkan_core.h>
 #include <vk_descriptors.h>
 #include <vk_loader.h>
@@ -62,6 +63,37 @@ struct GPUSceneData {
     glm::vec4 sunlightColor;
 };
 
+
+struct GLTFMetallic_Roughness {
+	MaterialPipeline opaquePipeline;
+	MaterialPipeline transparentPipeline;
+
+	VkDescriptorSetLayout materialLayout;
+
+	struct MaterialConstants {
+		glm::vec4 colorFactors;
+		glm::vec4 metal_rough_factors;
+		//padding, we need it anyway for uniform buffers
+		glm::vec4 extra[14];
+	};
+
+	struct MaterialResources {
+		AllocatedImage colorImage;
+		VkSampler colorSampler;
+		AllocatedImage metalRoughImage;
+		VkSampler metalRoughSampler;
+		VkBuffer dataBuffer;
+		uint32_t dataBufferOffset;
+	};
+
+	DescriptorWriter writer;
+
+	void build_pipelines(VulkanEngine* engine);
+	void clear_resources(VkDevice device);
+
+	MaterialInstance write_material(VkDevice device, MaterialPass pass, const MaterialResources& resources, DescriptorAllocatorGrowable& descriptorAllocator);
+};
+
 constexpr unsigned int FRAME_OVERLAP = 2;
 
 class VulkanEngine {
@@ -96,7 +128,7 @@ public:
 	float renderScale = 1.f;
 
 	// Descriptor related
-	DescriptorAllocator globalDescriptorAllocator;
+	DescriptorAllocatorGrowable globalDescriptorAllocator;
 
 	VkDescriptorSet _drawImageDescriptors;
 	VkDescriptorSetLayout _drawImageDescriptorLayout;
@@ -125,11 +157,29 @@ public:
 	AllocatedImage _drawImage;
 	AllocatedImage _depthImage;
 
+	AllocatedImage _whiteImage;
+	AllocatedImage _blackImage;
+	AllocatedImage _greyImage;
+	AllocatedImage _errorCheckerboardImage;
+
+    VkSampler _defaultSamplerLinear;
+	VkSampler _defaultSamplerNearest;
+
+	MaterialInstance defaultData;
+	GLTFMetallic_Roughness metalRoughMaterial;
+
 	GPUSceneData sceneData;
 
+	DrawContext mainDrawContext;
+    std::unordered_map<std::string, std::shared_ptr<Node>> loadedNodes;
+
+	VkDescriptorSetLayout _singleImageDescriptorLayout;
 	VkDescriptorSetLayout _gpuSceneDataDescriptorLayout;
 
 	bool resize_requested; 
+
+    Camera mainCamera;
+
 
 	bool _isInitialized{ false };
 	int _frameNumber {0};
@@ -197,7 +247,11 @@ private:
 	AllocatedBuffer create_buffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage);
 
 	void destroy_buffer(const AllocatedBuffer& buffer);
+	AllocatedImage create_image(VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped = false);
+	AllocatedImage create_image(void* data, VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped = false);
+	void destroy_image(const AllocatedImage& img);
 
+	void update_scene();
 
 };
 
