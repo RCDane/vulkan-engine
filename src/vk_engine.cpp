@@ -32,7 +32,7 @@
 #include <vulkan/vulkan_core.h>
 #include <chrono>
 
-constexpr bool bUseValidationLayers = false;
+constexpr bool bUseValidationLayers = true;
 
 
 VulkanEngine* loadedEngine = nullptr;
@@ -298,22 +298,35 @@ void VulkanEngine::draw_geometry(VkCommandBuffer cmd)
 
 	//allocate a new uniform buffer for the scene data
 	AllocatedBuffer gpuSceneDataBuffer = create_buffer(sizeof(GPUSceneData), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+	// Point light data
+	AllocatedBuffer lightingDataBuffer = create_buffer(sizeof(PointLight), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
 
+	
 	//add it to the deletion queue of this frame so it gets deleted once its been used
 	get_current_frame()._deletionQueue.push_function([=, this]() {
 		destroy_buffer(gpuSceneDataBuffer);
+		destroy_buffer(lightingDataBuffer);
 		});
 
 	//write the buffer
 	GPUSceneData* sceneUniformData = (GPUSceneData*)gpuSceneDataBuffer.allocation->GetMappedData();
 	*sceneUniformData = sceneData;
+	// Write lighting info
+	PointLight* lightingUniformData = (PointLight*)lightingDataBuffer.allocation->GetMappedData(); 
+	*lightingUniformData = pointLight;
+
 
 	//create a descriptor set that binds that buffer and update it
 	VkDescriptorSet globalDescriptor = get_current_frame()._frameDescriptors.allocate(_device, _gpuSceneDataDescriptorLayout);
+	VkDescriptorSet lightingDescriptor = get_current_frame()._frameDescriptors.allocate(_device, _lightingDescriptorLayout);
 
 	DescriptorWriter writer;
 	writer.write_buffer(0, gpuSceneDataBuffer.buffer, sizeof(GPUSceneData), 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
 	writer.update_set(_device, globalDescriptor);
+	DescriptorWriter writer2;
+	writer2.write_buffer(0, lightingDataBuffer.buffer, sizeof(PointLight), 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+	writer2.update_set(_device, lightingDescriptor);
+
 
 	MaterialPipeline* lastPipeline = nullptr;
 	MaterialInstance* lastMaterial = nullptr;
@@ -326,7 +339,8 @@ void VulkanEngine::draw_geometry(VkCommandBuffer cmd)
 				vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, r.material->pipeline->pipeline);
 				vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,r.material->pipeline->layout, 0, 1,
 					&globalDescriptor, 0, nullptr);
-
+				vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,r.material->pipeline->layout, 2, 1,
+					&lightingDescriptor, 0, nullptr);
 				VkViewport viewport = {};
 				viewport.x = 0;
 				viewport.y = 0;
@@ -481,6 +495,11 @@ void VulkanEngine::run()
 		ImGui::InputFloat4("Intensity", (float*)&   	tmpData.sunlightColor);
 		ImGui::InputFloat4("Direction", (float*)&    	tmpData.sunlightDirection);
 		ImGui::InputFloat4("Ambient Color", (float*)&	tmpData.ambientColor);
+		PointLight& tmpPointLight = pointLight;
+		ImGui::Text("Point light:");
+		ImGui::InputFloat3("Position", (float*)&  tmpPointLight.position);
+		ImGui::SliderFloat("Intensity", &tmpPointLight.intensity, 0.0f, 100.f);
+		ImGui::InputFloat4("color", (float*)&  tmpPointLight.color);
 		ImGui::End();
 		
 
@@ -722,7 +741,7 @@ void VulkanEngine::init_descriptors(){
 	std::vector<DescriptorAllocatorGrowable::PoolSizeRatio> sizes =
 	{
 		{ VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1 },
-		{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1 }
+		{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 2 }
 	};
 
 	globalDescriptorAllocator.init(_device, 10 , sizes);
@@ -739,8 +758,8 @@ void VulkanEngine::init_descriptors(){
 	}
 	{
 		DescriptorLayoutBuilder builder;
-		builder.add_binding(3, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC);
-		_lightingDescriptorLayout = builder.build(_device, VK_SHADER_STAGE_FRAGMENT_BIT);
+		builder.add_binding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+		_lightingDescriptorLayout = builder.build(_device, VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT);
 	}
 	{
 		DescriptorLayoutBuilder builder;
@@ -1302,8 +1321,8 @@ void VulkanEngine::init_default_data(){
 	sceneData.sunlightDirection = glm::vec4(0,1,0.5,1.f);
 
 	pointLight.color = glm::vec4(1.f);
- 	pointLight.position = glm::vec3(30.f, -00.f, -085.f);
-	pointLight.intensity = 10.f;
+ 	pointLight.position = glm::vec3(0.f, 20.f, 0.f);
+	pointLight.intensity = 2.f;
 }
 
 void VulkanEngine::resize_swapchain()
@@ -1405,7 +1424,7 @@ void VulkanEngine::destroy_image(const AllocatedImage& img){
 void GLTFMetallic_Roughness::build_pipelines(VulkanEngine* engine)
 {
 	VkShaderModule meshFragShader;
-	if (!vkutil::load_shader_module("../../shaders/mesh.frag.spv", engine->_device, &meshFragShader)) {
+	if (!vkutil::load_shader_module("../../shaders/phong.frag.spv", engine->_device, &meshFragShader)) {
 		fmt::println("Error when building the triangle fragment shader module");
 	}
 
@@ -1524,8 +1543,9 @@ void VulkanEngine::update_scene()
 {
 	auto start = std::chrono::system_clock::now();
 	mainDrawContext.OpaqueSurfaces.clear();
-
-	loadedScenes["structure"]->Draw(glm::mat4{ 1.f }, mainDrawContext);
+	glm::mat4 topMat = glm::mat4{ 1.f };
+	topMat = glm::scale(topMat, glm::vec3(0.15f));
+	loadedScenes["structure"]->Draw(topMat, mainDrawContext);
 
 	
 	mainCamera.update();
@@ -1539,7 +1559,7 @@ void VulkanEngine::update_scene()
 	sceneData.view = view;
 	sceneData.proj[1][1] *= -1;
 	sceneData.viewproj = sceneData.proj * sceneData.view;
-
+	sceneData.cameraPosition = glm::vec4(mainCamera.position, 1.0f);
 	
 	auto end = std::chrono::system_clock::now();
 

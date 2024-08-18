@@ -42,8 +42,8 @@ struct ComputePushConstants {
 };
 struct PointLight {
 	glm::vec3 position;
-	glm::vec4 color;
 	float intensity;
+	glm::vec4 color;
 };
 
 struct ComputeEffect {
@@ -72,6 +72,7 @@ struct GPUSceneData {
     glm::vec4 ambientColor;
     glm::vec4 sunlightDirection; // w for sun power
     glm::vec4 sunlightColor;
+	glm::vec4 cameraPosition;
 };
 
 
@@ -227,7 +228,7 @@ public:
 	void destroy_image(const AllocatedImage& img);
 	
 	EngineStats stats;
-	PointLight pointLight = {};
+	PointLight pointLight;
 	
 private:
 
