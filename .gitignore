@@ -36,3 +36,4 @@ bin/
 build
 .cache
 /renderdoc captures
+*.spv

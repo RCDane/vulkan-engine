@@ -5,6 +5,7 @@
 
 #include <vk_types.h>
 #include "camera.h"
+#include "shadows.h"
 #include <vulkan/vulkan_core.h>
 #include <vk_descriptors.h>
 #include <vk_loader.h>
@@ -108,6 +109,10 @@ struct GLTFMetallic_Roughness {
 
 constexpr unsigned int FRAME_OVERLAP = 2;
 
+
+// Forward declaration
+struct ShadowImage;
+
 class VulkanEngine {
 public:
 
@@ -168,7 +173,6 @@ public:
 
 	AllocatedImage _drawImage;
 	AllocatedImage _depthImage;
-
 	AllocatedImage _whiteImage;
 	AllocatedImage _blackImage;
 	AllocatedImage _greyImage;
@@ -176,6 +180,9 @@ public:
 
     VkSampler _defaultSamplerLinear;
 	VkSampler _defaultSamplerNearest;
+
+	ShadowImage _shadowImage;
+	VkDescriptorSet _imgui_shadow_descriptor;
 
 	MaterialInstance defaultData;
 	GLTFMetallic_Roughness metalRoughMaterial;

@@ -17,6 +17,7 @@
 #include "imgui.h"
 #include "imgui_impl_sdl2.h"
 #include "imgui_impl_vulkan.h"
+#include "shadows.h"
 #include "vk_descriptors.h"
 #define STB_IMAGE_IMPLEMENTATION
 #include <vk_loader.h>
@@ -514,6 +515,12 @@ void VulkanEngine::run()
         ImGui::End();
 
 		ImGui::End();
+
+		ImGui::Begin("Shadow debug");
+		
+		ImGui::Image((ImTextureID)_imgui_shadow_descriptor,ImVec2(256,256),ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f) );
+		ImGui::End();
+
 		//make imgui calculate internal draw structures
 		ImGui::Render();
         draw();
@@ -1245,6 +1252,29 @@ void VulkanEngine::init_default_data(){
 	}
 	_errorCheckerboardImage = create_image(pixels.data(), VkExtent3D{16, 16, 1}, VK_FORMAT_R8G8B8A8_UNORM,
 		VK_IMAGE_USAGE_SAMPLED_BIT);
+
+
+	VkExtent3D shadowExtent;
+	shadowExtent.depth = 1;
+	shadowExtent.height = 1024;
+	shadowExtent.width = 1024;
+
+
+
+	// Shadow image
+	
+	_shadowImage = ShadowImage();
+	_shadowImage.prepare_image(shadowExtent, this);
+
+	
+
+	// TODO: Should do something about this?
+	_imgui_shadow_descriptor =  
+		ImGui_ImplVulkan_AddTexture(
+		_shadowImage.sampler, 
+		_shadowImage.image.imageView, 
+		VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
+
 
 	VkSamplerCreateInfo sampl = {.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
 
