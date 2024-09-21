@@ -33,6 +33,9 @@
 #include <vulkan/vulkan_core.h>
 #include <chrono>
 
+#include <filesystem>
+#include <iostream>
+
 constexpr bool bUseValidationLayers = true;
 
 
@@ -44,6 +47,12 @@ void VulkanEngine::init()
     // only one engine initialization is allowed with the application.
     assert(loadedEngine == nullptr);
     loadedEngine = this;
+
+
+	// Print current path
+	std::filesystem::path cwd = std::filesystem::current_path() / "filename.txt";
+
+	std::cout << cwd << std::endl;
 
     // We initialize SDL and create a window with it.
     SDL_Init(SDL_INIT_VIDEO);
@@ -58,6 +67,7 @@ void VulkanEngine::init()
         _windowExtent.height,
         window_flags);
 
+	SDL_SetWindowFullscreen(_window, 0);
 
     init_vulkan();
 
@@ -76,12 +86,15 @@ void VulkanEngine::init()
 	init_default_data();
 
 	mainCamera.velocity = glm::vec3(0.f);
- 	mainCamera.position = glm::vec3(30.f, -00.f, -085.f);
+ 	mainCamera.position = glm::vec3(0.f, 0.f, 0.f);
 	
 	mainCamera.pitch = 0;
 	mainCamera.yaw = 0;
 
-	std::string structurePath = { "../../assets/sponza.glb"};
+	
+
+
+	std::string structurePath = { "../assets/sponza.glb"};
 
 
     auto structureFile = loadGltf(this,structurePath);
@@ -132,6 +145,44 @@ void VulkanEngine::cleanup()
     // clear engine pointer
     loadedEngine = nullptr;
 }
+bool is_visible(const RenderObject& obj, const glm::mat4& viewproj) {
+	std::array<glm::vec3, 8> corners{
+		glm::vec3 { 1, 1, 1 },
+		glm::vec3 { 1, 1, -1 },
+		glm::vec3 { 1, -1, 1 },
+		glm::vec3 { 1, -1, -1 },
+		glm::vec3 { -1, 1, 1 },
+		glm::vec3 { -1, 1, -1 },
+		glm::vec3 { -1, -1, 1 },
+		glm::vec3 { -1, -1, -1 },
+	};
+
+	glm::mat4 matrix = viewproj * obj.transform;
+
+	glm::vec3 min = { 1.5, 1.5, 1.5 };
+	glm::vec3 max = { -1.5, -1.5, -1.5 };
+
+	for (int c = 0; c < 8; c++) {
+		// project each corner into clip space
+		glm::vec4 v = matrix * glm::vec4(obj.bounds.origin + (corners[c] * obj.bounds.extents), 1.f);
+
+		// perspective correction
+		v.x = v.x / v.w;
+		v.y = v.y / v.w;
+		v.z = v.z / v.w;
+
+		min = glm::min(glm::vec3{ v.x, v.y, v.z }, min);
+		max = glm::max(glm::vec3{ v.x, v.y, v.z }, max);
+	}
+
+	// check the clip space box is within the view
+	if (min.z > 1.f || max.z < 0.f || min.x > 1.f || max.x < -1.f || min.y > 1.f || max.y < -1.f) {
+		return false;
+	}
+	else {
+		return true;
+	}
+}
 
 void VulkanEngine::draw()
 {
@@ -148,7 +199,7 @@ void VulkanEngine::draw()
     uint32_t swapchainImageIndex;
 
 	// Handling resizing
-	VkResult e = vkAcquireNextImageKHR(_device, _swapchain, 1000000000, get_current_frame()._swapchainSemaphore, nullptr, &swapchainImageIndex);
+	VkResult e = vkAcquireNextImageKHR(_device, _swapchain, 1000000000, get_current_frame()._swapchainSemaphore, VK_NULL_HANDLE, &swapchainImageIndex);
 	if (e == VK_ERROR_OUT_OF_DATE_KHR) {
         resize_requested = true;       
 		return ;
@@ -172,6 +223,14 @@ void VulkanEngine::draw()
 	vkutil::transition_image(cmd, _drawImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
 
 	draw_background(cmd);
+
+	vkutil::transition_image(cmd, _shadowImage->image.image, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, VK_IMAGE_ASPECT_DEPTH_BIT);
+
+	draw_shadows(cmd);
+
+	vkutil::transition_image(cmd, _shadowImage->image.image, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_ASPECT_DEPTH_BIT);
+
+	//vkCmdPipelineBarrier2()
 
 	vkutil::transition_image(cmd, _drawImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 	vkutil::transition_image(cmd, _depthImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
@@ -245,11 +304,14 @@ void VulkanEngine::draw_geometry(VkCommandBuffer cmd)
     //begin clock
     auto start = std::chrono::system_clock::now();
 
+	
 	std::vector<uint32_t> opaque_draws;
 	opaque_draws.reserve(mainDrawContext.OpaqueSurfaces.size());
 
 	for (uint32_t i = 0; i < mainDrawContext.OpaqueSurfaces.size(); i++) {
-		opaque_draws.push_back(i);
+		if (is_visible(mainDrawContext.OpaqueSurfaces[i], sceneData.viewproj)) {
+			opaque_draws.push_back(i);
+		}
 	}
 
 	// sort the opaque surfaces by material and mesh
@@ -262,8 +324,7 @@ void VulkanEngine::draw_geometry(VkCommandBuffer cmd)
 		else {
 			return A.material < B.material;
 		}
-	});
-
+		});
 	
 
 	//begin a render pass  connected to our draw image
@@ -302,12 +363,16 @@ void VulkanEngine::draw_geometry(VkCommandBuffer cmd)
 	// Point light data
 	AllocatedBuffer lightingDataBuffer = create_buffer(sizeof(PointLight), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
 
+	AllocatedBuffer directionalLightingDataBuffer = create_buffer(sizeof(DirectionalLighting), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+
 	
 	//add it to the deletion queue of this frame so it gets deleted once its been used
 	get_current_frame()._deletionQueue.push_function([=, this]() {
 		destroy_buffer(gpuSceneDataBuffer);
 		destroy_buffer(lightingDataBuffer);
+		destroy_buffer(directionalLightingDataBuffer);
 		});
+
 
 	//write the buffer
 	GPUSceneData* sceneUniformData = (GPUSceneData*)gpuSceneDataBuffer.allocation->GetMappedData();
@@ -316,18 +381,32 @@ void VulkanEngine::draw_geometry(VkCommandBuffer cmd)
 	PointLight* lightingUniformData = (PointLight*)lightingDataBuffer.allocation->GetMappedData(); 
 	*lightingUniformData = pointLight;
 
+	DirectionalLighting* directionalLightingUniformData = (DirectionalLighting*)directionalLightingDataBuffer.allocation->GetMappedData();
+	*directionalLightingUniformData = _directionalLighting;
+
 
 	//create a descriptor set that binds that buffer and update it
 	VkDescriptorSet globalDescriptor = get_current_frame()._frameDescriptors.allocate(_device, _gpuSceneDataDescriptorLayout);
 	VkDescriptorSet lightingDescriptor = get_current_frame()._frameDescriptors.allocate(_device, _lightingDescriptorLayout);
+	VkDescriptorSet directionalLightingDescriptor = get_current_frame()._frameDescriptors.allocate(_device, _shadowDescriptorLayout);
+
+
+	// TODO: Clean up shadow rendering
+	
+
+
 
 	DescriptorWriter writer;
 	writer.write_buffer(0, gpuSceneDataBuffer.buffer, sizeof(GPUSceneData), 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
 	writer.update_set(_device, globalDescriptor);
-	DescriptorWriter writer2;
-	writer2.write_buffer(0, lightingDataBuffer.buffer, sizeof(PointLight), 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
-	writer2.update_set(_device, lightingDescriptor);
-
+	writer.clear();
+	writer.write_buffer(0, lightingDataBuffer.buffer, sizeof(PointLight), 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+	writer.update_set(_device, lightingDescriptor);
+	writer.clear();
+	// Writer shadow uniform data
+	writer.write_buffer(0, directionalLightingDataBuffer.buffer, sizeof(DirectionalLighting), 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+	writer.write_image(1, _shadowImage->image.imageView, _shadowImage->sampler, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+	writer.update_set(_device, directionalLightingDescriptor);
 
 	MaterialPipeline* lastPipeline = nullptr;
 	MaterialInstance* lastMaterial = nullptr;
@@ -342,6 +421,8 @@ void VulkanEngine::draw_geometry(VkCommandBuffer cmd)
 					&globalDescriptor, 0, nullptr);
 				vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,r.material->pipeline->layout, 2, 1,
 					&lightingDescriptor, 0, nullptr);
+				vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, r.material->pipeline->layout, 3, 1,
+					&directionalLightingDescriptor, 0, nullptr);
 				VkViewport viewport = {};
 				viewport.x = 0;
 				viewport.y = 0;
@@ -516,10 +597,14 @@ void VulkanEngine::run()
 
 		ImGui::End();
 
-		ImGui::Begin("Shadow debug");
-		
-		ImGui::Image((ImTextureID)_imgui_shadow_descriptor,ImVec2(256,256),ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f) );
-		ImGui::End();
+		//ImGui::Begin("Shadow debug");
+		//immediate_submit([&](VkCommandBuffer cmd) {
+		//	vkutil::transition_image(cmd, this->_shadowImage.image.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
+		//	});
+
+
+		//ImGui::Image((ImTextureID)_imgui_shadow_descriptor,ImVec2(256,256),ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f) );
+		//ImGui::End();
 
 		//make imgui calculate internal draw structures
 		ImGui::Render();
@@ -539,11 +624,29 @@ void VulkanEngine::init_vulkan()
 {
     vkb::InstanceBuilder builder;
 
-    auto inst_ret = builder.set_app_name("Example Vulkan Application")
-        .request_validation_layers(bUseValidationLayers)
-        .use_default_debug_messenger()
-        .require_api_version(1,3,0)
-        .build();
+	builder = builder.set_app_name("Example Vulkan Application")
+		.use_default_debug_messenger()
+		.require_api_version(1, 3, 0);
+
+	auto system_info_ret = vkb::SystemInfo::get_system_info();
+	if (!system_info_ret) {
+		printf("%s\n", system_info_ret.error().message());
+		return;
+	}
+	auto system_info = system_info_ret.value();
+	if (system_info.is_extension_available("VK_EXT_debug_utils")) {
+		builder = builder.enable_extension("VK_EXT_debug_utils");
+	}
+	if (system_info.is_extension_available("VK_EXT_debug_report")) {
+		builder = builder.enable_extension("VK_EXT_debug_report");
+	}
+	if (system_info.is_extension_available("VK_EXT_debug_marker")) {
+		builder = builder.enable_extension("VK_EXT_debug_marker");
+	}
+	
+	builder = builder.request_validation_layers(bUseValidationLayers);
+
+	auto inst_ret = builder.build();
 
     vkb::Instance vkb_inst = inst_ret.value();
 
@@ -773,6 +876,14 @@ void VulkanEngine::init_descriptors(){
 		builder.add_binding(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 		_singleImageDescriptorLayout = builder.build(_device, VK_SHADER_STAGE_FRAGMENT_BIT);
 	}
+	{
+		DescriptorLayoutBuilder layoutBuilder;
+		layoutBuilder.add_binding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+		layoutBuilder.add_binding(1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+
+		_shadowDescriptorLayout = layoutBuilder.build(_device, VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT);
+
+	}
 	
 	_drawImageDescriptors = globalDescriptorAllocator.allocate(_device,_drawImageDescriptorLayout);	
 
@@ -814,14 +925,15 @@ void VulkanEngine::init_pipelines(){
 	
 	// init_triangle_pipeline();
 	init_mesh_pipeline();
-
+	_shadowPipeline = std::make_unique<ShadowPipeline>();
+	_shadowPipeline->build_pipelines(this);
     metalRoughMaterial.build_pipelines(this);
 
 }
 
 void VulkanEngine::init_triangle_pipeline(){
 	VkShaderModule triangleFragShader;
-	if (!vkutil::load_shader_module("../../shaders/colored_triangle.frag.spv", _device, &triangleFragShader)) {
+	if (!vkutil::load_shader_module("../shaders/colored_triangle.frag.spv", _device, &triangleFragShader)) {
 		fmt::print("Error when building the triangle fragment shader module");
 	}
 	else {
@@ -829,7 +941,7 @@ void VulkanEngine::init_triangle_pipeline(){
 	}
 
 	VkShaderModule triangleVertexShader;
-	if (!vkutil::load_shader_module("../../shaders/colored_triangle.vert.spv", _device, &triangleVertexShader)) {
+	if (!vkutil::load_shader_module("../shaders/colored_triangle.vert.spv", _device, &triangleVertexShader)) {
 		fmt::print("Error when building the triangle vertex shader module");
 	}
 	else {
@@ -876,6 +988,8 @@ void VulkanEngine::init_triangle_pipeline(){
 
 }
 
+
+
 void VulkanEngine::init_background_pipelines()
 {
 
@@ -897,12 +1011,12 @@ void VulkanEngine::init_background_pipelines()
 
 	
 	VkShaderModule gradientShader;
-	if (!vkutil::load_shader_module("../../shaders/gradient_color.comp.spv", _device, &gradientShader)) {
+	if (!vkutil::load_shader_module("../shaders/gradient_color.comp.spv", _device, &gradientShader)) {
 		fmt::print("Error when building the compute shader \n");
 	}
 
 	VkShaderModule skyShader;
-	if (!vkutil::load_shader_module("../../shaders/sky.comp.spv", _device, &skyShader)) {
+	if (!vkutil::load_shader_module("../shaders/sky.comp.spv", _device, &skyShader)) {
 		fmt::print("Error when building the compute shader \n");
 	}
 
@@ -1136,7 +1250,7 @@ GPUMeshBuffers VulkanEngine::uploadMesh(std::span<uint32_t> indices, std::span<V
 
 void VulkanEngine::init_mesh_pipeline(){
 	VkShaderModule triangleFragShader;
-	if (!vkutil::load_shader_module("../../shaders/tex_image.frag.spv", _device, &triangleFragShader)) {
+	if (!vkutil::load_shader_module("../shaders/tex_image.frag.spv", _device, &triangleFragShader)) {
 		fmt::print("Error when building the fragment shader \n");
 	}
 	else {
@@ -1144,7 +1258,7 @@ void VulkanEngine::init_mesh_pipeline(){
 	}
 
 	VkShaderModule triangleVertexShader;
-	if (!vkutil::load_shader_module("../../shaders/colored_triangle_mesh.vert.spv", _device, &triangleVertexShader)) {
+	if (!vkutil::load_shader_module("../shaders/colored_triangle_mesh.vert.spv", _device, &triangleVertexShader)) {
 		fmt::print("Error when building the vertex shader \n");
 	}
 	else {
@@ -1256,24 +1370,24 @@ void VulkanEngine::init_default_data(){
 
 	VkExtent3D shadowExtent;
 	shadowExtent.depth = 1;
-	shadowExtent.height = 1024;
-	shadowExtent.width = 1024;
+	shadowExtent.height = 2048;
+	shadowExtent.width = 2048;
 
 
 
 	// Shadow image
 	
-	_shadowImage = ShadowImage();
-	_shadowImage.prepare_image(shadowExtent, this);
+	_shadowImage = std::make_unique<ShadowImage>();
+	_shadowImage->prepare_image(shadowExtent, this);
 
 	
 
-	// TODO: Should do something about this?
-	_imgui_shadow_descriptor =  
-		ImGui_ImplVulkan_AddTexture(
-		_shadowImage.sampler, 
-		_shadowImage.image.imageView, 
-		VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
+	//// TODO: Should do something about this?
+	//_imgui_shadow_descriptor =  
+	//	(VkDescriptorSet)ImGui_ImplVulkan_AddTexture(
+	//	_shadowImage.sampler, 
+	//	_shadowImage.image.imageView, 
+	//	VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
 
 	VkSamplerCreateInfo sampl = {.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
@@ -1346,13 +1460,20 @@ void VulkanEngine::init_default_data(){
 
 
 	//some default lighting parameters
+	glm::vec4 sunDirection = glm::normalize(glm::vec4(0, -1, 0.5, 1.f));
+
 	sceneData.ambientColor = glm::vec4(.05f);
 	sceneData.sunlightColor = glm::vec4(1.f);
-	sceneData.sunlightDirection = glm::vec4(0,1,0.5,1.f);
+	sceneData.sunlightDirection = sunDirection;
 
 	pointLight.color = glm::vec4(1.f);
  	pointLight.position = glm::vec3(0.f, 20.f, 0.f);
 	pointLight.intensity = 2.f;
+
+	_directionalLighting.color = glm::vec4(1.f);
+	_directionalLighting.direction = sunDirection;
+	_directionalLighting.intensity = 1.f;
+
 }
 
 void VulkanEngine::resize_swapchain()
@@ -1386,7 +1507,7 @@ AllocatedImage VulkanEngine::create_image(VkExtent3D size, VkFormat format, VkIm
 	VmaAllocationCreateInfo allocinfo = {};
 	allocinfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
 	allocinfo.requiredFlags = VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
+	
 	// allocate and create the image
 	VK_CHECK(vmaCreateImage(_allocator, &img_info, &allocinfo, &newImage.image, &newImage.allocation, nullptr));
 
@@ -1405,6 +1526,8 @@ AllocatedImage VulkanEngine::create_image(VkExtent3D size, VkFormat format, VkIm
 
 	return newImage;
 }
+
+
 
 AllocatedImage VulkanEngine::create_image(void* data, VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped)
 {
@@ -1454,12 +1577,12 @@ void VulkanEngine::destroy_image(const AllocatedImage& img){
 void GLTFMetallic_Roughness::build_pipelines(VulkanEngine* engine)
 {
 	VkShaderModule meshFragShader;
-	if (!vkutil::load_shader_module("../../shaders/phong.frag.spv", engine->_device, &meshFragShader)) {
+	if (!vkutil::load_shader_module("../shaders/phong_directional.frag.spv", engine->_device, &meshFragShader)) {
 		fmt::println("Error when building the triangle fragment shader module");
 	}
 
 	VkShaderModule meshVertexShader;
-	if (!vkutil::load_shader_module("../../shaders/mesh.vert.spv", engine->_device, &meshVertexShader)) {
+	if (!vkutil::load_shader_module("../shaders/mesh.vert.spv", engine->_device, &meshVertexShader)) {
 		fmt::println("Error when building the triangle vertex shader module");
 	}
 
@@ -1478,10 +1601,11 @@ void GLTFMetallic_Roughness::build_pipelines(VulkanEngine* engine)
 	VkDescriptorSetLayout layouts[] = { 
 		engine->_gpuSceneDataDescriptorLayout,
         materialLayout,
-		engine->_lightingDescriptorLayout};
+		engine->_lightingDescriptorLayout,
+		engine->_shadowDescriptorLayout};
 
 	VkPipelineLayoutCreateInfo mesh_layout_info = vkinit::pipeline_layout_create_info();
-	mesh_layout_info.setLayoutCount = 3;
+	mesh_layout_info.setLayoutCount = 4;
 	mesh_layout_info.pSetLayouts = layouts;
 	mesh_layout_info.pPushConstantRanges = &matrixRange;
 	mesh_layout_info.pushConstantRangeCount = 1;
@@ -1558,11 +1682,16 @@ void MeshNode::Draw(const glm::mat4& topMatrix, DrawContext& ctx)
 		def.firstIndex = s.startIndex;
 		def.indexBuffer = mesh->meshBuffers.indexBuffer.buffer;
 		def.material = &s.material->data;
-
+		def.bounds = s.bounds;
 		def.transform = nodeMatrix;
 		def.vertexBufferAddress = mesh->meshBuffers.vertexBufferAddress;
 		
-		ctx.OpaqueSurfaces.push_back(def);
+		if (s.material->data.passType == MaterialPass::Transparent) {
+			ctx.TransparentSurfaces.push_back(def);
+		}
+		else {
+			ctx.OpaqueSurfaces.push_back(def);
+		}
 	}
 
 	// recurse down
@@ -1574,7 +1703,7 @@ void VulkanEngine::update_scene()
 	auto start = std::chrono::system_clock::now();
 	mainDrawContext.OpaqueSurfaces.clear();
 	glm::mat4 topMat = glm::mat4{ 1.f };
-	topMat = glm::scale(topMat, glm::vec3(0.15f));
+	topMat = glm::scale(topMat, glm::vec3(1.0f));
 	loadedScenes["structure"]->Draw(topMat, mainDrawContext);
 
 	
@@ -1597,3 +1726,143 @@ void VulkanEngine::update_scene()
     auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
     stats.scene_update_time = elapsed.count() / 1000.f;
 }
+
+void VulkanEngine::draw_shadows(VkCommandBuffer cmd) {
+	//begin a render pass  connected to our draw image
+	
+	
+	std::vector<uint32_t> opaque_draws;
+	opaque_draws.reserve(mainDrawContext.OpaqueSurfaces.size());
+
+	for (uint32_t i = 0; i < mainDrawContext.OpaqueSurfaces.size(); i++) {
+		opaque_draws.push_back(i);
+	}
+
+	// sort the opaque surfaces by material and mesh
+	std::sort(opaque_draws.begin(), opaque_draws.end(), [&](const auto& iA, const auto& iB) {
+		const RenderObject& A = mainDrawContext.OpaqueSurfaces[iA];
+		const RenderObject& B = mainDrawContext.OpaqueSurfaces[iB];
+		if (A.material == B.material) {
+			return A.indexBuffer < B.indexBuffer;
+		}
+		else {
+			return A.material < B.material;
+		}
+	});	
+	VkExtent2D viewportExtent = { _shadowImage->resolution.width, _shadowImage->resolution.height };
+	
+	VkRenderingAttachmentInfo depthAttachment = vkinit::depth_attachment_info(_shadowImage->image.imageView, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
+
+	VkRenderingInfo renderInfo{};
+	renderInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
+	renderInfo.pNext = nullptr;
+
+	renderInfo.renderArea = VkRect2D{ VkOffset2D { 0, 0 }, viewportExtent };
+	renderInfo.layerCount = 1;
+	renderInfo.pDepthAttachment = &depthAttachment;
+	renderInfo.pStencilAttachment = nullptr;
+
+	vkCmdBeginRendering(cmd, &renderInfo);
+
+	//set dynamic viewport and scissor
+	VkViewport viewport = {};
+	viewport.x = 0;
+	viewport.y = 0;
+	viewport.width = viewportExtent.width;
+	viewport.height = viewportExtent.height;
+	viewport.minDepth = 0.f;
+	viewport.maxDepth = 1.f;
+
+	vkCmdSetViewport(cmd, 0, 1, &viewport);
+
+	VkRect2D scissor = {};
+	scissor.offset.x = 0;
+	scissor.offset.y = 0;
+	scissor.extent.width = viewportExtent.width;
+	scissor.extent.height = viewportExtent.height;
+
+	vkCmdSetScissor(cmd, 0, 1, &scissor);
+	
+	AllocatedBuffer gpuSceneDataBuffer = create_buffer(sizeof(GPUSceneData), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+
+	get_current_frame()._deletionQueue.push_function([=, this]() {
+		destroy_buffer(gpuSceneDataBuffer);
+		});
+
+
+	DirectionalShadow shadow = prepare_directional_shadow(this, this->mainDrawContext, this->sceneData.sunlightDirection);
+
+
+	glm::mat4 lightProjection = shadow.projectionMatrix;
+
+	glm::mat4 lightView = shadow.viewMatrix;
+	glm::mat4 lightSpaceMatrix = lightProjection * lightView;
+
+	GPUSceneData shadowSceneData = {};
+	/*shadowSceneData.view = lightView;
+	shadowSceneData.proj = lightProjection;
+	shadowSceneData.proj[1][1] *= -1;
+
+	shadowSceneData.viewproj = lightSpaceMatrix;
+	*/
+	mainCamera.update();
+
+	shadowSceneData.proj = lightProjection;
+
+		//// invert the Y direction on projection matrix so that we are more similar
+		//// to opengl and gltf axis
+	shadowSceneData.view = lightView;
+	shadowSceneData.viewproj = lightSpaceMatrix;
+	//shadowSceneData.cameraPosition = glm::vec4(shadow.positions,1.0f);
+	//shadowSceneData.proj[1][1] *= -1;
+
+
+	GPUSceneData* sceneUniformData = (GPUSceneData*)gpuSceneDataBuffer.allocation->GetMappedData();
+		*sceneUniformData = shadowSceneData;
+
+	VkDescriptorSet globalDescriptor = get_current_frame()._frameDescriptors.allocate(_device, _gpuSceneDataDescriptorLayout);
+
+	DescriptorWriter writer;
+	writer.write_buffer(0, gpuSceneDataBuffer.buffer, sizeof(GPUSceneData), 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+	writer.update_set(_device, globalDescriptor);
+
+	MaterialPipeline* lastPipeline = nullptr;
+	MaterialInstance* lastMaterial = nullptr;
+	VkBuffer lastIndexBuffer = VK_NULL_HANDLE;
+
+	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _shadowPipeline->pipeline);
+
+	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _shadowPipeline->layout, 0, 1,
+		&globalDescriptor, 0, nullptr);
+
+
+
+
+	auto draw = [&](const RenderObject& r) {
+		//rebind index buffer if needed
+		if (r.indexBuffer != lastIndexBuffer) {
+			lastIndexBuffer = r.indexBuffer;
+			vkCmdBindIndexBuffer(cmd, r.indexBuffer, 0, VK_INDEX_TYPE_UINT32);
+		}
+		// calculate final mesh matrix
+		GPUDrawPushConstants push_constants;
+		push_constants.worldMatrix = r.transform;
+		push_constants.vertexBuffer = r.vertexBufferAddress;
+
+		vkCmdPushConstants(cmd, r.material->pipeline->layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(GPUDrawPushConstants), &push_constants);
+
+		vkCmdDrawIndexed(cmd, r.indexCount, 1, r.firstIndex, 0, 0);
+		//stats
+		stats.drawcall_count++;
+		stats.triangle_count += r.indexCount / 3;
+	};
+
+	for (int r : opaque_draws) {
+		draw(mainDrawContext.OpaqueSurfaces[r]);
+	}
+
+	vkCmdEndRendering(cmd);
+	// we delete the draw commands now that we processed them
+	//mainDrawContext.OpaqueSurfaces.clear();
+}
+

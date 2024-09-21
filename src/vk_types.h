@@ -19,13 +19,15 @@
 
 #include <glm/mat4x4.hpp>
 #include <glm/vec4.hpp>
-
-
+#include <stdexcept>
+#include <format>
+#include <iostream>
+#include <stdlib.h>
 #define VK_CHECK(x)                                                     \
     do {                                                                \
         VkResult err = x;                                               \
-        if (err) {                                                      \
-            fmt::println("Detected Vulkan error: {}", string_VkResult(err)); \
+        if (err<0) {                                                   \
+            std::cout << std::format("Detected Vulkan error: {}", string_VkResult(err)) << ""; \
             abort();                                                    \
         }                                                               \
     } while (0)
@@ -87,7 +89,6 @@ struct MaterialInstance {
 };
 
 struct DrawContext;
-
 // base class for a renderable dynamic object
 class IRenderable {
 
@@ -124,25 +125,11 @@ struct Node : public IRenderable {
 };
 
 struct MeshAsset;
-
+struct DrawContext;
 struct MeshNode : public Node {
 
 	std::shared_ptr<MeshAsset> mesh;
 
 	virtual void Draw(const glm::mat4& topMatrix, DrawContext& ctx) override;
 };
-struct RenderObject {
-	uint32_t indexCount;
-	uint32_t firstIndex;
-	VkBuffer indexBuffer;
 
-	MaterialInstance* material;
-
-	glm::mat4 transform;
-	VkDeviceAddress vertexBufferAddress;
-};
-
-struct DrawContext {
-	std::vector<RenderObject> OpaqueSurfaces;
-    std::vector<RenderObject> TransparentSurfaces;
-};

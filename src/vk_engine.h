@@ -2,13 +2,18 @@
 // or project specific include files.
 
 #pragma once
-
+#ifndef VK_ENGINE_H
+#define VK_ENGINE_H
 #include <vk_types.h>
 #include "camera.h"
-#include "shadows.h"
 #include <vulkan/vulkan_core.h>
 #include <vk_descriptors.h>
 #include <vk_loader.h>
+#include "shadows.h"
+
+struct ShadowImage;
+struct ShadowPipeline;
+
 
 struct DeletionQueue
 {
@@ -26,6 +31,21 @@ struct DeletionQueue
 
 		deletors.clear();
 	}
+};
+
+struct RenderObject {
+	uint32_t indexCount;
+	uint32_t firstIndex;
+	VkBuffer indexBuffer;
+
+	MaterialInstance* material;
+	Bounds bounds;
+	glm::mat4 transform;
+	VkDeviceAddress vertexBufferAddress;
+};
+struct DrawContext {
+	std::vector<RenderObject> OpaqueSurfaces;
+	std::vector<RenderObject> TransparentSurfaces;
 };
 struct EngineStats {
     float frametime;
@@ -111,7 +131,6 @@ constexpr unsigned int FRAME_OVERLAP = 2;
 
 
 // Forward declaration
-struct ShadowImage;
 
 class VulkanEngine {
 public:
@@ -181,7 +200,12 @@ public:
     VkSampler _defaultSamplerLinear;
 	VkSampler _defaultSamplerNearest;
 
-	ShadowImage _shadowImage;
+	std::unique_ptr<ShadowImage> _shadowImage;
+	std::unique_ptr<ShadowPipeline> _shadowPipeline;
+	VkDescriptorSetLayout _shadowDescriptorLayout;
+
+	DirectionalLighting _directionalLighting;
+
 	VkDescriptorSet _imgui_shadow_descriptor;
 
 	MaterialInstance defaultData;
@@ -204,7 +228,7 @@ public:
 	bool _isInitialized{ false };
 	int _frameNumber {0};
 	bool stop_rendering{ false };
-	VkExtent2D _windowExtent{ 1600 , 900 };
+	VkExtent2D _windowExtent{1280  , 720 };
 
 	std::unordered_map<std::string, std::shared_ptr<LoadedGLTF>> loadedScenes;
 
@@ -254,6 +278,8 @@ private:
 
 	void draw_geometry(VkCommandBuffer cmd);
 
+	void draw_shadows(VkCommandBuffer cmd);
+
 	void draw_imgui(VkCommandBuffer cmd, VkImageView targetImageView);
 
 	void init_descriptors();
@@ -278,3 +304,4 @@ private:
 
 };
 
+#endif // VK_ENGINE_H
