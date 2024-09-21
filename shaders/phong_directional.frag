@@ -7,28 +7,44 @@ layout (location = 0) in vec3 inNormal;
 layout (location = 1) in vec3 inColor;
 layout (location = 2) in vec2 inUV;
 layout (location = 3) in vec3 vPos;
+layout (location = 4) in vec4 lightFragPos;
 layout (location = 0) out vec4 outFragColor;
 
-layout (set = 3, 0) uniform DirectionalLight {
+layout (set = 3, binding = 0) uniform DirectionalLight {
 	vec3 direction;
 	float intensity;
 	vec4 color;
 	mat4 lightView;
-}
-layout (set = 3, 1) uniform sampler2D shadowMap;
+} directionalLight;
 
+layout (set = 3, binding = 1) uniform sampler2D shadowMap;
+
+float ShadowCalculation(vec4 fragPosLightSpace)
+{
+	vec3 projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;
+	// projCoords.y = projCoords.y * -1.0; // Invert Y
+
+	// transform to NDC
+	projCoords.xy = projCoords.xy * 0.5 + 0.5;
+	float closestDepth = texture(shadowMap, projCoords.xy).r;
+	float currentDepth = projCoords.z; // Is the depth correct?
+	// Is the comparison the right way around?
+	float bias = 0.00005;
+	float shadow = currentDepth - bias > closestDepth  ? 1.0 : 0.0;  
+	return shadow;
+}
 void main() 
 {
 	// vec3 lightDirection = sceneData.sunlightDirection.xyz;
 
-	vec3 pointLightDirection = normalize(pointLight.position - vPos);
+	vec3 pointLightDirection = -directionalLight.direction;
 	vec3 viewDir = normalize(sceneData.cameraPosition.xyz - vPos);
 	vec3 hafwayDir = normalize(pointLightDirection + viewDir);
 
-	float d = length(pointLight.position - vPos);
-	float attenuation = 1.0/(1.0 + 0.0027 * d + (d*d)*0.000028);
+	// float d = length(pointLight.position - vPos);
+	// float attenuation = 1.0/(1.0 + 0.0027 * d + (d*d)*0.000028);
 
-	vec3 pointLightColor = pointLight.color.xyz * pointLight.intensity;
+	vec3 pointLightColor = directionalLight.color.xyz * directionalLight.intensity;
 
 	vec3 diffuse =  pointLightColor * max(dot(inNormal, pointLightDirection), 0.0f);
 
@@ -36,12 +52,16 @@ void main()
 	
 	
 	vec3 ambient = sceneData.ambientColor.xyz;
-	vec3 specular =   spec;
+	vec3 specular = spec;
 	
 	
 	vec3 color = inColor * texture(colorTex,inUV).xyz;
 
-	vec3 result = (ambient*attenuation + specular*attenuation + diffuse*attenuation) * color;
+	diffuse = diffuse * ShadowCalculation(lightFragPos);
+	specular = specular * ShadowCalculation(lightFragPos);
+
+	// vec3 result = (ambient*attenuation + specular*attenuation + diffuse*attenuation) * color;
+	vec3 result = (ambient + specular + diffuse) * color;
 
 
 	outFragColor = vec4(result ,1.0f);

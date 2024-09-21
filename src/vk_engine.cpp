@@ -36,7 +36,7 @@
 #include <filesystem>
 #include <iostream>
 
-constexpr bool bUseValidationLayers = true;
+constexpr bool bUseValidationLayers = false;
 
 
 VulkanEngine* loadedEngine = nullptr;
@@ -228,9 +228,8 @@ void VulkanEngine::draw()
 
 	draw_shadows(cmd);
 
-	vkutil::transition_image(cmd, _shadowImage->image.image, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_ASPECT_DEPTH_BIT);
+	vkutil::transition_shadow_map(cmd, _shadowImage->image.image, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
-	//vkCmdPipelineBarrier2()
 
 	vkutil::transition_image(cmd, _drawImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 	vkutil::transition_image(cmd, _depthImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
@@ -306,13 +305,18 @@ void VulkanEngine::draw_geometry(VkCommandBuffer cmd)
 
 	
 	std::vector<uint32_t> opaque_draws;
+	opaque_draws.clear();
 	opaque_draws.reserve(mainDrawContext.OpaqueSurfaces.size());
+
+	glm::mat4 view = mainCamera.getViewMatrix();
+	
 
 	for (uint32_t i = 0; i < mainDrawContext.OpaqueSurfaces.size(); i++) {
 		if (is_visible(mainDrawContext.OpaqueSurfaces[i], sceneData.viewproj)) {
 			opaque_draws.push_back(i);
 		}
 	}
+
 
 	// sort the opaque surfaces by material and mesh
 	std::sort(opaque_draws.begin(), opaque_draws.end(), [&](const auto& iA, const auto& iB) {
@@ -333,6 +337,7 @@ void VulkanEngine::draw_geometry(VkCommandBuffer cmd)
 
 
 	VkRenderingInfo renderInfo = vkinit::rendering_info(_windowExtent, &colorAttachment, &depthAttachment);
+	
 	vkCmdBeginRendering(cmd, &renderInfo);
 
 	// vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _trianglePipeline);
@@ -643,6 +648,7 @@ void VulkanEngine::init_vulkan()
 	if (system_info.is_extension_available("VK_EXT_debug_marker")) {
 		builder = builder.enable_extension("VK_EXT_debug_marker");
 	}
+	
 	
 	builder = builder.request_validation_layers(bUseValidationLayers);
 
@@ -1460,7 +1466,7 @@ void VulkanEngine::init_default_data(){
 
 
 	//some default lighting parameters
-	glm::vec4 sunDirection = glm::normalize(glm::vec4(0, -1, 0.5, 1.f));
+	glm::vec4 sunDirection = glm::normalize(glm::vec4(0.f, -1.0f, 0.0f, 1.f));
 
 	sceneData.ambientColor = glm::vec4(.05f);
 	sceneData.sunlightColor = glm::vec4(1.f);
@@ -1582,7 +1588,7 @@ void GLTFMetallic_Roughness::build_pipelines(VulkanEngine* engine)
 	}
 
 	VkShaderModule meshVertexShader;
-	if (!vkutil::load_shader_module("../shaders/mesh.vert.spv", engine->_device, &meshVertexShader)) {
+	if (!vkutil::load_shader_module("../shaders/phong_directional.vert.spv", engine->_device, &meshVertexShader)) {
 		fmt::println("Error when building the triangle vertex shader module");
 	}
 
@@ -1756,7 +1762,7 @@ void VulkanEngine::draw_shadows(VkCommandBuffer cmd) {
 	VkRenderingInfo renderInfo{};
 	renderInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
 	renderInfo.pNext = nullptr;
-
+	
 	renderInfo.renderArea = VkRect2D{ VkOffset2D { 0, 0 }, viewportExtent };
 	renderInfo.layerCount = 1;
 	renderInfo.pDepthAttachment = &depthAttachment;

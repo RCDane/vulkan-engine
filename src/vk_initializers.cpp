@@ -185,7 +185,7 @@ VkImageSubresourceRange vkinit::image_subresource_range(VkImageAspectFlags aspec
     subImage.levelCount = VK_REMAINING_MIP_LEVELS;
     subImage.baseArrayLayer = 0;
     subImage.layerCount = VK_REMAINING_ARRAY_LAYERS;
-
+    
     return subImage;
 }
 //< subresource

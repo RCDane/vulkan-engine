@@ -245,6 +245,8 @@ public:
 	//draw loop
 	void draw();
 
+	void draw_shadows();
+
 	//run main loop
 	void run();
 
