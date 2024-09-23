@@ -36,7 +36,7 @@
 #include <filesystem>
 #include <iostream>
 
-constexpr bool bUseValidationLayers = false;
+constexpr bool bUseValidationLayers = true;
 
 
 VulkanEngine* loadedEngine = nullptr;
@@ -224,11 +224,13 @@ void VulkanEngine::draw()
 
 	draw_background(cmd);
 
-	vkutil::transition_image(cmd, _shadowImage->image.image, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, VK_IMAGE_ASPECT_DEPTH_BIT);
+	VkImageSubresourceRange subResourceRange = vkinit::image_subresource_range(VK_IMAGE_ASPECT_DEPTH_BIT);
+	
+	vkutil::transition_shadow_map(cmd, _shadowImage->image.image, VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, subResourceRange);
 
 	draw_shadows(cmd);
-
-	vkutil::transition_shadow_map(cmd, _shadowImage->image.image, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+	
+	vkutil::transition_shadow_map(cmd, _shadowImage->image.image, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL, subResourceRange);
 
 
 	vkutil::transition_image(cmd, _drawImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
@@ -312,9 +314,9 @@ void VulkanEngine::draw_geometry(VkCommandBuffer cmd)
 	
 
 	for (uint32_t i = 0; i < mainDrawContext.OpaqueSurfaces.size(); i++) {
-		if (is_visible(mainDrawContext.OpaqueSurfaces[i], sceneData.viewproj)) {
+		//if (is_visible(mainDrawContext.OpaqueSurfaces[i], sceneData.viewproj)) {
 			opaque_draws.push_back(i);
-		}
+		//}
 	}
 
 
@@ -334,7 +336,7 @@ void VulkanEngine::draw_geometry(VkCommandBuffer cmd)
 	//begin a render pass  connected to our draw image
 	VkRenderingAttachmentInfo colorAttachment = vkinit::attachment_info(_drawImage.imageView, nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 	VkRenderingAttachmentInfo depthAttachment = vkinit::depth_attachment_info(_depthImage.imageView, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
-
+	
 
 	VkRenderingInfo renderInfo = vkinit::rendering_info(_windowExtent, &colorAttachment, &depthAttachment);
 	
@@ -410,7 +412,7 @@ void VulkanEngine::draw_geometry(VkCommandBuffer cmd)
 	writer.clear();
 	// Writer shadow uniform data
 	writer.write_buffer(0, directionalLightingDataBuffer.buffer, sizeof(DirectionalLighting), 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
-	writer.write_image(1, _shadowImage->image.imageView, _shadowImage->sampler, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+	writer.write_image(1, _shadowImage->image.imageView, _shadowImage->sampler, VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 	writer.update_set(_device, directionalLightingDescriptor);
 
 	MaterialPipeline* lastPipeline = nullptr;
@@ -629,30 +631,11 @@ void VulkanEngine::init_vulkan()
 {
     vkb::InstanceBuilder builder;
 
-	builder = builder.set_app_name("Example Vulkan Application")
+	auto inst_ret = builder.set_app_name("Example Vulkan Application")
+		.request_validation_layers(bUseValidationLayers)
 		.use_default_debug_messenger()
-		.require_api_version(1, 3, 0);
-
-	auto system_info_ret = vkb::SystemInfo::get_system_info();
-	if (!system_info_ret) {
-		printf("%s\n", system_info_ret.error().message());
-		return;
-	}
-	auto system_info = system_info_ret.value();
-	if (system_info.is_extension_available("VK_EXT_debug_utils")) {
-		builder = builder.enable_extension("VK_EXT_debug_utils");
-	}
-	if (system_info.is_extension_available("VK_EXT_debug_report")) {
-		builder = builder.enable_extension("VK_EXT_debug_report");
-	}
-	if (system_info.is_extension_available("VK_EXT_debug_marker")) {
-		builder = builder.enable_extension("VK_EXT_debug_marker");
-	}
-	
-	
-	builder = builder.request_validation_layers(bUseValidationLayers);
-
-	auto inst_ret = builder.build();
+		.require_api_version(1, 3, 0)
+		.build();
 
     vkb::Instance vkb_inst = inst_ret.value();
 
@@ -1466,9 +1449,9 @@ void VulkanEngine::init_default_data(){
 
 
 	//some default lighting parameters
-	glm::vec4 sunDirection = glm::normalize(glm::vec4(0.f, -1.0f, 0.0f, 1.f));
+	glm::vec4 sunDirection = glm::vec4(0.f, -1.0f, 0.0f, 1.f);
 
-	sceneData.ambientColor = glm::vec4(.05f);
+	sceneData.ambientColor = glm::vec4(.2f);
 	sceneData.sunlightColor = glm::vec4(1.f);
 	sceneData.sunlightDirection = sunDirection;
 
@@ -1855,7 +1838,7 @@ void VulkanEngine::draw_shadows(VkCommandBuffer cmd) {
 		push_constants.worldMatrix = r.transform;
 		push_constants.vertexBuffer = r.vertexBufferAddress;
 
-		vkCmdPushConstants(cmd, r.material->pipeline->layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(GPUDrawPushConstants), &push_constants);
+		vkCmdPushConstants(cmd, _shadowPipeline->layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(GPUDrawPushConstants), &push_constants);
 
 		vkCmdDrawIndexed(cmd, r.indexCount, 1, r.firstIndex, 0, 0);
 		//stats

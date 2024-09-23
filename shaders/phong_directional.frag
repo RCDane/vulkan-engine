@@ -21,48 +21,75 @@ layout (set = 3, binding = 1) uniform sampler2D shadowMap;
 
 float ShadowCalculation(vec4 fragPosLightSpace)
 {
-	vec3 projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;
-	// projCoords.y = projCoords.y * -1.0; // Invert Y
+    vec3 projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;
 
-	// transform to NDC
-	projCoords.xy = projCoords.xy * 0.5 + 0.5;
-	float closestDepth = texture(shadowMap, projCoords.xy).r;
-	float currentDepth = projCoords.z; // Is the depth correct?
-	// Is the comparison the right way around?
-	float bias = 0.00005;
-	float shadow = currentDepth - bias > closestDepth  ? 1.0 : 0.0;  
-	return shadow;
+    // Transform to texture coordinates
+    projCoords.xy = projCoords.xy * 0.5 + 0.5;
+
+    // Check if projCoords are outside [0,1]
+    if (projCoords.x < 0.0 || projCoords.x > 1.0 ||
+        projCoords.y < 0.0 || projCoords.y > 1.0)
+    {
+        return 1.0; // Not in shadow
+    }
+
+    float closestDepth = texture(shadowMap, projCoords.xy).r;
+    float currentDepth = projCoords.z;
+
+    // Bias to prevent shadow acne
+    float bias = max(0.05 * (1.0 - dot(normalize(inNormal), normalize(-directionalLight.direction))), 0.005);
+    float shadow = currentDepth - bias > closestDepth ? 0.0 : 1.0;
+
+    // If fragment is outside the light's frustum
+    if (projCoords.z > 1.0)
+    {
+        shadow = 1.0;
+    }
+
+    return shadow;
 }
-void main() 
+
+void main()
 {
-	// vec3 lightDirection = sceneData.sunlightDirection.xyz;
+    // Normalize input normal
+    vec3 N = normalize(inNormal);
 
-	vec3 pointLightDirection = -directionalLight.direction;
-	vec3 viewDir = normalize(sceneData.cameraPosition.xyz - vPos);
-	vec3 hafwayDir = normalize(pointLightDirection + viewDir);
+    // Light direction (from fragment to light)
+    vec3 L = normalize(-directionalLight.direction);
 
-	// float d = length(pointLight.position - vPos);
-	// float attenuation = 1.0/(1.0 + 0.0027 * d + (d*d)*0.000028);
+    // View direction (from fragment to camera)
+    vec3 V = normalize(sceneData.cameraPosition.xyz - vPos);
 
-	vec3 pointLightColor = directionalLight.color.xyz * directionalLight.intensity;
+    // Halfway vector
+    vec3 H = normalize(L + V);
 
-	vec3 diffuse =  pointLightColor * max(dot(inNormal, pointLightDirection), 0.0f);
+    // Material properties
+    vec3 baseColor = inColor * texture(colorTex, inUV).rgb * materialData.colorFactors.rgb;
+    float shininess = max((1.0 - materialData.metal_rough_factors.y) * 128.0, 1.0);
 
-	vec3 spec = pointLightColor*pow(max(dot(inNormal, hafwayDir), 0.0), materialData.metal_rough_factors.y);
-	
-	
-	vec3 ambient = sceneData.ambientColor.xyz;
-	vec3 specular = spec;
-	
-	
-	vec3 color = inColor * texture(colorTex,inUV).xyz;
+    // Light properties
+    vec3 lightColor = directionalLight.color.rgb * directionalLight.intensity;
 
-	diffuse = diffuse * ShadowCalculation(lightFragPos);
-	specular = specular * ShadowCalculation(lightFragPos);
+    // Ambient component
+    vec3 ambient = sceneData.ambientColor.rgb * baseColor;
 
-	// vec3 result = (ambient*attenuation + specular*attenuation + diffuse*attenuation) * color;
-	vec3 result = (ambient + specular + diffuse) * color;
+    // Diffuse component
+    float diff = max(dot(N, L), 0.0);
+    vec3 diffuse = diff * lightColor * baseColor;
 
+    // Specular component
+    float spec = pow(max(dot(N, H), 0.0), shininess);
+    vec3 specular = spec * lightColor * materialData.specularColor.rgb;
 
-	outFragColor = vec4(result ,1.0f);
+    // Shadow factor
+    float shadow = ShadowCalculation(lightFragPos);
+
+    // Apply shadow
+    diffuse *= shadow;
+    specular *= shadow;
+
+    // Combine components
+    vec3 result = ambient + diffuse + specular;
+
+    outFragColor = vec4(result, materialData.colorFactors.a);
 }
