@@ -1741,7 +1741,7 @@ void VulkanEngine::draw_shadows(VkCommandBuffer cmd) {
 	VkExtent2D viewportExtent = { _shadowImage->resolution.width, _shadowImage->resolution.height };
 	
 	VkRenderingAttachmentInfo depthAttachment = vkinit::depth_attachment_info(_shadowImage->image.imageView, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
-
+	depthAttachment.clearValue = { 0.0f, 0 };
 	VkRenderingInfo renderInfo{};
 	renderInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
 	renderInfo.pNext = nullptr;

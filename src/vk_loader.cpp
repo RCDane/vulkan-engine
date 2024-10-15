@@ -6,6 +6,7 @@
 #include <string_view>
 #include <variant>
 #include <vk_loader.h>
+#include <stdlib.h>
 
 #include "fastgltf/types.hpp"
 #include "fastgltf/util.hpp"
@@ -300,7 +301,9 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGltf(VulkanEngine* engine, std::s
         { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 3 },
         { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1 } };
 
-    file.descriptorPool.init(engine->_device, gltf.materials.size(), sizes);
+    int materisals_size = std::max((int)gltf.materials.size(), 1);
+
+    file.descriptorPool.init(engine->_device, materisals_size, sizes);
 
     for (fastgltf::Sampler& sampler : gltf.samplers){
         VkSamplerCreateInfo sampl = 
@@ -344,7 +347,7 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGltf(VulkanEngine* engine, std::s
     }
 
      // create buffer to hold the material data
-    file.materialDataBuffer = engine->create_buffer(sizeof(GLTFMetallic_Roughness::MaterialConstants) * gltf.materials.size(),
+    file.materialDataBuffer = engine->create_buffer(sizeof(GLTFMetallic_Roughness::MaterialConstants) * materisals_size,
         VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
     int data_index = 0;
     GLTFMetallic_Roughness::MaterialConstants* sceneMaterialConstants = (GLTFMetallic_Roughness::MaterialConstants*)file.materialDataBuffer.info.pMappedData;

@@ -53,7 +53,7 @@ void ShadowPipeline::build_pipelines(VulkanEngine* engine)
 	pipelineBuilder.set_shaders(meshVertexShader, meshFragShader);
 	pipelineBuilder.set_input_topology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
 	pipelineBuilder.set_polygon_mode(VK_POLYGON_MODE_FILL);
-	pipelineBuilder.set_cull_mode(VK_CULL_MODE_BACK_BIT, VK_FRONT_FACE_CLOCKWISE);
+	pipelineBuilder.set_cull_mode(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE);
 	pipelineBuilder.disable_blending();
 	pipelineBuilder.enable_depthtest(true, VK_COMPARE_OP_GREATER_OR_EQUAL);
 	pipelineBuilder.set_depth_format(VK_FORMAT_D32_SFLOAT);
@@ -88,7 +88,7 @@ void ShadowImage::prepare_image(VkExtent3D resolution, VulkanEngine* engine){
 	samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
 	samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
 	samplerInfo.compareEnable = VK_TRUE;
-	samplerInfo.compareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
+	samplerInfo.compareOp = VK_COMPARE_OP_GREATER_OR_EQUAL;
 
 
 	vkCreateSampler(engine->_device, &samplerInfo, nullptr, &this->sampler);
@@ -121,7 +121,7 @@ DirectionalShadow prepare_directional_shadow(VulkanEngine* engine, DrawContext s
 	}
 	glm::vec3 middle = (minBounds + maxBounds) / 2.0f;
 
-	direction = glm::normalize(direction);
+	direction = -glm::normalize(direction);
 	glm::vec3 basis_up;
 	if (fabs(glm::dot(direction, glm::vec3(0.0f, 1.0f, 0.0f))) > 0.99f) {
 		basis_up = glm::vec3(1.0f, 0.0f, 0.0f);
@@ -133,7 +133,7 @@ DirectionalShadow prepare_directional_shadow(VulkanEngine* engine, DrawContext s
 	glm::vec3 newUp = glm::cross(basis_right, direction);
 	// Light view matrix (similar to a camera view matrix)
 
-	glm::mat4 viewMatrix = glm::lookAt(direction, glm::vec3(0.0f), basis_up);
+	glm::mat4 viewMatrix = glm::lookAt(direction, glm::vec3(0.0f), newUp);
 
 	// Initialize orthographic bounds with large limits
 	float near = std::numeric_limits<float>::max();
@@ -183,11 +183,15 @@ DirectionalShadow prepare_directional_shadow(VulkanEngine* engine, DrawContext s
 
 	// Create an orthographic projection matrix based on the calculated bounds
 	//glm::mat4 projectionMatrix = glm::ortho(left, right, bottom, top, 1.0f, (far-near)+20.0f); // Added padding to far plane for normalizing moving camera back
+	float offset = (far - near);
 	float correctedFar = (far - near);
-	glm::mat4 projectionMatrix = glm::ortho(left, right, bottom, top, 0.f, (correctedFar)*1.02f);
+	glm::mat4 projectionMatrix = glm::orthoRH_ZO(left, right, bottom, top, 0.001f, (correctedFar+1.0f)*1.1f);
 	
-	glm::vec3 eyePosition =  direction * far * 1.f;
-	viewMatrix = glm::lookAt(eyePosition, glm::vec3(0.0f), basis_up);
+
+
+	glm::vec3 eyePosition =  direction * (near*1.1f);
+	glm::vec3 lookAtPosition = direction + direction * offset;
+	viewMatrix = glm::lookAt(eyePosition, eyePosition + direction, newUp);
 	//projectionMatrix[1][1] *= -1; // Flip the y axis
 	engine->_directionalLighting.lightView =  projectionMatrix* viewMatrix;
 
