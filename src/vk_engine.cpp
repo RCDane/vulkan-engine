@@ -94,7 +94,7 @@ void VulkanEngine::init()
 	
 
 
-	std::string structurePath = { "../assets/sponza.glb"};
+	std::string structurePath = { "../assets/DamagedHelmet/glTF-Binary/DamagedHelmet.glb"};
 
 
     auto structureFile = loadGltf(this,structurePath);
