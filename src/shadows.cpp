@@ -122,7 +122,7 @@ DirectionalShadow prepare_directional_shadow(VulkanEngine* engine, DrawContext s
 	glm::vec3 middle = (minBounds + maxBounds) / 2.0f;
 
 	// Light is pointing from the light towards the scene.
-	// Therefore we negate it such that we can move the camera towards the light.
+	// Ne therefore negate the light direction such that we can move the camera towards the light.
 	direction = -glm::normalize(direction);
 	glm::vec3 basis_up;
 	if (fabs(glm::dot(direction, glm::vec3(0.0f, 1.0f, 0.0f))) > 0.99f) {
