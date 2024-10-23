@@ -10,12 +10,15 @@ layout (location = 1) out vec3 outColor;
 layout (location = 2) out vec2 outUV;
 layout (location = 3) out vec3 outVPos;
 layout (location = 4) out vec4 lightFragPos;
+layout (location = 5) out mat3 outTBN;
+
 struct Vertex {
 	vec3 position;
 	float uv_x;
 	vec3 normal;
 	float uv_y;
 	vec4 color;
+	vec4 tangent;
 }; 
 
 layout(buffer_reference, std430) readonly buffer VertexBuffer{ 
@@ -27,6 +30,7 @@ layout( push_constant ) uniform constants
 {
 	mat4 render_matrix;
 	VertexBuffer vertexBuffer;
+	int hasTangent;
 } PushConstants;
 
 layout (set = 3, binding = 0) uniform DirectionalLight {
@@ -51,4 +55,11 @@ void main()
 	outColor = v.color.xyz * materialData.colorFactors.xyz;	
 	outUV.x = v.uv_x;
 	outUV.y = v.uv_y;
+	if (PushConstants.hasTangent == 1) {
+		vec3 T = normalize(PushConstants.render_matrix * vec4(v.tangent.xyz,0.f)).xyz;
+		vec3 N = normalize(PushConstants.render_matrix * vec4(v.normal, 0.f)).xyz;
+		vec3 B = normalize(cross(N, T) * v.tangent.w);
+		outTBN = mat3(T, B, N);
+	}
+
 }

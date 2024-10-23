@@ -13,6 +13,7 @@ struct Vertex {
 	vec3 normal;
 	float uv_y;
 	vec4 color;
+	vec4 tangents;
 }; 
 
 layout(buffer_reference, std430) readonly buffer VertexBuffer{ 
@@ -24,6 +25,7 @@ layout( push_constant ) uniform constants
 {
 	mat4 render_matrix;
 	VertexBuffer vertexBuffer;
+	int hasTangents;
 } PushConstants;
 
 void main() 
@@ -34,5 +36,6 @@ void main()
 
 	vec4 worldPos=  PushConstants.render_matrix *position;
 	gl_Position = sceneData.viewproj * worldPos;
+	gl_Position = gl_Position / gl_Position.w;
 
 }

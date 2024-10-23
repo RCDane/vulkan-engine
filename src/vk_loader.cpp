@@ -97,6 +97,7 @@ std::optional<AllocatedImage> load_image(VulkanEngine* engine, fastgltf::Asset& 
         return {};
     }
     else {
+		newImage.name = image.name;
         return newImage;
     }
 }
@@ -252,6 +253,8 @@ VkSamplerMipmapMode extract_mipmap_mode(fastgltf::Filter filter)
     }
 }
 
+
+
 std::optional<std::shared_ptr<LoadedGLTF>> loadGltf(VulkanEngine* engine, std::string_view filePath){
     fmt::print("Loading GLTF: {}", filePath);
 
@@ -379,7 +382,8 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGltf(VulkanEngine* engine, std::s
         materialResources.colorSampler = engine->_defaultSamplerLinear;
         materialResources.metalRoughImage = engine->_whiteImage;
         materialResources.metalRoughSampler = engine->_defaultSamplerLinear;
-
+        materialResources.normalImage = engine->_defaultNormalMap;
+        materialResources.normalSampler = engine->_defaultSamplerLinear;
         // set the uniform buffer for the material data
         materialResources.dataBuffer = file.materialDataBuffer.buffer;
         materialResources.dataBufferOffset = data_index * sizeof(GLTFMetallic_Roughness::MaterialConstants);
@@ -391,6 +395,15 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGltf(VulkanEngine* engine, std::s
             materialResources.colorImage = images[img];
             materialResources.colorSampler = file.samplers[sampler];
         }
+        
+        if (mat.normalTexture.has_value()) {
+            size_t img = gltf.textures[mat.normalTexture.value().textureIndex].imageIndex.value();
+            size_t sampler = gltf.textures[mat.normalTexture.value().textureIndex].samplerIndex.value();
+
+            materialResources.normalImage = images[img];
+            materialResources.normalSampler = file.samplers[sampler];
+        }
+
         // build material
         newMat->data = engine->metalRoughMaterial.write_material(engine->_device, passType, materialResources, file.descriptorPool);
 
@@ -401,6 +414,9 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGltf(VulkanEngine* engine, std::s
     // often
     std::vector<uint32_t> indices;
     std::vector<Vertex> vertices;
+
+    bool hasTangents = false;
+
 
     for (fastgltf::Mesh& mesh : gltf.meshes) {
         std::shared_ptr<MeshAsset> newmesh = std::make_shared<MeshAsset>();
@@ -416,7 +432,7 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGltf(VulkanEngine* engine, std::s
             GeoSurface newSurface;
             newSurface.startIndex = (uint32_t)indices.size();
             newSurface.count = (uint32_t)gltf.accessors[p.indicesAccessor.value()].count;
-
+            newSurface.hasTangents = false;
             size_t initial_vtx = vertices.size();
 
             // load indexes
@@ -454,6 +470,16 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGltf(VulkanEngine* engine, std::s
                 fastgltf::iterateAccessorWithIndex<glm::vec3>(gltf, gltf.accessors[(*normals).second],
                     [&](glm::vec3 v, size_t index) {
                         vertices[initial_vtx + index].normal = v;
+                    });
+            }
+
+            // load vertex tangents
+            auto tangents = p.findAttribute("TANGENT");
+            if (tangents != p.attributes.end()) {
+				newSurface.hasTangents = true;
+                fastgltf::iterateAccessorWithIndex<glm::vec4>(gltf, gltf.accessors[(*tangents).second],
+                    [&](glm::vec4 v, size_t index) {
+                        vertices[initial_vtx + index].tangent = v;
                     });
             }
 
@@ -501,6 +527,12 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGltf(VulkanEngine* engine, std::s
 
             newmesh->surfaces.push_back(newSurface);
         }
+
+
+        if (!hasTangents) {
+            // We have to calculate tangents ourselves
+        }
+
 
         newmesh->meshBuffers = engine->uploadMesh(indices, vertices);
         

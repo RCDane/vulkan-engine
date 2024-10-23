@@ -38,7 +38,7 @@ void ShadowPipeline::build_pipelines(VulkanEngine* engine)
 	VkPipelineLayoutCreateInfo layout_info = vkinit::pipeline_layout_create_info();
 	layout_info.setLayoutCount = 1;
 	layout_info.pSetLayouts = &layout;
-	layout_info.pPushConstantRanges = & matrixRange;
+	layout_info.pPushConstantRanges = &matrixRange;
 	layout_info.pushConstantRangeCount = 1;
 	
 	VkPipelineLayout newLayout;

@@ -23,6 +23,7 @@
 #include <format>
 #include <iostream>
 #include <stdlib.h>
+#include <string>
 #define VK_CHECK(x)                                                     \
     do {                                                                \
         VkResult err = x;                                               \
@@ -39,6 +40,7 @@ struct AllocatedImage {
     VmaAllocation allocation;
     VkExtent3D imageExtent;
     VkFormat imageFormat;
+    std::string name;
 };
 
 
@@ -56,6 +58,7 @@ struct Vertex {
 	glm::vec3 normal;
 	float uv_y;
 	glm::vec4 color;
+    glm::vec4 tangent;
 };
 
 // holds the resources needed for a mesh
@@ -70,6 +73,7 @@ struct GPUMeshBuffers {
 struct GPUDrawPushConstants {
     glm::mat4 worldMatrix;
     VkDeviceAddress vertexBuffer;
+    int hasTangents;
 };
 
 enum class MaterialPass :uint8_t {

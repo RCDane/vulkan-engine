@@ -20,7 +20,7 @@ struct GeoSurface {
     uint32_t count;
     Bounds bounds;
     std::shared_ptr<GLTFMaterial> material;
-
+    bool hasTangents;
 };
 
 struct MeshAsset {

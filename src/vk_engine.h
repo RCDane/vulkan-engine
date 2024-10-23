@@ -42,6 +42,7 @@ struct RenderObject {
 	Bounds bounds;
 	glm::mat4 transform;
 	VkDeviceAddress vertexBufferAddress;
+	bool hasTangents;
 };
 struct DrawContext {
 	std::vector<RenderObject> OpaqueSurfaces;
@@ -115,6 +116,9 @@ struct GLTFMetallic_Roughness {
 		VkSampler colorSampler;
 		AllocatedImage metalRoughImage;
 		VkSampler metalRoughSampler;
+		AllocatedImage normalImage;
+		VkSampler normalSampler;
+
 		VkBuffer dataBuffer;
 		uint32_t dataBufferOffset;
 	};
@@ -196,6 +200,7 @@ public:
 	AllocatedImage _blackImage;
 	AllocatedImage _greyImage;
 	AllocatedImage _errorCheckerboardImage;
+	AllocatedImage _defaultNormalMap;
 
     VkSampler _defaultSamplerLinear;
 	VkSampler _defaultSamplerNearest;
