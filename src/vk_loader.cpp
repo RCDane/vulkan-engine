@@ -14,6 +14,7 @@
 
 #include "vk_engine.h"
 #include "vk_types.h"
+#include "vk_buffers.h"
 #include <glm/gtx/quaternion.hpp>
 
 #include <fastgltf/glm_element_traits.hpp>
@@ -350,7 +351,7 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGltf(VulkanEngine* engine, std::s
     }
 
      // create buffer to hold the material data
-    file.materialDataBuffer = engine->create_buffer(sizeof(GLTFMetallic_Roughness::MaterialConstants) * materisals_size,
+    file.materialDataBuffer = create_buffer(&engine->_device, &engine->_allocator,sizeof(GLTFMetallic_Roughness::MaterialConstants) * materisals_size,
         VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
     int data_index = 0;
     GLTFMetallic_Roughness::MaterialConstants* sceneMaterialConstants = (GLTFMetallic_Roughness::MaterialConstants*)file.materialDataBuffer.info.pMappedData;
@@ -608,12 +609,12 @@ void LoadedGLTF::clearAll()
     VkDevice dv = creator->_device;
 
     descriptorPool.destroy_pools(dv);
-    creator->destroy_buffer(materialDataBuffer);
+    destroy_buffer(materialDataBuffer);
 
     for (auto& [k, v] : meshes) {
 
-		creator->destroy_buffer(v->meshBuffers.indexBuffer);
-		creator->destroy_buffer(v->meshBuffers.vertexBuffer);
+		destroy_buffer(v->meshBuffers.indexBuffer);
+		destroy_buffer(v->meshBuffers.vertexBuffer);
     }
 
     for (auto& [k, v] : images) {

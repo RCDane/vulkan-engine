@@ -9,11 +9,10 @@
 #include <vulkan/vulkan_core.h>
 #include <vk_descriptors.h>
 #include <vk_loader.h>
-#include "shadows.h"
-
+#include <shadows.h>
+#include <raytracing.h>
 struct ShadowImage;
 struct ShadowPipeline;
-
 
 struct DeletionQueue
 {
@@ -250,7 +249,6 @@ public:
 	//draw loop
 	void draw();
 
-	void draw_shadows();
 
 	//run main loop
 	void run();
@@ -259,15 +257,17 @@ public:
 	void immediate_submit(std::function<void(VkCommandBuffer cmd)>&& function);
 
 	GPUMeshBuffers uploadMesh(std::span<uint32_t> indices, std::span<Vertex>);
-	AllocatedBuffer create_buffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage);
 	AllocatedImage create_image(VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped = false);
 	AllocatedImage create_image(void* data, VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped = false);
-	void destroy_buffer(const AllocatedBuffer& buffer);
 	void destroy_image(const AllocatedImage& img);
 	
 	EngineStats stats;
 	PointLight pointLight;
 	
+
+	// Raytracing
+	RaytracingHandler _raytracingHandler;
+
 private:
 
 	// general initialization

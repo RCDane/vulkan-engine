@@ -1,5 +1,5 @@
 ﻿#include <vk_descriptors.h>
-
+#include <vk_buffers.h>
 void DescriptorLayoutBuilder::add_binding(uint32_t binding, VkDescriptorType type)
 {
     VkDescriptorSetLayoutBinding newbind {};
@@ -234,4 +234,26 @@ void DescriptorWriter::update_set(VkDevice device, VkDescriptorSet set)
     }
 
     vkUpdateDescriptorSets(device, (uint32_t)writes.size(), writes.data(), 0, nullptr);
+}
+
+AccelKHR DescriptorAllocatorGrowable::createAcceleration(VkDevice device,const VkAccelerationStructureCreateInfoKHR& accel_)
+{
+    AccelKHR resultAccel;
+    // Allocating the buffer to hold the acceleration structure
+    resultAccel.buffer = create_buffer(&device, &allocator, accel_.size, VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR
+        | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+    // Setting the buffer
+    VkAccelerationStructureCreateInfoKHR accel = accel_;
+    accel.buffer = resultAccel.buffer.buffer;
+    // Create the acceleration structure
+    vkCreateAccelerationStructureKHR(device, &accel, nullptr, &resultAccel.accel);
+
+    if (vkGetAccelerationStructureDeviceAddressKHR != nullptr)
+    {
+        VkAccelerationStructureDeviceAddressInfoKHR info{ VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR };
+        info.accelerationStructure = resultAccel.accel;
+        resultAccel.buffer.address = vkGetAccelerationStructureDeviceAddressKHR(device, &info);
+    }
+
+    return resultAccel;
 }

@@ -24,7 +24,14 @@ add_executable(engine
   camera.h
   shadows.h
   shadows.cpp
-)
+  raytracing.h
+  raytracing.cpp
+  vk_extensions.h
+  vk_extensions.cpp
+  alignment.hpp
+  vk_buffers.cpp
+  vk_buffers.h
+  )
 
 set_property(TARGET engine PROPERTY CXX_STANDARD 20)
 target_compile_definitions(engine PUBLIC GLM_FORCE_DEPTH_ZERO_TO_ONE)

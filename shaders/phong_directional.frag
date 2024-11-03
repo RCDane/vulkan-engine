@@ -64,8 +64,8 @@ float ShadowCalculation(vec4 fragPosLightSpace, vec3 normal)
     float currentDepth = projCoords.z;
 
     // Bias to prevent shadow acne
-    float bias = max(0.0005 * (1.0 - dot(normalize(normal), normalize(-directionalLight.direction))), 0.0005);
-    // float bias = 0.0005;
+    // float bias = max(0.00005 * (1.0 - dot(normalize(normal), normalize(-directionalLight.direction))), 0.00005);
+    float bias = 0.0005;
     // Perform shadow test
     float shadow = currentDepth < shadowDepth - bias ? 0.0 : 1.0;
 

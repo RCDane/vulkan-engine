@@ -53,6 +53,8 @@ struct LoadedGLTF : public IRenderable {
 
     VulkanEngine* creator;
 
+	glm::mat4 rootTransform = glm::mat4(1.0f);
+
     ~LoadedGLTF() { clearAll(); };
 
     virtual void Draw(const glm::mat4& topMatrix, DrawContext& ctx);

@@ -41,11 +41,14 @@ public:
 	void clear_pools(VkDevice device);
 	void destroy_pools(VkDevice device);
 
+    AccelKHR createAcceleration(VkDevice device, const VkAccelerationStructureCreateInfoKHR& accel_);
+
     VkDescriptorSet allocate(VkDevice device, VkDescriptorSetLayout layout, void* pNext = nullptr);
 private:
 	VkDescriptorPool get_pool(VkDevice device);
 	VkDescriptorPool create_pool(VkDevice device, uint32_t setCount, std::span<PoolSizeRatio> poolRatios);
 
+	VmaAllocator allocator;
 	std::vector<PoolSizeRatio> ratios;
 	std::vector<VkDescriptorPool> fullPools;
 	std::vector<VkDescriptorPool> readyPools;
