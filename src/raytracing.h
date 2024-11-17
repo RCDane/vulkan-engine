@@ -43,7 +43,7 @@ private:
 	DrawContext* m_models;
 	
 public:
-	bool setup(DrawContext drawContext);
+	bool setup(DrawContext &drawContext);
 	bool init_raytracing(VulkanEngine *engine);
 	void createBottomLevelAS(VulkanEngine *engine);
 };

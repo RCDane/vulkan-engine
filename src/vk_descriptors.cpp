@@ -240,11 +240,12 @@ AccelKHR DescriptorAllocatorGrowable::createAcceleration(VkDevice device,const V
 {
     AccelKHR resultAccel;
     // Allocating the buffer to hold the acceleration structure
-    resultAccel.buffer = create_buffer(&device, &allocator, accel_.size, VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR
+    resultAccel.buffer.buffer = create_buffer(&device, &allocator, accel_.size, VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR
         | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
     // Setting the buffer
     VkAccelerationStructureCreateInfoKHR accel = accel_;
-    accel.buffer = resultAccel.buffer.buffer;
+    accel.buffer = resultAccel.buffer.buffer.buffer;
+	resultAccel.buffer.deviceAddress = getBufferDeviceAddress(device, resultAccel.buffer.buffer.buffer);
     // Create the acceleration structure
     vkCreateAccelerationStructureKHR(device, &accel, nullptr, &resultAccel.accel);
 
@@ -252,7 +253,7 @@ AccelKHR DescriptorAllocatorGrowable::createAcceleration(VkDevice device,const V
     {
         VkAccelerationStructureDeviceAddressInfoKHR info{ VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR };
         info.accelerationStructure = resultAccel.accel;
-        resultAccel.buffer.address = vkGetAccelerationStructureDeviceAddressKHR(device, &info);
+        resultAccel.buffer.deviceAddress = vkGetAccelerationStructureDeviceAddressKHR(device, &info);
     }
 
     return resultAccel;

@@ -21,7 +21,6 @@ AllocatedBuffer create_buffer(VkDevice *device, VmaAllocator *allocator,size_t a
 	VK_CHECK(vmaCreateBuffer(*allocator, &bufferInfo, &vmaallocInfo, &newBuffer.buffer, &newBuffer.allocation,
 		&newBuffer.info));
 	newBuffer.allocator = allocator;
-	newBuffer.address = getBufferDeviceAddress(*device, newBuffer.buffer);
 
 	return newBuffer;
 }

@@ -48,19 +48,22 @@ struct AllocatedBuffer {
     VkBuffer buffer;
     VmaAllocation allocation;
     VmaAllocationInfo info;
-    VkDeviceAddress  address{ 0 };
     VmaAllocator *allocator;
+};
+struct AccelBuffer {
+    AllocatedBuffer buffer;
+    VkDeviceAddress deviceAddress;
 };
 
 struct AccelKHR
 {
     VkAccelerationStructureKHR accel = VK_NULL_HANDLE;
-    AllocatedBuffer               buffer;
+    AccelBuffer               buffer;
 
 	void destroy(VkDevice device)
 	{
 		vkDestroyAccelerationStructureKHR(device, accel, nullptr);
-		vmaDestroyBuffer(*buffer.allocator, buffer.buffer, buffer.allocation);
+		vmaDestroyBuffer(*buffer.buffer.allocator, buffer.buffer.buffer, buffer.buffer.allocation);
 	}
 };
 

@@ -541,6 +541,7 @@ BlasBuilder::~BlasBuilder()
 
 VkAccelerationStructureBuildSizesInfoKHR AccelerationStructureBuildData::finalizeGeometry(VkDevice device, VkBuildAccelerationStructureFlagsKHR flags)
 {
+	assert(device != VK_NULL_HANDLE && "VkDevice is null");
 	assert(asGeometry.size() > 0 && "No geometry added to Build Structure");
 	assert(asType != VK_ACCELERATION_STRUCTURE_TYPE_MAX_ENUM_KHR && "Acceleration Structure Type not set");
 
@@ -554,6 +555,9 @@ VkAccelerationStructureBuildSizesInfoKHR AccelerationStructureBuildData::finaliz
 	buildInfo.pGeometries = asGeometry.data();
 	buildInfo.ppGeometries = nullptr;
 	buildInfo.scratchData.deviceAddress = 0;
+
+	assert(buildInfo.geometryCount > 0 && "Geometry count is zero");
+	assert(buildInfo.pGeometries != nullptr && "Geometry data is null");
 
 	std::vector<uint32_t> maxPrimCount(asBuildRangeInfo.size());
 	for (size_t i = 0; i < asBuildRangeInfo.size(); ++i)
@@ -661,7 +665,7 @@ void RaytracingBuilder::buildBlas(VulkanEngine* engine, const std::vector<BlasIn
 	destroy_buffer(blasScratchBuffer);
 }
 
-bool  RaytracingHandler::setup(DrawContext drawContext) {
+bool  RaytracingHandler::setup(DrawContext &drawContext) {
 
 	m_models = &drawContext;
 	return true;
@@ -671,7 +675,7 @@ void RaytracingHandler::createBottomLevelAS(VulkanEngine* engine)
 {
 	// BLAS - Storing each primitive in a geometry
 	std::vector<BlasInput> allBlas;
-	allBlas.reserve(m_models->OpaqueSurfaces.size());
+	allBlas.reserve(m_models->OpaqueSurfaces.size()); 
 	for (const auto& obj : m_models->OpaqueSurfaces)
 	{
 		auto blas = m_rtBuilder.objectToVkGeometry(engine,obj);

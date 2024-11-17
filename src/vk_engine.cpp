@@ -10,6 +10,8 @@
 #include <vk_images.h>
 #include <vk_pipelines.h>
 
+#include <vk_extensions.h>
+
 #include <glm/gtx/transform.hpp>
 
 
@@ -118,8 +120,8 @@ void VulkanEngine::init()
 	loadedScenes["helmet"]->rootTransform = glm::translate(glm::vec3(0.0f, 20.0f, 0.0f)) * loadedScenes["helmet"]->rootTransform;
 	
 	update_scene();
-	//_raytracingHandler.setup(mainDrawContext);
-	//_raytracingHandler.createBottomLevelAS(this);
+	_raytracingHandler.setup(mainDrawContext);
+	_raytracingHandler.createBottomLevelAS(this);
 
 	// everything went fine
     _isInitialized = true;
@@ -705,7 +707,8 @@ void VulkanEngine::init_vulkan()
     _graphicsQueueFamily = vkbDevice.get_queue_index(vkb::QueueType::graphics).value();
 
 	
-	
+	load_VK_EXTENSIONS(_instance, vkGetInstanceProcAddr, _device, vkGetDeviceProcAddr);
+
 	
 	
 	
