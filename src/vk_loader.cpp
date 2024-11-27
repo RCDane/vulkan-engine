@@ -307,7 +307,7 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGltf(VulkanEngine* engine, std::s
 
     int materisals_size = std::max((int)gltf.materials.size(), 1);
 
-    file.descriptorPool.init(engine->_device, materisals_size, sizes);
+    file.descriptorPool.init(engine->_device,&engine->_allocator, materisals_size, sizes);
 
     for (fastgltf::Sampler& sampler : gltf.samplers){
         VkSamplerCreateInfo sampl = 

@@ -24,13 +24,29 @@ public:
 	
 	BlasInput objectToVkGeometry(VulkanEngine* engine, const RenderObject& object);
 	void buildBlas(VulkanEngine* engine, const std::vector<BlasInput>& input, VkBuildAccelerationStructureFlagsKHR flags);
-
+	VkDeviceAddress getBlasDeviceAddress(uint32_t blasId, VkDevice device);
+	void createTopLevelAS(VulkanEngine* engine, std::vector<RenderObject> models);
+	void destroy(VkDevice device);
 protected:
 	std::vector<AccelKHR> m_blas;
+	AccelKHR m_tlas;  // Top-level acceleration structure
+
 	DescriptorAllocatorGrowable m_descriptorAllocator;
 
 	bool hasFlag(VkFlags item, VkFlags flag) { return (item & flag) == flag; }
-
+	void buildTlas(VkCommandBuffer cmd, VulkanEngine* engine,
+		const std::vector<VkAccelerationStructureInstanceKHR>& instances,
+		VkBuildAccelerationStructureFlagsKHR flags,
+		bool                                 update,
+		bool                                 motion);
+	void cmdCreateTlas(VkCommandBuffer cmdBuf,
+		VulkanEngine* engine,
+		uint32_t                             countInstance,
+		VkDeviceAddress                      instBufferAddr,
+		AllocatedBuffer& scratchBuffer,
+		VkBuildAccelerationStructureFlagsKHR flags,
+		bool                                 update,
+		bool                                 motion);
 };
 
 
@@ -42,10 +58,13 @@ private:
 	RaytracingBuilder m_rtBuilder;
 	DrawContext* m_models;
 	
+
 public:
 	bool setup(DrawContext &drawContext);
 	bool init_raytracing(VulkanEngine *engine);
 	void createBottomLevelAS(VulkanEngine *engine);
+	void createTopLevelAS(VulkanEngine* engine);
+	void cleanup(VkDevice device);
 };
 
 

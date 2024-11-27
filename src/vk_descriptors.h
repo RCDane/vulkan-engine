@@ -37,7 +37,7 @@ public:
 		float ratio;
 	};
 
-	void init(VkDevice device, uint32_t initialSets, std::span<PoolSizeRatio> poolRatios);
+	void init(VkDevice device, VmaAllocator *allocator, uint32_t initialSets, std::span<PoolSizeRatio> poolRatios);
 	void clear_pools(VkDevice device);
 	void destroy_pools(VkDevice device);
 
@@ -48,7 +48,7 @@ private:
 	VkDescriptorPool get_pool(VkDevice device);
 	VkDescriptorPool create_pool(VkDevice device, uint32_t setCount, std::span<PoolSizeRatio> poolRatios);
 
-	VmaAllocator allocator;
+	VmaAllocator *_allocator;
 	std::vector<PoolSizeRatio> ratios;
 	std::vector<VkDescriptorPool> fullPools;
 	std::vector<VkDescriptorPool> readyPools;

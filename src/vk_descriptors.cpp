@@ -116,9 +116,9 @@ VkDescriptorPool DescriptorAllocatorGrowable::create_pool(VkDevice device, uint3
     return newPool;
 }
 
-void DescriptorAllocatorGrowable::init(VkDevice device, uint32_t maxSets, std::span<PoolSizeRatio> poolRatios){
+void DescriptorAllocatorGrowable::init(VkDevice device, VmaAllocator *allocator, uint32_t maxSets, std::span<PoolSizeRatio> poolRatios){
     ratios.clear();
-
+	_allocator = allocator;
     for (auto r : poolRatios){
         ratios.push_back(r);
     }
@@ -240,7 +240,7 @@ AccelKHR DescriptorAllocatorGrowable::createAcceleration(VkDevice device,const V
 {
     AccelKHR resultAccel;
     // Allocating the buffer to hold the acceleration structure
-    resultAccel.buffer.buffer = create_buffer(&device, &allocator, accel_.size, VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR
+    resultAccel.buffer.buffer = create_buffer(&device, _allocator, accel_.size, VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR
         | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
     // Setting the buffer
     VkAccelerationStructureCreateInfoKHR accel = accel_;

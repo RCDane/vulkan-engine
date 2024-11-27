@@ -122,6 +122,7 @@ void VulkanEngine::init()
 	update_scene();
 	_raytracingHandler.setup(mainDrawContext);
 	_raytracingHandler.createBottomLevelAS(this);
+	_raytracingHandler.createTopLevelAS(this);
 
 	// everything went fine
     _isInitialized = true;
@@ -149,6 +150,9 @@ void VulkanEngine::cleanup()
 			destroy_buffer(mesh->meshBuffers.indexBuffer);
 			destroy_buffer(mesh->meshBuffers.vertexBuffer);
 		}
+
+		_raytracingHandler.cleanup(_device);
+
 
 		_mainDeletionQueue.flush();
 
@@ -577,7 +581,7 @@ void VulkanEngine::run()
 
 		if (resize_requested) {
 			resize_swapchain();
-	}
+		}
 
 		// imgui new frame
 		ImGui_ImplVulkan_NewFrame();
@@ -671,12 +675,23 @@ void VulkanEngine::init_vulkan()
     features.dynamicRendering = true;
     features.synchronization2 = true;
 	
+	
 
     VkPhysicalDeviceVulkan12Features features12{ .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES };
 	features12.bufferDeviceAddress = true;
 	features12.descriptorIndexing = true;
+	features12.uniformAndStorageBuffer8BitAccess = true;
 	
+	VkPhysicalDeviceVulkan11Features features11{ .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES };
+	features11.storageBuffer16BitAccess = true;
 	
+
+
+	VkPhysicalDeviceAccelerationStructureFeaturesKHR accelerationStructureFeatures{ .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR };
+	accelerationStructureFeatures.accelerationStructure = true;
+	//accelerationStructureFeatures.
+	//VkPhysicalDeviceFeatures features2{};
+	//features.pNext = &accelerationStructureFeatures;
 
 
     //use vkbootstrap to select a gpu. 
@@ -684,11 +699,12 @@ void VulkanEngine::init_vulkan()
 	vkb::PhysicalDeviceSelector selector{ vkb_inst };
 	vkb::PhysicalDevice physicalDevice = selector
 		.set_minimum_version(1, 3)
-		.set_required_features_13(features)
-		.set_required_features_12(features12)
 		.add_required_extension("VK_KHR_acceleration_structure")
+		.add_required_extension_features(accelerationStructureFeatures)
 		.add_required_extension("VK_KHR_ray_tracing_pipeline")
 		.add_required_extension("VK_KHR_deferred_host_operations")
+		.set_required_features_13(features)
+		.set_required_features_12(features12)
 		.set_surface(_surface)
 		.select()
 		.value();
@@ -878,7 +894,7 @@ void VulkanEngine::init_descriptors(){
 		{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 2 }
 	};
 
-	globalDescriptorAllocator.init(_device, 10 , sizes);
+	globalDescriptorAllocator.init(_device,&_allocator, 10 , sizes);
 
 	{
 		DescriptorLayoutBuilder builder;
@@ -935,7 +951,7 @@ void VulkanEngine::init_descriptors(){
 		};
 
 		_frames[i]._frameDescriptors = DescriptorAllocatorGrowable{};
-		_frames[i]._frameDescriptors.init(_device, 1000, frame_sizes);
+		_frames[i]._frameDescriptors.init(_device,&_allocator, 1000, frame_sizes);
 	
 		_mainDeletionQueue.push_function([&, i]() {
 			_frames[i]._frameDescriptors.destroy_pools(_device);
@@ -1208,7 +1224,10 @@ GPUMeshBuffers VulkanEngine::uploadMesh(std::span<uint32_t> indices, std::span<V
 
 	//create vertex buffer
 	newSurface.vertexBuffer = create_buffer(&_device, &_allocator,
-		vertexBufferSize, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+		vertexBufferSize, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT 
+		| VK_BUFFER_USAGE_TRANSFER_DST_BIT 
+		| VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT 
+		| VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR,
 		VMA_MEMORY_USAGE_GPU_ONLY);
 
 	//find the adress of the vertex buffer
@@ -1217,12 +1236,16 @@ GPUMeshBuffers VulkanEngine::uploadMesh(std::span<uint32_t> indices, std::span<V
 
 	//create index buffer
 	newSurface.indexBuffer = create_buffer(&_device, &_allocator,
-		indexBufferSize, VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+		indexBufferSize, VK_BUFFER_USAGE_INDEX_BUFFER_BIT 
+		| VK_BUFFER_USAGE_TRANSFER_DST_BIT 
+		| VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
+		| VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR,
 		VMA_MEMORY_USAGE_GPU_ONLY);
 
 
 	AllocatedBuffer staging = create_buffer(&_device, &_allocator,
-		vertexBufferSize + indexBufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, VMA_MEMORY_USAGE_CPU_ONLY);
+		vertexBufferSize + indexBufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT 
+			| VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, VMA_MEMORY_USAGE_CPU_ONLY);
 
 	void* data = staging.allocation->GetMappedData();
 
