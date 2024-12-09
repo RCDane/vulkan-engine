@@ -6,7 +6,6 @@ void DescriptorLayoutBuilder::add_binding(uint32_t binding, VkDescriptorType typ
     newbind.binding = binding;
     newbind.descriptorCount = 1;
     newbind.descriptorType = type;
-
     bindings.push_back(newbind);
 }
 
@@ -23,7 +22,6 @@ VkDescriptorSetLayout DescriptorLayoutBuilder::build(VkDevice device, VkShaderSt
 
     VkDescriptorSetLayoutCreateInfo info = {.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
     info.pNext = pNext;
-
     info.pBindings = bindings.data();
     info.bindingCount = (uint32_t)bindings.size();
     info.flags = flags;
@@ -219,6 +217,19 @@ void DescriptorWriter::write_image(int binding,VkImageView image, VkSampler samp
 
 	writes.push_back(write);
 }
+
+void DescriptorWriter::write_acceleration_structure(int binding, VkWriteDescriptorSetAccelerationStructureKHR as)
+{
+	
+	VkWriteDescriptorSet write = { VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET };
+	write.dstBinding = binding;
+	write.dstSet = VK_NULL_HANDLE;
+	write.descriptorCount = 1;
+	write.descriptorType = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
+	write.pNext = &as;
+	writes.push_back(write);
+}
+
 
 void DescriptorWriter::clear()
 {

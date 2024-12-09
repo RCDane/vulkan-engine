@@ -123,7 +123,7 @@ void VulkanEngine::init()
 	_raytracingHandler.setup(mainDrawContext);
 	_raytracingHandler.createBottomLevelAS(this);
 	_raytracingHandler.createTopLevelAS(this);
-
+	_raytracingHandler.createRtDescriptorSet(this);
 	// everything went fine
     _isInitialized = true;
 }

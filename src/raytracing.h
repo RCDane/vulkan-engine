@@ -26,7 +26,12 @@ public:
 	void buildBlas(VulkanEngine* engine, const std::vector<BlasInput>& input, VkBuildAccelerationStructureFlagsKHR flags);
 	VkDeviceAddress getBlasDeviceAddress(uint32_t blasId, VkDevice device);
 	void createTopLevelAS(VulkanEngine* engine, std::vector<RenderObject> models);
+	VkAccelerationStructureKHR getAccelerationStructure() const {
+		return m_tlas.accel;
+	};
 	void destroy(VkDevice device);
+
+
 protected:
 	std::vector<AccelKHR> m_blas;
 	AccelKHR m_tlas;  // Top-level acceleration structure
@@ -50,6 +55,13 @@ protected:
 };
 
 
+class RaytracingDescriptorSetBindings {
+public:
+	std::vector<VkDescriptorSetLayoutBinding> m_bindings;
+	std::vector<VkDescriptorBindingFlags> m_bindingFlags;
+};
+
+
 class RaytracingHandler {
 	
 private:
@@ -58,12 +70,19 @@ private:
 	RaytracingBuilder m_rtBuilder;
 	DrawContext* m_models;
 	
+	
+	RaytracingDescriptorSetBindings m_rtDescSetLayoutBind;
+	VkDescriptorPool m_rtDescPool;
+	VkDescriptorSetLayout m_rtDescSetLayout;
+	VkDescriptorSet m_rtDescSet;
 
 public:
 	bool setup(DrawContext &drawContext);
 	bool init_raytracing(VulkanEngine *engine);
 	void createBottomLevelAS(VulkanEngine *engine);
 	void createTopLevelAS(VulkanEngine* engine);
+	void createRtDescriptorSet(VulkanEngine* engine);
+
 	void cleanup(VkDevice device);
 };
 

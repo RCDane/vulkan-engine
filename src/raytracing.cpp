@@ -921,3 +921,28 @@ void RaytracingBuilder::destroy(VkDevice device) {
 void RaytracingHandler::cleanup(VkDevice device) {
 	m_rtBuilder.destroy(device);
 }
+
+void RaytracingHandler::createRtDescriptorSet(VulkanEngine *engine) {
+	DescriptorLayoutBuilder builder;
+	builder.add_binding(0, VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR);
+	builder.add_binding(1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+	m_rtDescSetLayout = builder.build(engine->_device,
+				VK_SHADER_STAGE_RAYGEN_BIT_KHR |
+				VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR);
+	m_rtDescSet = engine->globalDescriptorAllocator.allocate(engine->_device, m_rtDescSetLayout);
+	
+	VkAccelerationStructureKHR tlas = m_rtBuilder.getAccelerationStructure();
+	
+	VkWriteDescriptorSetAccelerationStructureKHR asInfo = { VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR };
+	asInfo.accelerationStructureCount = 1;
+	asInfo.pAccelerationStructures = &tlas;
+
+	DescriptorWriter writer;
+	writer.write_acceleration_structure(0, asInfo);
+	writer.write_image(1, 
+		engine->_drawImage.imageView, 
+		VK_NULL_HANDLE  // Need to define sampler
+		,VK_IMAGE_LAYOUT_GENERAL, 
+		VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+	writer.update_set(engine->_device, m_rtDescSet);
+}
