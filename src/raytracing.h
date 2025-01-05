@@ -9,7 +9,7 @@
 class VulkanEngine;  // 
 struct RenderObject;
 struct DrawContext;
-
+struct GlobalUniforms;
 
 struct BlasInput {
 	std::vector<VkAccelerationStructureGeometryKHR>       asGeometry;
@@ -25,7 +25,7 @@ public:
 	BlasInput objectToVkGeometry(VulkanEngine* engine, const RenderObject& object);
 	void buildBlas(VulkanEngine* engine, const std::vector<BlasInput>& input, VkBuildAccelerationStructureFlagsKHR flags);
 	VkDeviceAddress getBlasDeviceAddress(uint32_t blasId, VkDevice device);
-	void createTopLevelAS(VulkanEngine* engine, std::vector<RenderObject> models);
+	void createTopLevelAS(VulkanEngine* engine, const std::vector<RenderObject>& models);
 	VkAccelerationStructureKHR getAccelerationStructure() const {
 		return m_tlas.accel;
 	};
@@ -60,7 +60,14 @@ public:
 	std::vector<VkDescriptorSetLayoutBinding> m_bindings;
 	std::vector<VkDescriptorBindingFlags> m_bindingFlags;
 };
-
+// Push constant structure for the ray tracer
+struct PushConstantRay
+{
+	glm::vec4  clearColor;
+	glm::vec3  lightPosition;
+	float lightIntensity;
+	int   lightType;
+};
 
 class RaytracingHandler {
 	
@@ -70,19 +77,41 @@ private:
 	RaytracingBuilder m_rtBuilder;
 	DrawContext* m_models;
 	
-	
+	AllocatedBuffer m_bObjDesc;  // Device buffer of the OBJ descriptions
+
+
+	VkDescriptorSet m_descSet;
 	RaytracingDescriptorSetBindings m_rtDescSetLayoutBind;
 	VkDescriptorPool m_rtDescPool;
 	VkDescriptorSetLayout m_rtDescSetLayout;
 	VkDescriptorSet m_rtDescSet;
+	VkDescriptorSetLayout m_descSetLayout;
+	AllocatedBuffer m_rtSBTBuffer;
+	VkStridedDeviceAddressRegionKHR m_rgenRegion{};
+	VkStridedDeviceAddressRegionKHR m_missRegion{};
+	VkStridedDeviceAddressRegionKHR m_hitRegion{};
+	VkStridedDeviceAddressRegionKHR m_callRegion{};
+
 
 public:
-	bool setup(DrawContext &drawContext);
+	void createDescriptorSetLayout(VulkanEngine* engine);
+	bool setup(VulkanEngine* engine);
 	bool init_raytracing(VulkanEngine *engine);
 	void createBottomLevelAS(VulkanEngine *engine);
 	void createTopLevelAS(VulkanEngine* engine);
 	void createRtDescriptorSet(VulkanEngine* engine);
+	void updateRtDescriptorSet(VulkanEngine* engine);
+	void createRtPipeline(VulkanEngine* engine);
+	void createRtShaderBindingTable(VulkanEngine* engine);
+	void raytrace(VkCommandBuffer cmd, VulkanEngine* engine);
+	AllocatedBuffer m_bGlobals;  // Device-Host of the camera matrices
 
+	GlobalUniforms* raytracingUniforms{};
+	GlobalUniforms* m_uniformMappedPtr;
+	std::vector<VkRayTracingShaderGroupCreateInfoKHR> m_rtShaderGroups;
+	VkPipelineLayout                                  m_rtPipelineLayout;
+	VkPipeline                                        m_rtPipeline;
+	PushConstantRay m_pcRay{};
 	void cleanup(VkDevice device);
 };
 

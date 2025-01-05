@@ -15,7 +15,7 @@ inline VkDeviceAddress getBufferDeviceAddress(VkDevice device, VkBuffer buffer)
 	return vkGetBufferDeviceAddress(device, &info);
 }
 
-AllocatedBuffer create_buffer(VkDevice* device, VmaAllocator* allocator, size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage);
+AllocatedBuffer create_buffer(VkDevice* device, VmaAllocator* allocator, size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage, VkBufferCreateFlagBits flags = (VkBufferCreateFlagBits)0);
 void destroy_buffer(AllocatedBuffer buffer);
 
 

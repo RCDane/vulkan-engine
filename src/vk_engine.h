@@ -35,6 +35,9 @@ struct DeletionQueue
 struct RenderObject {
 	uint32_t indexCount;
 	uint32_t firstIndex;
+	uint32_t firstVertex;
+	uint32_t vertexCount;
+	uint32_t maxVertex;
 	VkBuffer indexBuffer;
 
 	MaterialInstance* material;
@@ -95,7 +98,12 @@ struct GPUSceneData {
     glm::vec4 sunlightColor;
 	glm::vec4 cameraPosition;
 };
-
+struct GlobalUniforms
+{
+	glm::mat4 viewProj;     // Camera view * projection
+	glm::mat4 viewInverse;  // Camera inverse view matrix
+	glm::mat4 projInverse;  // Camera inverse projection matrix
+};
 
 struct GLTFMetallic_Roughness {
 	MaterialPipeline opaquePipeline;
@@ -106,8 +114,12 @@ struct GLTFMetallic_Roughness {
 	struct MaterialConstants {
 		glm::vec4 colorFactors;
 		glm::vec4 metal_rough_factors;
+		int colorIdx;
+		int normalIdx;
+		int metalIdx;
+		int padding;
 		//padding, we need it anyway for uniform buffers
-		glm::vec4 extra[14];
+		glm::vec4 extra[13];
 	};
 
 	struct MaterialResources {
@@ -120,6 +132,7 @@ struct GLTFMetallic_Roughness {
 
 		VkBuffer dataBuffer;
 		uint32_t dataBufferOffset;
+		MaterialConstants constants;
 	};
 
 	DescriptorWriter writer;
@@ -127,7 +140,7 @@ struct GLTFMetallic_Roughness {
 	void build_pipelines(VulkanEngine* engine);
 	void clear_resources(VkDevice device);
 
-	MaterialInstance write_material(VkDevice device, MaterialPass pass, const MaterialResources& resources, DescriptorAllocatorGrowable& descriptorAllocator);
+	MaterialInstance write_material(VulkanEngine* engine, MaterialPass pass, MaterialResources& resources, DescriptorAllocatorGrowable& descriptorAllocator);
 };
 
 constexpr unsigned int FRAME_OVERLAP = 2;
@@ -168,6 +181,8 @@ public:
 
 	// Descriptor related
 	DescriptorAllocatorGrowable globalDescriptorAllocator;
+	DescriptorAllocatorGrowable updatingGlobalDescriptorAllocator;
+
 
 	VkDescriptorSet _drawImageDescriptors;
 	VkDescriptorSetLayout _drawImageDescriptorLayout;
@@ -215,6 +230,9 @@ public:
 	MaterialInstance defaultData;
 	GLTFMetallic_Roughness metalRoughMaterial;
 
+	std::vector<VkImageView> textureImages;
+	std::vector<VkSampler> textureSamplers;
+
 	GPUSceneData sceneData;
 
 	DrawContext mainDrawContext;
@@ -223,9 +241,12 @@ public:
 	VkDescriptorSetLayout _singleImageDescriptorLayout;
 	VkDescriptorSetLayout _gpuSceneDataDescriptorLayout;
 	VkDescriptorSetLayout _lightingDescriptorLayout;
+	VkDescriptorSetLayout _textureArrayLayout;
+
+	VkDescriptorSet _textureArrayDescriptor;
 
 	bool resize_requested; 
-
+	bool useRaytracing = true;
     Camera mainCamera;
 
 
@@ -286,6 +307,8 @@ private:
 	void draw_geometry(VkCommandBuffer cmd);
 
 	void draw_shadows(VkCommandBuffer cmd);
+
+	void draw_raytraced(VkCommandBuffer cmd);
 
 	void draw_imgui(VkCommandBuffer cmd, VkImageView targetImageView);
 

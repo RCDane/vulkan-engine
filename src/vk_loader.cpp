@@ -7,7 +7,7 @@
 #include <variant>
 #include <vk_loader.h>
 #include <stdlib.h>
-
+#include <functional> 
 #include "fastgltf/types.hpp"
 #include "fastgltf/util.hpp"
 #include <iostream>
@@ -103,124 +103,7 @@ std::optional<AllocatedImage> load_image(VulkanEngine* engine, fastgltf::Asset& 
     }
 }
 
-std::optional<std::vector<std::shared_ptr<MeshAsset>>> loadGltfMeshes(VulkanEngine* engine, std::filesystem::path filePath){
-    std::cout << "Loading GLTF: " << filePath << std::endl;
 
-    fastgltf::GltfDataBuffer data;
-    data.loadFromFile(filePath);
-
-    constexpr auto gltfOptions = fastgltf::Options::LoadGLBBuffers
-        | fastgltf::Options::LoadExternalBuffers;
-
-    fastgltf::Asset gltf;
-    fastgltf::Parser parser {};
-
-    auto load = parser.loadBinaryGLTF(&data, filePath.parent_path(), gltfOptions);
-    if (load) {
-        gltf = std::move(load.get());
-    } else {
-        fmt::print("Failed to load glTF: {} \n", fastgltf::to_underlying(load.error()));
-        return {};
-    }
-
-
-    std::vector<std::shared_ptr<MeshAsset>> meshes;
-
-    // use the same vectors for all meshes so that the memory doesnt reallocate as
-    // often
-    std::vector<uint32_t> indices;
-    std::vector<Vertex> vertices;
-    for (fastgltf::Mesh& mesh : gltf.meshes) {
-        MeshAsset newmesh;
-
-        newmesh.name = mesh.name;
-
-        // clear the mesh arrays each mesh, we dont want to merge them by error
-        indices.clear();
-        vertices.clear();
-
-        for (auto&& p : mesh.primitives) {
-            GeoSurface newSurface;
-            newSurface.startIndex = (uint32_t)indices.size();
-            newSurface.count = (uint32_t)gltf.accessors[p.indicesAccessor.value()].count;
-
-            size_t initial_vtx = vertices.size();
-
-            // load indexes
-            {
-                fastgltf::Accessor& indexaccessor = gltf.accessors[p.indicesAccessor.value()];
-                indices.reserve(indices.size() + indexaccessor.count);
-
-                fastgltf::iterateAccessor<std::uint32_t>(gltf, indexaccessor,
-                    [&](std::uint32_t idx) {
-                        indices.push_back(idx + initial_vtx);
-                    });
-            }
-
-            // load vertex positions
-            {
-                fastgltf::Accessor& posAccessor = gltf.accessors[p.findAttribute("POSITION")->second];
-                vertices.resize(vertices.size() + posAccessor.count);
-
-                fastgltf::iterateAccessorWithIndex<glm::vec3>(gltf, posAccessor,
-                    [&](glm::vec3 v, size_t index) {
-                        Vertex newvtx;
-                        newvtx.position = v;
-                        newvtx.normal = { 1, 0, 0 };
-                        newvtx.color = glm::vec4 { 1.f };
-                        newvtx.uv_x = 0;
-                        newvtx.uv_y = 0;
-                        vertices[initial_vtx + index] = newvtx;
-                    });
-            }
-
-            // load vertex normals
-            auto normals = p.findAttribute("NORMAL");
-            if (normals != p.attributes.end()) {
-
-                fastgltf::iterateAccessorWithIndex<glm::vec3>(gltf, gltf.accessors[(*normals).second],
-                    [&](glm::vec3 v, size_t index) {
-                        vertices[initial_vtx + index].normal = v;
-                    });
-            }
-
-            // load UVs
-            auto uv = p.findAttribute("TEXCOORD_0");
-            if (uv != p.attributes.end()) {
-
-                fastgltf::iterateAccessorWithIndex<glm::vec2>(gltf, gltf.accessors[(*uv).second],
-                    [&](glm::vec2 v, size_t index) {
-                        vertices[initial_vtx + index].uv_x = v.x;
-                        vertices[initial_vtx + index].uv_y = v.y;
-                    });
-            }
-
-            // load vertex colors
-            auto colors = p.findAttribute("COLOR_0");
-            if (colors != p.attributes.end()) {
-
-                fastgltf::iterateAccessorWithIndex<glm::vec4>(gltf, gltf.accessors[(*colors).second],
-                    [&](glm::vec4 v, size_t index) {
-                        vertices[initial_vtx + index].color = v;
-                    });
-            }
-            newmesh.surfaces.push_back(newSurface);
-        }
-
-        // display the vertex normals
-        constexpr bool OverrideColors = true;
-        if (OverrideColors) {
-            for (Vertex& vtx : vertices) {
-                vtx.color = glm::vec4(vtx.normal, 1.f);
-            }
-        }
-        newmesh.meshBuffers = engine->uploadMesh(indices, vertices);
-
-        meshes.emplace_back(std::make_shared<MeshAsset>(std::move(newmesh)));
-    }
-
-    return meshes;
-}
 
 VkFilter extract_filter(fastgltf::Filter filter)
 {
@@ -256,8 +139,18 @@ VkSamplerMipmapMode extract_mipmap_mode(fastgltf::Filter filter)
 
 
 
+
+
+std::unordered_map<size_t, int> textureMap;
+bool textureMapInitialized = false;
+
+
+uint32_t findMaxVertexIdx(std::span<uint32_t> indices) {
+    return *std::max_element(indices.begin(), indices.end());
+}
+
 std::optional<std::shared_ptr<LoadedGLTF>> loadGltf(VulkanEngine* engine, std::string_view filePath){
-    fmt::print("Loading GLTF: {}", filePath);
+    fmt::print("Loading GLTF: {}\n", filePath);
 
     std::shared_ptr<LoadedGLTF> scene = std::make_shared<LoadedGLTF>();
     scene->creator = engine;
@@ -354,12 +247,32 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGltf(VulkanEngine* engine, std::s
     file.materialDataBuffer = create_buffer(&engine->_device, &engine->_allocator,sizeof(GLTFMetallic_Roughness::MaterialConstants) * materisals_size,
         VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
     int data_index = 0;
+
+    
+
+    if (!textureMapInitialized) {
+        engine->textureImages.emplace_back(engine->_whiteImage.imageView);
+        engine->textureSamplers.emplace_back(engine->_defaultSamplerLinear);
+        engine->textureImages.emplace_back(engine->_whiteImage.imageView);
+        engine->textureSamplers.emplace_back(engine->_defaultSamplerLinear);
+        engine->textureImages.emplace_back(engine->_defaultNormalMap.imageView);
+        engine->textureSamplers.emplace_back(engine->_defaultSamplerLinear);
+		textureMapInitialized = true;
+
+    }
+
+
+
     GLTFMetallic_Roughness::MaterialConstants* sceneMaterialConstants = (GLTFMetallic_Roughness::MaterialConstants*)file.materialDataBuffer.info.pMappedData;
 
     for (fastgltf::Material& mat : gltf.materials) {
         std::shared_ptr<GLTFMaterial> newMat = std::make_shared<GLTFMaterial>();
         materials.push_back(newMat);
         file.materials[mat.name.c_str()] = newMat;
+
+
+        
+
 
         GLTFMetallic_Roughness::MaterialConstants constants;
         constants.colorFactors.x = mat.pbrData.baseColorFactor[0];
@@ -369,8 +282,12 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGltf(VulkanEngine* engine, std::s
 
         constants.metal_rough_factors.x = mat.pbrData.metallicFactor;
         constants.metal_rough_factors.y = mat.pbrData.roughnessFactor;
+
+        constants.colorIdx = 0;
+        constants.metalIdx = 1;
+        constants.normalIdx = 2;
+
         // write material parameters to buffer
-        sceneMaterialConstants[data_index] = constants;
 
         MaterialPass passType = MaterialPass::MainColor;
         if (mat.alphaMode == fastgltf::AlphaMode::Blend) {
@@ -388,25 +305,100 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGltf(VulkanEngine* engine, std::s
         // set the uniform buffer for the material data
         materialResources.dataBuffer = file.materialDataBuffer.buffer;
         materialResources.dataBufferOffset = data_index * sizeof(GLTFMetallic_Roughness::MaterialConstants);
+        
+        
+        
+        std::hash<std::string> hash_fn;
+		std::string name = path.string();
+        
+
         // grab textures from gltf file
         if (mat.pbrData.baseColorTexture.has_value()) {
             size_t img = gltf.textures[mat.pbrData.baseColorTexture.value().textureIndex].imageIndex.value();
             size_t sampler = gltf.textures[mat.pbrData.baseColorTexture.value().textureIndex].samplerIndex.value();
-
             materialResources.colorImage = images[img];
             materialResources.colorSampler = file.samplers[sampler];
+            uint32_t idx = 0;
+
+            size_t colorTextureIndex = mat.pbrData.baseColorTexture.value().textureIndex;
+
+            size_t hash = hash_fn(name + std::to_string(colorTextureIndex));
+
+
+
+            if (!textureMap.contains(hash)) {
+				idx = engine->textureImages.size();
+                engine->textureImages.emplace_back(materialResources.colorImage.imageView);
+                engine->textureSamplers.emplace_back(materialResources.colorSampler);
+				textureMap.emplace(hash, idx);
+
+            }
+            else {
+                idx = textureMap[hash];
+                materialResources.colorImage.imageView = engine->textureImages[idx];
+                materialResources.colorSampler = engine->textureSamplers[idx];
+            }
+            constants.colorIdx = idx;
         }
         
+        // Ensure that metal/roughness textures are not loaded multiple times
+        if (mat.pbrData.metallicRoughnessTexture.has_value()) {
+            size_t img = gltf.textures[mat.pbrData.metallicRoughnessTexture.value().textureIndex].imageIndex.value();
+            size_t sampler = gltf.textures[mat.pbrData.metallicRoughnessTexture.value().textureIndex].samplerIndex.value();
+            materialResources.metalRoughImage = images[img];
+            materialResources.metalRoughSampler = file.samplers[sampler];
+			uint32_t idx = 0;
+
+
+            size_t metalTextureIndex = mat.pbrData.metallicRoughnessTexture.value().textureIndex;
+
+            size_t hash = hash_fn(name + std::to_string(metalTextureIndex));
+
+            if (!textureMap.contains(hash)) {
+                idx = engine->textureImages.size();
+                engine->textureImages.emplace_back(materialResources.metalRoughImage.imageView);
+                engine->textureSamplers.emplace_back(materialResources.metalRoughSampler);
+                textureMap.emplace(hash, idx);
+            }
+            else {
+                idx = textureMap[hash];
+                materialResources.metalRoughImage.imageView = engine->textureImages[idx];
+                materialResources.metalRoughSampler = engine->textureSamplers[idx];
+            }
+            constants.metalIdx = idx;
+
+        }
+
+        // Ensure that normal maps are not loaded multiple times
         if (mat.normalTexture.has_value()) {
             size_t img = gltf.textures[mat.normalTexture.value().textureIndex].imageIndex.value();
             size_t sampler = gltf.textures[mat.normalTexture.value().textureIndex].samplerIndex.value();
-
             materialResources.normalImage = images[img];
             materialResources.normalSampler = file.samplers[sampler];
+            uint32_t idx = 0;
+
+            size_t normalTextureIndex = mat.normalTexture.value().textureIndex;
+
+            size_t hash = hash_fn(name + std::to_string(normalTextureIndex));
+
+            if (!textureMap.contains(hash)) {
+                idx = engine->textureImages.size();
+                engine->textureImages.emplace_back(materialResources.normalImage.imageView);
+                engine->textureSamplers.emplace_back(materialResources.normalSampler);
+                textureMap.emplace(hash, idx);
+            }
+            else {
+                idx = textureMap[hash];
+                materialResources.normalImage.imageView = engine->textureImages[idx];
+                materialResources.normalSampler = engine->textureSamplers[idx];
+            }
+            constants.normalIdx = idx;
         }
 
+        sceneMaterialConstants[data_index] = constants;
+
         // build material
-        newMat->data = engine->metalRoughMaterial.write_material(engine->_device, passType, materialResources, file.descriptorPool);
+        newMat->data = engine->metalRoughMaterial.write_material(engine, passType, materialResources, file.descriptorPool);
 
         data_index++;
     }
@@ -425,69 +417,70 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGltf(VulkanEngine* engine, std::s
         file.meshes[mesh.name.c_str()] = newmesh;
         newmesh->name = mesh.name;
 
-        // clear the mesh arrays each mesh, we dont want to merge them by error
+        // Clear the mesh arrays for the new mesh
         indices.clear();
         vertices.clear();
 
+        // Clear surfaces for the new mesh
+        newmesh->surfaces.clear();
+
         for (auto&& p : mesh.primitives) {
             GeoSurface newSurface;
-            newSurface.startIndex = (uint32_t)indices.size();
-            newSurface.count = (uint32_t)gltf.accessors[p.indicesAccessor.value()].count;
+            newSurface.startIndex = static_cast<uint32_t>(indices.size());
+            newSurface.count = static_cast<uint32_t>(gltf.accessors[p.indicesAccessor.value()].count);
             newSurface.hasTangents = false;
             size_t initial_vtx = vertices.size();
+            newSurface.startVertex = static_cast<uint32_t>(initial_vtx);
 
-            // load indexes
+            // Load indices
             {
                 fastgltf::Accessor& indexaccessor = gltf.accessors[p.indicesAccessor.value()];
                 indices.reserve(indices.size() + indexaccessor.count);
 
                 fastgltf::iterateAccessor<std::uint32_t>(gltf, indexaccessor,
                     [&](std::uint32_t idx) {
-                        indices.push_back(idx + initial_vtx);
+                        indices.push_back(idx); // Offset by initial_vtx
                     });
             }
 
-            // load vertex positions
+            // Load vertex positions
             {
                 fastgltf::Accessor& posAccessor = gltf.accessors[p.findAttribute("POSITION")->second];
                 vertices.resize(vertices.size() + posAccessor.count);
-
                 fastgltf::iterateAccessorWithIndex<glm::vec3>(gltf, posAccessor,
                     [&](glm::vec3 v, size_t index) {
                         Vertex newvtx;
                         newvtx.position = v;
                         newvtx.normal = { 1, 0, 0 };
-                        newvtx.color = glm::vec4 { 1.f };
+                        newvtx.color = glm::vec4{ 1.f };
                         newvtx.uv_x = 0;
                         newvtx.uv_y = 0;
                         vertices[initial_vtx + index] = newvtx;
                     });
             }
 
-            // load vertex normals
+            // Load vertex normals
             auto normals = p.findAttribute("NORMAL");
             if (normals != p.attributes.end()) {
-
                 fastgltf::iterateAccessorWithIndex<glm::vec3>(gltf, gltf.accessors[(*normals).second],
                     [&](glm::vec3 v, size_t index) {
                         vertices[initial_vtx + index].normal = v;
                     });
             }
 
-            // load vertex tangents
+            // Load vertex tangents
             auto tangents = p.findAttribute("TANGENT");
             if (tangents != p.attributes.end()) {
-				newSurface.hasTangents = true;
+                newSurface.hasTangents = true;
                 fastgltf::iterateAccessorWithIndex<glm::vec4>(gltf, gltf.accessors[(*tangents).second],
                     [&](glm::vec4 v, size_t index) {
                         vertices[initial_vtx + index].tangent = v;
                     });
             }
 
-            // load UVs
+            // Load UVs
             auto uv = p.findAttribute("TEXCOORD_0");
             if (uv != p.attributes.end()) {
-
                 fastgltf::iterateAccessorWithIndex<glm::vec2>(gltf, gltf.accessors[(*uv).second],
                     [&](glm::vec2 v, size_t index) {
                         vertices[initial_vtx + index].uv_x = v.x;
@@ -495,36 +488,42 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGltf(VulkanEngine* engine, std::s
                     });
             }
 
-            // load vertex colors
+            // Load vertex colors
             auto colors = p.findAttribute("COLOR_0");
             if (colors != p.attributes.end()) {
-
                 fastgltf::iterateAccessorWithIndex<glm::vec4>(gltf, gltf.accessors[(*colors).second],
                     [&](glm::vec4 v, size_t index) {
                         vertices[initial_vtx + index].color = v;
                     });
             }
 
+            // Assign material
             if (p.materialIndex.has_value()) {
                 newSurface.material = materials[p.materialIndex.value()];
-            } else {
+            }
+            else {
                 newSurface.material = materials[0];
             }
 
-
-            //loop the vertices of this surface, find min/max bounds
+            // Compute min/max bounds
             glm::vec3 minpos = vertices[initial_vtx].position;
             glm::vec3 maxpos = vertices[initial_vtx].position;
-            for (int i = initial_vtx; i < vertices.size(); i++) {
+            for (size_t i = initial_vtx; i < vertices.size(); i++) {
                 minpos = glm::min(minpos, vertices[i].position);
                 maxpos = glm::max(maxpos, vertices[i].position);
             }
-            // calculate origin and extents from the min/max, use extent lenght for radius
+            // Calculate origin and extents from the min/max, use extent length for radius
             newSurface.bounds.origin = (maxpos + minpos) / 2.f;
             newSurface.bounds.extents = (maxpos - minpos) / 2.f;
             newSurface.bounds.sphereRadius = glm::length(newSurface.bounds.extents);
 
+            newSurface.maxVertex = *std::max_element(indices.begin(), indices.end());
+            fastgltf::Accessor& posAccessor = gltf.accessors[p.findAttribute("POSITION")->second];
+            newSurface.vertexCount = static_cast<uint32_t>(posAccessor.count);
 
+            // Alternatively:
+			printf("mesh vertex count: %d\n", newSurface.vertexCount);
+			printf("mesh index count: %d\n", newSurface.count);
 
             newmesh->surfaces.push_back(newSurface);
         }

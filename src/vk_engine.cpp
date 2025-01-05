@@ -52,7 +52,6 @@ void VulkanEngine::init()
     assert(loadedEngine == nullptr);
     loadedEngine = this;
 
-
 	// Print current path
 	std::filesystem::path cwd = std::filesystem::current_path() / "filename.txt";
 
@@ -75,7 +74,6 @@ void VulkanEngine::init()
 
     init_vulkan();
 
-	//_raytracingHandler.init_raytracing(this);
 
     init_swapchain();
     
@@ -119,11 +117,21 @@ void VulkanEngine::init()
 	loadedScenes["helmet"]->rootTransform = glm::scale(glm::vec3(10.0f)) * loadedScenes["helmet"]->rootTransform;
 	loadedScenes["helmet"]->rootTransform = glm::translate(glm::vec3(0.0f, 20.0f, 0.0f)) * loadedScenes["helmet"]->rootTransform;
 	
+	DescriptorWriter writer;
+	writer.write_texture_array(0, textureImages, textureSamplers, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+	writer.update_set(_device, _textureArrayDescriptor);
+	_raytracingHandler.init_raytracing(this);
+
+
 	update_scene();
-	_raytracingHandler.setup(mainDrawContext);
+
+	_raytracingHandler.setup(this);
+	_raytracingHandler.createDescriptorSetLayout(this);
 	_raytracingHandler.createBottomLevelAS(this);
 	_raytracingHandler.createTopLevelAS(this);
 	_raytracingHandler.createRtDescriptorSet(this);
+	_raytracingHandler.createRtPipeline(this);
+	_raytracingHandler.createRtShaderBindingTable(this);
 	// everything went fine
     _isInitialized = true;
 }
@@ -248,21 +256,32 @@ void VulkanEngine::draw()
 
 	draw_background(cmd);
 
-	VkImageSubresourceRange subResourceRange = vkinit::image_subresource_range(VK_IMAGE_ASPECT_DEPTH_BIT);
+
+	if (useRaytracing) {
+
+		_raytracingHandler.raytrace(cmd, this);
+		vkutil::transition_image(cmd, _drawImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+
+	}
+	else {
+		VkImageSubresourceRange subResourceRange = vkinit::image_subresource_range(VK_IMAGE_ASPECT_DEPTH_BIT);
 	
-	vkutil::transition_shadow_map(cmd, _shadowImage->image.image, VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, subResourceRange);
+		vkutil::transition_shadow_map(cmd, _shadowImage->image.image, VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, subResourceRange);
 
-	draw_shadows(cmd);
+		draw_shadows(cmd);
 	
-	vkutil::transition_shadow_map(cmd, _shadowImage->image.image, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL, subResourceRange);
+		vkutil::transition_shadow_map(cmd, _shadowImage->image.image, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL, subResourceRange);
 
 
-	vkutil::transition_image(cmd, _drawImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-	vkutil::transition_image(cmd, _depthImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
+		vkutil::transition_image(cmd, _drawImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+		vkutil::transition_image(cmd, _depthImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
 
-	draw_geometry(cmd);
+		draw_geometry(cmd);
+		vkutil::transition_image(cmd, _drawImage.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
 
-	vkutil::transition_image(cmd, _drawImage.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+	}
+
+
 	vkutil::transition_image(cmd, _swapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
 	vkutil::copy_image_to_image(cmd, _drawImage.image, _swapchainImages[swapchainImageIndex], _drawExtent, _swapchainExtent);
@@ -439,6 +458,7 @@ void VulkanEngine::draw_geometry(VkCommandBuffer cmd)
 	writer.write_image(1, _shadowImage->image.imageView, _shadowImage->sampler, VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 	writer.update_set(_device, directionalLightingDescriptor);
 
+	
 	MaterialPipeline* lastPipeline = nullptr;
 	MaterialInstance* lastMaterial = nullptr;
 	VkBuffer lastIndexBuffer = VK_NULL_HANDLE;
@@ -448,12 +468,16 @@ void VulkanEngine::draw_geometry(VkCommandBuffer cmd)
 			if (r.material->pipeline != lastPipeline){
 				lastPipeline = r.material->pipeline;
 				vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, r.material->pipeline->pipeline);
+
 				vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,r.material->pipeline->layout, 0, 1,
 					&globalDescriptor, 0, nullptr);
 				vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,r.material->pipeline->layout, 2, 1,
 					&lightingDescriptor, 0, nullptr);
 				vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, r.material->pipeline->layout, 3, 1,
 					&directionalLightingDescriptor, 0, nullptr);
+				vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, r.material->pipeline->layout, 4, 1, 
+					&_textureArrayDescriptor, 0, nullptr);
+
 				VkViewport viewport = {};
 				viewport.x = 0;
 				viewport.y = 0;
@@ -485,7 +509,11 @@ void VulkanEngine::draw_geometry(VkCommandBuffer cmd)
 		push_constants.worldMatrix = r.transform;
 		push_constants.vertexBuffer = r.vertexBufferAddress;
 		push_constants.hasTangents = r.hasTangents ? 1 : 0;
-		vkCmdPushConstants(cmd, r.material->pipeline->layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(GPUDrawPushConstants), &push_constants);
+		vkCmdPushConstants(
+			cmd, 
+			r.material->pipeline->layout, 
+			VK_SHADER_STAGE_VERTEX_BIT | 
+			VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(GPUDrawPushConstants), &push_constants);
 
 		vkCmdDrawIndexed(cmd, r.indexCount, 1, r.firstIndex, 0, 0);
 		//stats
@@ -581,6 +609,7 @@ void VulkanEngine::run()
 
 		if (resize_requested) {
 			resize_swapchain();
+			_raytracingHandler.updateRtDescriptorSet(this);
 		}
 
 		// imgui new frame
@@ -655,8 +684,10 @@ void VulkanEngine::init_vulkan()
 {
     vkb::InstanceBuilder builder;
 
+
 	auto inst_ret = builder.set_app_name("Example Vulkan Application")
 		.request_validation_layers(bUseValidationLayers)
+		.add_validation_feature_disable(VK_VALIDATION_FEATURE_DISABLE_UNIQUE_HANDLES_EXT)
 		.use_default_debug_messenger()
 		.require_api_version(1, 3, 0)
 		.build();
@@ -680,19 +711,39 @@ void VulkanEngine::init_vulkan()
     VkPhysicalDeviceVulkan12Features features12{ .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES };
 	features12.bufferDeviceAddress = true;
 	features12.descriptorIndexing = true;
+	features12.descriptorBindingStorageImageUpdateAfterBind = true;
+	features12.descriptorBindingUniformBufferUpdateAfterBind = true;
+	features12.descriptorBindingStorageBufferUpdateAfterBind = true;
+	features12.descriptorBindingSampledImageUpdateAfterBind = true;
 	features12.uniformAndStorageBuffer8BitAccess = true;
-	
+	features12.scalarBlockLayout = true;
+	features12.runtimeDescriptorArray = true;
+	features12.shaderSampledImageArrayNonUniformIndexing = true;
+	features12.bufferDeviceAddressCaptureReplay = true;
 	VkPhysicalDeviceVulkan11Features features11{ .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES };
 	features11.storageBuffer16BitAccess = true;
+	features11.uniformAndStorageBuffer16BitAccess = true;
 	
-
+	VkPhysicalDeviceRayTracingPipelineFeaturesKHR rtPipelineFeatures{
+		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR,
+		.rayTracingPipeline = VK_TRUE,
+		// .rayTraversalPrimitiveCulling = VK_TRUE, // optional
+	};
 
 	VkPhysicalDeviceAccelerationStructureFeaturesKHR accelerationStructureFeatures{ .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR };
 	accelerationStructureFeatures.accelerationStructure = true;
+	
 	//accelerationStructureFeatures.
 	//VkPhysicalDeviceFeatures features2{};
-	//features.pNext = &accelerationStructureFeatures;
 
+
+
+	VkPhysicalDeviceRayTracingValidationFeaturesNV rtValidationFeatures{ .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_VALIDATION_FEATURES_NV };
+	rtValidationFeatures.rayTracingValidation = VK_TRUE;
+	
+
+
+	
 
     //use vkbootstrap to select a gpu. 
 	//We want a gpu that can write to the SDL surface and supports vulkan 1.3 with the correct features
@@ -700,7 +751,15 @@ void VulkanEngine::init_vulkan()
 	vkb::PhysicalDevice physicalDevice = selector
 		.set_minimum_version(1, 3)
 		.add_required_extension("VK_KHR_acceleration_structure")
+		.add_required_extension("VK_KHR_push_descriptor")
+		.add_required_extension("VK_KHR_buffer_device_address")
 		.add_required_extension_features(accelerationStructureFeatures)
+		.add_required_extension_features(rtPipelineFeatures)
+		.add_desired_extension("VK_EXT_private_data")
+		.add_desired_extension("VK_EXT_debug_utils")
+		.add_desired_extension("VK_EXT_validation_features")
+		.add_required_extension("VK_NV_ray_tracing_validation")
+		.add_required_extension_features(rtValidationFeatures)
 		.add_required_extension("VK_KHR_ray_tracing_pipeline")
 		.add_required_extension("VK_KHR_deferred_host_operations")
 		.set_required_features_13(features)
@@ -811,7 +870,7 @@ void VulkanEngine::init_swapchain()
 
 	//build a image-view for the draw image to use for rendering
 	VkImageViewCreateInfo rview_info = vkinit::imageview_create_info(_drawImage.imageFormat, _drawImage.image, VK_IMAGE_ASPECT_COLOR_BIT);
-
+	
 	VK_CHECK(vkCreateImageView(_device, &rview_info, nullptr, &_drawImage.imageView));
 
 	_depthImage.imageFormat = VK_FORMAT_D32_SFLOAT;
@@ -820,7 +879,7 @@ void VulkanEngine::init_swapchain()
 	depthImageUsages |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
 
 	VkImageCreateInfo dimg_info = vkinit::image_create_info(_depthImage.imageFormat, depthImageUsages, drawImageExtent);
-
+	
 	//allocate and create the image
 	vmaCreateImage(_allocator, &dimg_info, &rimg_allocinfo, &_depthImage.image, &_depthImage.allocation, nullptr);
 
@@ -892,14 +951,22 @@ void VulkanEngine::init_descriptors(){
 	{
 		{ VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1 },
 		{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 2 }
+		,
+		{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 100 },
+		{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1 },
 	};
 
 	globalDescriptorAllocator.init(_device,&_allocator, 10 , sizes);
-
+	updatingGlobalDescriptorAllocator.init(_device, &_allocator, 10, sizes,true);
 	{
+		VkDescriptorBindingFlags flags = VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT;
+		
 		DescriptorLayoutBuilder builder;
-		builder.add_binding(0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
-		_drawImageDescriptorLayout = builder.build(_device, VK_SHADER_STAGE_COMPUTE_BIT);
+		builder.add_binding(0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, flags);
+		_drawImageDescriptorLayout = builder.build(_device, 
+			VK_SHADER_STAGE_COMPUTE_BIT, 
+			NULL, 
+			VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT);
 	}
 	{
 		DescriptorLayoutBuilder builder;
@@ -924,15 +991,31 @@ void VulkanEngine::init_descriptors(){
 		_shadowDescriptorLayout = layoutBuilder.build(_device, VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT);
 
 	}
+	{
+		// Descriptor layout for Texture array
+		DescriptorLayoutBuilder layoutBuilder;
+		layoutBuilder.add_binding(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 0, 1000);
+		
+		_textureArrayLayout = layoutBuilder.build(_device, 
+			VK_SHADER_STAGE_VERTEX_BIT | // Might not be needed in Vertex shader. 
+			VK_SHADER_STAGE_RAYGEN_BIT_KHR |
+			VK_SHADER_STAGE_FRAGMENT_BIT |
+			VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR);
+
+	}
 	
-	_drawImageDescriptors = globalDescriptorAllocator.allocate(_device,_drawImageDescriptorLayout);	
+
+
+
+	_drawImageDescriptors = updatingGlobalDescriptorAllocator.allocate(_device,_drawImageDescriptorLayout);	
+	_textureArrayDescriptor = globalDescriptorAllocator.allocate(_device, _textureArrayLayout);
 
 	DescriptorWriter writer;
 	writer.write_image(0, _drawImage.imageView, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 
 	writer.update_set(_device,_drawImageDescriptors);
 
-	
+	writer.clear();
 
 	//make sure both the descriptor allocator and the new layout get cleaned up properly
 	_mainDeletionQueue.push_function([&]() {
@@ -973,7 +1056,7 @@ void VulkanEngine::init_pipelines(){
 
 void VulkanEngine::init_triangle_pipeline(){
 	VkShaderModule triangleFragShader;
-	if (!vkutil::load_shader_module("../shaders/colored_triangle.frag.spv", _device, &triangleFragShader)) {
+	if (!vkutil::load_shader_module("../shaders/spv/colored_triangle.frag.spv", _device, &triangleFragShader)) {
 		fmt::print("Error when building the triangle fragment shader module");
 	}
 	else {
@@ -981,7 +1064,7 @@ void VulkanEngine::init_triangle_pipeline(){
 	}
 
 	VkShaderModule triangleVertexShader;
-	if (!vkutil::load_shader_module("../shaders/colored_triangle.vert.spv", _device, &triangleVertexShader)) {
+	if (!vkutil::load_shader_module("../shaders/spv/colored_triangle.vert.spv", _device, &triangleVertexShader)) {
 		fmt::print("Error when building the triangle vertex shader module");
 	}
 	else {
@@ -1051,12 +1134,12 @@ void VulkanEngine::init_background_pipelines()
 
 	
 	VkShaderModule gradientShader;
-	if (!vkutil::load_shader_module("../shaders/gradient_color.comp.spv", _device, &gradientShader)) {
+	if (!vkutil::load_shader_module("../shaders/spv/gradient_color.comp.spv", _device, &gradientShader)) {
 		fmt::print("Error when building the compute shader \n");
 	}
 
 	VkShaderModule skyShader;
-	if (!vkutil::load_shader_module("../shaders/sky.comp.spv", _device, &skyShader)) {
+	if (!vkutil::load_shader_module("../shaders/spv/sky.comp.spv", _device, &skyShader)) {
 		fmt::print("Error when building the compute shader \n");
 	}
 
@@ -1213,7 +1296,9 @@ void VulkanEngine::draw_imgui(VkCommandBuffer cmd, VkImageView targetImageView)
 	vkCmdEndRendering(cmd);
 }
 
-
+uint32_t findMaxVertexIndex(std::span<uint32_t> indices) {
+	return *std::max_element(indices.begin(), indices.end());
+}
 
 GPUMeshBuffers VulkanEngine::uploadMesh(std::span<uint32_t> indices, std::span<Vertex> vertices)
 {
@@ -1221,7 +1306,6 @@ GPUMeshBuffers VulkanEngine::uploadMesh(std::span<uint32_t> indices, std::span<V
 	const size_t indexBufferSize = indices.size() * sizeof(uint32_t);
 
 	GPUMeshBuffers newSurface;
-
 	//create vertex buffer
 	newSurface.vertexBuffer = create_buffer(&_device, &_allocator,
 		vertexBufferSize, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT 
@@ -1231,7 +1315,11 @@ GPUMeshBuffers VulkanEngine::uploadMesh(std::span<uint32_t> indices, std::span<V
 		VMA_MEMORY_USAGE_GPU_ONLY);
 
 	//find the adress of the vertex buffer
-	VkBufferDeviceAddressInfo deviceAdressInfo{ .sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,.buffer = newSurface.vertexBuffer.buffer };
+	VkBufferDeviceAddressInfo deviceAdressInfo
+	{ 
+		.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
+		.buffer = newSurface.vertexBuffer.buffer 
+	};
 	newSurface.vertexBufferAddress = vkGetBufferDeviceAddress(_device, &deviceAdressInfo);
 
 	//create index buffer
@@ -1240,12 +1328,14 @@ GPUMeshBuffers VulkanEngine::uploadMesh(std::span<uint32_t> indices, std::span<V
 		| VK_BUFFER_USAGE_TRANSFER_DST_BIT 
 		| VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
 		| VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR,
-		VMA_MEMORY_USAGE_GPU_ONLY);
+		VMA_MEMORY_USAGE_GPU_ONLY,
+		VK_BUFFER_CREATE_DEVICE_ADDRESS_CAPTURE_REPLAY_BIT);
 
 
 	AllocatedBuffer staging = create_buffer(&_device, &_allocator,
 		vertexBufferSize + indexBufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT 
-			| VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, VMA_MEMORY_USAGE_CPU_ONLY);
+			| VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, VMA_MEMORY_USAGE_CPU_ONLY,
+		VK_BUFFER_CREATE_DEVICE_ADDRESS_CAPTURE_REPLAY_BIT);
 
 	void* data = staging.allocation->GetMappedData();
 
@@ -1268,6 +1358,37 @@ GPUMeshBuffers VulkanEngine::uploadMesh(std::span<uint32_t> indices, std::span<V
 		indexCopy.size = indexBufferSize;
 
 		vkCmdCopyBuffer(cmd, staging.buffer, newSurface.indexBuffer.buffer, 1, &indexCopy);
+		// Memory barriers to ensure data is visible to BLAS builds
+		VkBufferMemoryBarrier vertexBufferBarrier{};
+		vertexBufferBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+		vertexBufferBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+		vertexBufferBarrier.dstAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR;
+		vertexBufferBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		vertexBufferBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		vertexBufferBarrier.buffer = newSurface.vertexBuffer.buffer;
+		vertexBufferBarrier.offset = 0;
+		vertexBufferBarrier.size = VK_WHOLE_SIZE;
+
+		VkBufferMemoryBarrier indexBufferBarrier{};
+		indexBufferBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+		indexBufferBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+		indexBufferBarrier.dstAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR;
+		indexBufferBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		indexBufferBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		indexBufferBarrier.buffer = newSurface.indexBuffer.buffer;
+		indexBufferBarrier.offset = 0;
+		indexBufferBarrier.size = VK_WHOLE_SIZE;
+		VkBufferMemoryBarrier bufferBarriers[2] = { vertexBufferBarrier, indexBufferBarrier };
+		// Insert the barrier
+		vkCmdPipelineBarrier(
+			cmd,
+			VK_PIPELINE_STAGE_TRANSFER_BIT,                         // Source stage
+			VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR, // Destination stage
+			0,
+			0, nullptr,
+			2,bufferBarriers,
+			0, nullptr
+		);
 	});
 
 	destroy_buffer(staging);
@@ -1277,7 +1398,7 @@ GPUMeshBuffers VulkanEngine::uploadMesh(std::span<uint32_t> indices, std::span<V
 
 void VulkanEngine::init_mesh_pipeline(){
 	VkShaderModule triangleFragShader;
-	if (!vkutil::load_shader_module("../shaders/tex_image.frag.spv", _device, &triangleFragShader)) {
+	if (!vkutil::load_shader_module("../shaders/spv/tex_image.frag.spv", _device, &triangleFragShader)) {
 		fmt::print("Error when building the fragment shader \n");
 	}
 	else {
@@ -1285,7 +1406,7 @@ void VulkanEngine::init_mesh_pipeline(){
 	}
 
 	VkShaderModule triangleVertexShader;
-	if (!vkutil::load_shader_module("../shaders/colored_triangle_mesh.vert.spv", _device, &triangleVertexShader)) {
+	if (!vkutil::load_shader_module("../shaders/spv/colored_triangle_mesh.vert.spv", _device, &triangleVertexShader)) {
 		fmt::print("Error when building the vertex shader \n");
 	}
 	else {
@@ -1475,7 +1596,7 @@ void VulkanEngine::init_default_data(){
 	materialResources.dataBuffer = materialConstants.buffer;
 	materialResources.dataBufferOffset = 0;
 
-	defaultData = metalRoughMaterial.write_material(_device,MaterialPass::MainColor,materialResources, globalDescriptorAllocator);
+	defaultData = metalRoughMaterial.write_material(this,MaterialPass::MainColor,materialResources, globalDescriptorAllocator);
 
 	for (auto& m : testMeshes) {
 		std::shared_ptr<MeshNode> newNode = std::make_shared<MeshNode>();
@@ -1522,7 +1643,7 @@ void VulkanEngine::resize_swapchain()
 	_windowExtent.height = h;
 
 	create_swapchain(_windowExtent.width, _windowExtent.height);
-
+	
 	resize_requested = false;
 }
 
@@ -1612,12 +1733,12 @@ void VulkanEngine::destroy_image(const AllocatedImage& img){
 void GLTFMetallic_Roughness::build_pipelines(VulkanEngine* engine)
 {
 	VkShaderModule meshFragShader;
-	if (!vkutil::load_shader_module("../shaders/phong_directional.frag.spv", engine->_device, &meshFragShader)) {
+	if (!vkutil::load_shader_module("../shaders/spv/phong_directional.frag.spv", engine->_device, &meshFragShader)) {
 		fmt::println("Error when building the triangle fragment shader module");
 	}
 
 	VkShaderModule meshVertexShader;
-	if (!vkutil::load_shader_module("../shaders/phong_directional.vert.spv", engine->_device, &meshVertexShader)) {
+	if (!vkutil::load_shader_module("../shaders/spv/phong_directional.vert.spv", engine->_device, &meshVertexShader)) {
 		fmt::println("Error when building the triangle vertex shader module");
 	}
 
@@ -1639,10 +1760,11 @@ void GLTFMetallic_Roughness::build_pipelines(VulkanEngine* engine)
 		engine->_gpuSceneDataDescriptorLayout,
         materialLayout,
 		engine->_lightingDescriptorLayout,
-		engine->_shadowDescriptorLayout};
+		engine->_shadowDescriptorLayout,
+		engine->_textureArrayLayout};
 
 	VkPipelineLayoutCreateInfo mesh_layout_info = vkinit::pipeline_layout_create_info();
-	mesh_layout_info.setLayoutCount = 4;
+	mesh_layout_info.setLayoutCount = 5;
 	mesh_layout_info.pSetLayouts = layouts;
 	mesh_layout_info.pPushConstantRanges = &matrixRange;
 	mesh_layout_info.pushConstantRangeCount = 1;
@@ -1685,7 +1807,7 @@ void GLTFMetallic_Roughness::build_pipelines(VulkanEngine* engine)
 	vkDestroyShaderModule(engine->_device, meshVertexShader, nullptr);
 }
 
-MaterialInstance GLTFMetallic_Roughness::write_material(VkDevice device, MaterialPass pass, const MaterialResources& resources, DescriptorAllocatorGrowable& descriptorAllocator)
+MaterialInstance GLTFMetallic_Roughness::write_material(VulkanEngine *engine, MaterialPass pass, MaterialResources& resources, DescriptorAllocatorGrowable& descriptorAllocator)
 {
 	MaterialInstance matData;
 	matData.passType = pass;
@@ -1696,8 +1818,10 @@ MaterialInstance GLTFMetallic_Roughness::write_material(VkDevice device, Materia
 		matData.pipeline = &opaquePipeline;
 	}
 
-	matData.materialSet = descriptorAllocator.allocate(device, materialLayout);
+	matData.materialSet = descriptorAllocator.allocate(engine->_device, materialLayout);
 
+
+	
 
 	writer.clear();
 	writer.write_buffer(0, resources.dataBuffer, sizeof(MaterialConstants), resources.dataBufferOffset, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
@@ -1705,7 +1829,10 @@ MaterialInstance GLTFMetallic_Roughness::write_material(VkDevice device, Materia
 	writer.write_image(2, resources.metalRoughImage.imageView, resources.metalRoughSampler, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 	writer.write_image(3, resources.normalImage.imageView, resources.normalSampler, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 
-	writer.update_set(device, matData.materialSet);
+	writer.update_set(engine->_device, matData.materialSet);
+
+	
+
 
 	return matData;
 }
@@ -1718,6 +1845,9 @@ void MeshNode::Draw(const glm::mat4& topMatrix, DrawContext& ctx)
 		RenderObject def;
 		def.indexCount = s.count;
 		def.firstIndex = s.startIndex;
+		def.vertexCount = s.vertexCount;
+		def.firstVertex = s.startVertex;
+		def.maxVertex = s.maxVertex;
 		def.indexBuffer = mesh->meshBuffers.indexBuffer.buffer;
 		def.material = &s.material->data;
 		def.bounds = s.bounds;
@@ -1749,26 +1879,38 @@ void VulkanEngine::update_scene()
 		node->Draw(root, mainDrawContext);
 	}
 
-	
 	mainCamera.update();
 
 	glm::mat4 view = mainCamera.getViewMatrix();
-	// camera projection
-	sceneData.proj = glm::perspective(glm::radians(70.f), (float)_windowExtent.width / (float)_windowExtent.height, 10000.f, 0.1f);
-
-	// invert the Y direction on projection matrix so that we are more similar
-	// to opengl and gltf axis
-	sceneData.view = view;
+	// Corrected camera projection with near < far
+	glm::mat4 projection = glm::perspective(
+		glm::radians(70.f),
+		(float)_windowExtent.width / (float)_windowExtent.height,
+		0.1f,      // Near plane
+		10000.f    // Far plane
+	);
+	sceneData.proj = projection;
+	// Invert the Y direction on projection matrix to match OpenGL and glTF conventions
 	sceneData.proj[1][1] *= -1;
+	sceneData.view = view;
 	sceneData.viewproj = sceneData.proj * sceneData.view;
 	sceneData.cameraPosition = glm::vec4(mainCamera.position, 1.0f);
-	
+
+	// Directly write to the mapped uniform buffer
+	if (_raytracingHandler.m_uniformMappedPtr) {
+		_raytracingHandler.m_uniformMappedPtr->viewProj = sceneData.viewproj;
+		_raytracingHandler.m_uniformMappedPtr->viewInverse = glm::inverse(view);
+		_raytracingHandler.m_uniformMappedPtr->projInverse = glm::inverse(projection);
+		// Update additional uniforms as needed
+	}
+
 	auto end = std::chrono::system_clock::now();
 
-    //convert to microseconds (integer), and then come back to miliseconds
-    auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
-    stats.scene_update_time = elapsed.count() / 1000.f;
+	// Convert to microseconds (integer), and then back to milliseconds
+	auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+	stats.scene_update_time = elapsed.count() / 1000.f;
 }
+
 
 void VulkanEngine::draw_shadows(VkCommandBuffer cmd) {
 	//begin a render pass  connected to our draw image

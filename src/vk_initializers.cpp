@@ -275,7 +275,7 @@ VkImageCreateInfo vkinit::image_create_info(VkFormat format, VkImageUsageFlags u
 
     info.mipLevels = 1;
     info.arrayLayers = 1;
-
+    
     //for MSAA. we will not be using it by default, so default it to 1 sample per pixel.
     info.samples = VK_SAMPLE_COUNT_1_BIT;
 

@@ -2,6 +2,8 @@
 
 #extension GL_GOOGLE_include_directive : require
 #extension GL_EXT_buffer_reference : require
+#extension GL_EXT_nonuniform_qualifier : enable
+
 #include "input_structures.glsl"
 
 layout (location = 0) in vec3 inNormal;
@@ -32,6 +34,8 @@ layout (set = 3, binding = 1) uniform sampler2D shadowMap;
 layout(buffer_reference, std430) readonly buffer VertexBuffer{ 
 	Vertex vertices[];
 };
+
+layout(set = 4, binding=0) uniform sampler2D[] textureSamplers;
 
 //push constants block
 layout( push_constant ) uniform constants
@@ -145,7 +149,7 @@ void main()
 
     mat3 TBN = calculate_TBN(inNormal, inUV);
 
-    vec3 textureNormal = texture(normalTex, inUV).xyz;
+    vec3 textureNormal = texture(textureSamplers[materialData.normalIdx], inUV).xyz;
     
     textureNormal = textureNormal * 255./127. - 128./127.;
     vec3 N = normalize(TBN * textureNormal);
@@ -158,12 +162,28 @@ void main()
     // Halfway vector
     vec3 H = normalize(L + V);
 
+
+
+
+
     // Material properties
-    vec3 baseColor = inColor * texture(colorTex, inUV).rgb * materialData.colorFactors.rgb;
+    vec3 baseColor = inColor * texture(textureSamplers[materialData.colorIdx], inUV).rgb * materialData.colorFactors.rgb;
+
+
 
     // Roughness and metallic factors
     float roughness = materialData.metal_rough_factors.y;
     float metallic = materialData.metal_rough_factors.x;
+
+    // If a metal roughness texture is bound
+    if (materialData.metalIdx != 1){
+        // https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#_material_pbrmetallicroughness_metallicroughnesstexture
+        // The GLTF spec defines that metalness is stored in the B channel
+        // while the roughness is stored in the G channel of the MetallicRougnessTexture
+        vec2 metalRough = texture(textureSamplers[materialData.metalIdx], inUV).gb;
+        roughness = metalRough.x;
+        metallic = metalRough.y;
+    }   
 
     // Shininess exponent for Blinn-Phong
     float shininess = max((1.0 - roughness) * 128.0, 1.0);
@@ -196,9 +216,7 @@ void main()
 
     // Combine components
     vec3 result = ambient + diffuse + specular;
-    // if (shadow > 0.0){
-    //     result = vec3(1.0);
-    // }
+
 
     // Output final color with alpha from material data
     outFragColor = vec4(result, materialData.colorFactors.a);
