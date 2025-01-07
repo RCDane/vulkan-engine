@@ -253,7 +253,7 @@ public:
 	VkDescriptorSet _textureArrayDescriptor;
 
 	bool resize_requested; 
-	bool useRaytracing = false;
+	bool useRaytracing = true;
     Camera mainCamera;
 
 

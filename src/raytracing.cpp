@@ -1379,6 +1379,7 @@ void RaytracingHandler::raytrace(VkCommandBuffer cmd, VulkanEngine* engine) {
 	// Bind the uniform buffer to the descriptor set using the DescriptorWriter
 	DescriptorWriter writer;
 	writer.write_buffer(0, m_globalsBuffer.buffer, sizeof(GlobalUniforms), 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+	
 	writer.update_set(engine->_device, uniformsDescriptor);
 
 	// Bind the ray tracing descriptor sets

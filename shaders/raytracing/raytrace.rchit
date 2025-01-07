@@ -46,10 +46,29 @@ layout(set = 1, binding = eTextures) uniform sampler2D textureSamplers[];
 
 layout(push_constant) uniform _PushConstantRay { PushConstantRay pcRay; };
 // clang-format on
+vec3 getColorFromInstanceIndex(int index) {
+    // Normalize the index to a range [0, 1]
+    float normalizedIndex = float(index % 256) / 255.0;
 
+    // Generate a color based on the normalized index
+    vec3 color = vec3(
+        sin(normalizedIndex * 3.14159 * 2.0),
+        cos(normalizedIndex * 3.14159 * 2.0),
+        sin(normalizedIndex * 3.14159)
+    );
+
+    // Ensure the color is in the range [0, 1]
+    color = clamp(color, 0.0, 1.0);
+
+    return color;
+}
 
 void main()
 {
+  prd.hitValue = vec3(getColorFromInstanceIndex(gl_InstanceCustomIndexEXT));
+  return;
+
+
   // Object data
   ObjDesc    objResource = objDesc.i[gl_InstanceCustomIndexEXT];
   MatIndices matIndices  = MatIndices(objResource.materialIndexAddress);

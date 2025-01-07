@@ -126,7 +126,7 @@ void VulkanEngine::init()
 
 	_raytracingHandler.setup(this);
 	_raytracingHandler.createDescriptorSetLayout(this);
-	//_raytracingHandler.prepareModelData(this);
+	_raytracingHandler.prepareModelData(this);
 	_raytracingHandler.createBottomLevelAS(this);
 	_raytracingHandler.createTopLevelAS(this);
 	_raytracingHandler.createRtDescriptorSet(this);
@@ -230,8 +230,12 @@ void VulkanEngine::draw()
 
     uint32_t swapchainImageIndex;
 
+	auto start = std::chrono::system_clock::now();
+
+
+
 	// Handling resizing
-	VkResult e = vkAcquireNextImageKHR(_device, _swapchain, 1000000000, get_current_frame()._swapchainSemaphore, VK_NULL_HANDLE, &swapchainImageIndex);
+	VkResult e = vkAcquireNextImageKHR(_device, _swapchain, 10000000000, get_current_frame()._swapchainSemaphore, VK_NULL_HANDLE, &swapchainImageIndex);
 	if (e == VK_ERROR_OUT_OF_DATE_KHR) {
         resize_requested = true;       
 		return ;
@@ -312,6 +316,12 @@ void VulkanEngine::draw()
 	// _renderFence will now block until the graphic commands finish execution
 	VK_CHECK(vkQueueSubmit2(_graphicsQueue, 1, &submit, get_current_frame()._renderFence));
 
+	auto end = std::chrono::system_clock::now();
+
+	//convert to microseconds (integer), and then come back to miliseconds
+	auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+	stats.mesh_draw_time = elapsed.count() / 1000.f;
+
     //prepare present
 	// this will put the image we just rendered to into the visible window.
 	// we want to wait on the _renderSemaphore for that, 
@@ -346,7 +356,6 @@ void VulkanEngine::draw_geometry(VkCommandBuffer cmd)
     stats.drawcall_count = 0;
     stats.triangle_count = 0;
     //begin clock
-    auto start = std::chrono::system_clock::now();
 
 	
 	std::vector<uint32_t> opaque_draws;
@@ -557,11 +566,7 @@ void VulkanEngine::draw_geometry(VkCommandBuffer cmd)
 	mainDrawContext.OpaqueSurfaces.clear();
 	mainDrawContext.TransparentSurfaces.clear();
 
-	auto end = std::chrono::system_clock::now();
-
-    //convert to microseconds (integer), and then come back to miliseconds
-    auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
-    stats.mesh_draw_time = elapsed.count() / 1000.f;
+	
 }
 
 
