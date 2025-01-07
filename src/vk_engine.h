@@ -11,6 +11,8 @@
 #include <vk_loader.h>
 #include <shadows.h>
 #include <raytracing.h>
+#include "vk_mem_alloc.h"  // No #define VMA_IMPLEMENTATION here
+
 struct ShadowImage;
 struct ShadowPipeline;
 
@@ -39,11 +41,16 @@ struct RenderObject {
 	uint32_t vertexCount;
 	uint32_t maxVertex;
 	VkBuffer indexBuffer;
+	VkBuffer indexBufferRaytracing;
 
+	VkBuffer vertexBuffer;
 	MaterialInstance* material;
 	Bounds bounds;
 	glm::mat4 transform;
-	VkDeviceAddress vertexBufferAddress;
+	VkDeviceAddress vertexBufferAddressRaytracing;
+	VkDeviceAddress vertexBufferAddressRasterization;
+	VkDeviceAddress indexBufferAddressRaytracing;
+
 	bool hasTangents;
 };
 struct DrawContext {
@@ -246,7 +253,7 @@ public:
 	VkDescriptorSet _textureArrayDescriptor;
 
 	bool resize_requested; 
-	bool useRaytracing = true;
+	bool useRaytracing = false;
     Camera mainCamera;
 
 
@@ -277,7 +284,7 @@ public:
 	// used for IMGUI
 	void immediate_submit(std::function<void(VkCommandBuffer cmd)>&& function);
 
-	GPUMeshBuffers uploadMesh(std::span<uint32_t> indices, std::span<Vertex>);
+	GPUMeshBuffers uploadMesh(std::span<uint32_t> indices, std::span<Vertex>, std::span<uint32_t> raytracingIndices = {});
 	AllocatedImage create_image(VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped = false);
 	AllocatedImage create_image(void* data, VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped = false);
 	void destroy_image(const AllocatedImage& img);

@@ -16,8 +16,14 @@ struct BlasInput {
 	std::vector<VkAccelerationStructureBuildRangeInfoKHR> asBuildOffsetInfo;
 	VkBuildAccelerationStructureFlagsKHR                  flags{ 0 };
 };
-
-
+struct ObjDesc
+{
+	int   txtOffset;             // Texture index offset in the array of textures
+	glm::uvec2 vertexAddress;         // Address of the Vertex buffer
+	glm::uvec2 indexAddress;          // Address of the index buffer
+	glm::uvec2 materialAddress;       // Address of the material buffer
+	glm::uvec2 materialIndexAddress;  // Address of the triangle material index buffer
+};
 
 class RaytracingBuilder {
 public:
@@ -97,6 +103,7 @@ public:
 	void createDescriptorSetLayout(VulkanEngine* engine);
 	bool setup(VulkanEngine* engine);
 	bool init_raytracing(VulkanEngine *engine);
+	void prepareModelData(VulkanEngine* engine);
 	void createBottomLevelAS(VulkanEngine *engine);
 	void createTopLevelAS(VulkanEngine* engine);
 	void createRtDescriptorSet(VulkanEngine* engine);
@@ -105,9 +112,11 @@ public:
 	void createRtShaderBindingTable(VulkanEngine* engine);
 	void raytrace(VkCommandBuffer cmd, VulkanEngine* engine);
 	AllocatedBuffer m_bGlobals;  // Device-Host of the camera matrices
+	//AllocatedBuffer _vertexIndexBuffer;
 
-	GlobalUniforms* raytracingUniforms{};
+	GlobalUniforms* raytracingUniforms;
 	GlobalUniforms* m_uniformMappedPtr;
+	std::vector<ObjDesc> m_objDescs;
 	std::vector<VkRayTracingShaderGroupCreateInfoKHR> m_rtShaderGroups;
 	VkPipelineLayout                                  m_rtPipelineLayout;
 	VkPipeline                                        m_rtPipeline;

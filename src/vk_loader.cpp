@@ -262,7 +262,7 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGltf(VulkanEngine* engine, std::s
     }
 
 
-
+	int materialStart = engine->textureImages.size();
     GLTFMetallic_Roughness::MaterialConstants* sceneMaterialConstants = (GLTFMetallic_Roughness::MaterialConstants*)file.materialDataBuffer.info.pMappedData;
 
     for (fastgltf::Material& mat : gltf.materials) {
@@ -406,25 +406,26 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGltf(VulkanEngine* engine, std::s
     // use the same vectors for all meshes so that the memory doesnt reallocate as
     // often
     std::vector<uint32_t> indices;
+    std::vector<uint32_t> raytracingIndices;
     std::vector<Vertex> vertices;
 
     bool hasTangents = false;
-
-
     for (fastgltf::Mesh& mesh : gltf.meshes) {
         std::shared_ptr<MeshAsset> newmesh = std::make_shared<MeshAsset>();
         meshes.push_back(newmesh);
         file.meshes[mesh.name.c_str()] = newmesh;
         newmesh->name = mesh.name;
-
+        
         // Clear the mesh arrays for the new mesh
         indices.clear();
         vertices.clear();
+        int lastMeshesIndex = 0;
 
         // Clear surfaces for the new mesh
         newmesh->surfaces.clear();
 
         for (auto&& p : mesh.primitives) {
+            
             GeoSurface newSurface;
             newSurface.startIndex = static_cast<uint32_t>(indices.size());
             newSurface.count = static_cast<uint32_t>(gltf.accessors[p.indicesAccessor.value()].count);
@@ -439,9 +440,22 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGltf(VulkanEngine* engine, std::s
 
                 fastgltf::iterateAccessor<std::uint32_t>(gltf, indexaccessor,
                     [&](std::uint32_t idx) {
-                        indices.push_back(idx); // Offset by initial_vtx
+                        indices.push_back(idx + initial_vtx); // Offset by initial_vtx
+                        raytracingIndices.push_back(idx); 
+
                     });
             }
+
+            int primMaterial = 0;
+            // Assign material
+            if (p.materialIndex.has_value()) {
+                newSurface.material = materials[p.materialIndex.value()];
+				primMaterial = p.materialIndex.value();
+            }
+            else {
+                newSurface.material = materials[0];
+            }
+
 
             // Load vertex positions
             {
@@ -453,8 +467,8 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGltf(VulkanEngine* engine, std::s
                         newvtx.position = v;
                         newvtx.normal = { 1, 0, 0 };
                         newvtx.color = glm::vec4{ 1.f };
-                        newvtx.uv_x = 0;
-                        newvtx.uv_y = 0;
+                        newvtx.uv = glm::vec2(0.0f);
+						newvtx.materialIndex = primMaterial;
                         vertices[initial_vtx + index] = newvtx;
                     });
             }
@@ -483,8 +497,7 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGltf(VulkanEngine* engine, std::s
             if (uv != p.attributes.end()) {
                 fastgltf::iterateAccessorWithIndex<glm::vec2>(gltf, gltf.accessors[(*uv).second],
                     [&](glm::vec2 v, size_t index) {
-                        vertices[initial_vtx + index].uv_x = v.x;
-                        vertices[initial_vtx + index].uv_y = v.y;
+                        vertices[initial_vtx + index].uv = v;
                     });
             }
 
@@ -497,13 +510,7 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGltf(VulkanEngine* engine, std::s
                     });
             }
 
-            // Assign material
-            if (p.materialIndex.has_value()) {
-                newSurface.material = materials[p.materialIndex.value()];
-            }
-            else {
-                newSurface.material = materials[0];
-            }
+            
 
             // Compute min/max bounds
             glm::vec3 minpos = vertices[initial_vtx].position;
@@ -524,6 +531,9 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGltf(VulkanEngine* engine, std::s
             // Alternatively:
 			printf("mesh vertex count: %d\n", newSurface.vertexCount);
 			printf("mesh index count: %d\n", newSurface.count);
+			printf("mesh max vertex: %d\n", newSurface.maxVertex);
+			printf("mesh start vertex: %d\n", newSurface.startVertex);
+			printf("mesh start index: %d\n", newSurface.startIndex);
 
             newmesh->surfaces.push_back(newSurface);
         }
@@ -534,8 +544,8 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGltf(VulkanEngine* engine, std::s
         }
 
 
-        newmesh->meshBuffers = engine->uploadMesh(indices, vertices);
-        
+        newmesh->meshBuffers = engine->uploadMesh(indices, vertices, raytracingIndices);
+		
 
  
     

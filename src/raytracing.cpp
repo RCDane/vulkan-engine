@@ -1,11 +1,15 @@
 #include <raytracing.h>
 #include <vk_engine.h>
+#include "vk_mem_alloc.h"
+
 #include <vk_pipelines.h>
 #include <vulkan/vulkan_core.h>
 #include <algorithm> // Add this include for std::max
 #include <vk_extensions.h>
 #include <alignment.hpp>
 #include <vk_buffers.h>
+
+
 class VulkanEngine;
 class DrawContext;
 
@@ -46,8 +50,8 @@ uint32_t findMaxVertexIndex(const std::vector<uint32_t>& indices) {
 }
 
 BlasInput RaytracingBuilder::objectToVkGeometry(VulkanEngine* engine, const RenderObject& object) {
-	VkDeviceAddress vertexAddress = object.vertexBufferAddress;
-	VkDeviceAddress indexAddress = getBufferDeviceAddress(engine->_device, object.indexBuffer);
+	VkDeviceAddress vertexAddress = object.vertexBufferAddressRaytracing;
+	VkDeviceAddress indexAddress = getBufferDeviceAddress(engine->_device, object.indexBufferRaytracing);
 
 	uint32_t maxPrimitiveCount = object.indexCount / 3;
 
@@ -729,6 +733,52 @@ bool  RaytracingHandler::setup(VulkanEngine* engine) {
 	return true;
 }
 
+glm::uvec2 pack_uint_64(uint64_t value)
+{
+	return glm::uvec2(value & 0xFFFFFFFF, value >> 32);
+}
+
+ObjDesc prepareModel(VulkanEngine* engine, RenderObject renderObject) {
+	ObjDesc objModel;
+	objModel.vertexAddress = pack_uint_64(renderObject.vertexBufferAddressRaytracing);
+	objModel.indexAddress = pack_uint_64(getBufferDeviceAddress(engine->_device, renderObject.indexBufferRaytracing));
+
+	return objModel;
+}
+
+
+void RaytracingHandler::prepareModelData(VulkanEngine* engine) {
+
+	std::vector<ObjDesc> objDescs;
+	for (auto& obj : m_models->OpaqueSurfaces) {
+		objDescs.emplace_back(prepareModel(engine,obj));
+	}
+	
+	
+	AllocatedBuffer vertexIndexBuffer = create_buffer(
+		&engine->_device,
+		&engine->_allocator,
+		objDescs.size()*sizeof(ObjDesc),
+		VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
+		VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+		VMA_MEMORY_USAGE_CPU_TO_GPU
+	);
+	// Map the buffer for CPU writes
+	void* mappedData = nullptr;
+	vmaMapMemory(engine->_allocator, vertexIndexBuffer.allocation, &mappedData);
+	if (mappedData) {
+		// Copy ObjDesc data into the mapped buffer
+		memcpy(mappedData, objDescs.data(), objDescs.size() * sizeof(ObjDesc));
+		vmaUnmapMemory(engine->_allocator, vertexIndexBuffer.allocation);
+	}
+	else {
+		throw std::runtime_error("Failed to map scratch buffer for ObjDesc data.");
+	}
+	DescriptorWriter writer;
+	writer.write_buffer(1, vertexIndexBuffer.buffer, objDescs.size() * sizeof(ObjDesc), 0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+	writer.update_set(engine->_device, m_descSet);
+}
+
 void RaytracingHandler::createBottomLevelAS(VulkanEngine* engine)
 {
 	// BLAS - Storing each primitive in a geometry
@@ -1041,13 +1091,21 @@ void RaytracingHandler::createDescriptorSetLayout(VulkanEngine* engine) {
 
 
 void RaytracingHandler::createRtDescriptorSet(VulkanEngine *engine) {
+	VkDescriptorBindingFlags flags = VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT;
+
+	
 	DescriptorLayoutBuilder builder;
 	builder.add_binding(0, VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR);
-	builder.add_binding(1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+	builder.add_binding(1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, flags);
+
+	VkDescriptorSetLayoutCreateFlags createFlags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
+
 	m_rtDescSetLayout = builder.build(engine->_device,
 				VK_SHADER_STAGE_RAYGEN_BIT_KHR |
-				VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR);
-	m_rtDescSet = engine->globalDescriptorAllocator.allocate(engine->_device, m_rtDescSetLayout);
+				VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR,
+		NULL,
+		createFlags);
+	m_rtDescSet = engine->updatingGlobalDescriptorAllocator.allocate(engine->_device, m_rtDescSetLayout);
 	
 	VkAccelerationStructureKHR tlas = m_rtBuilder.getAccelerationStructure();
 	
@@ -1285,50 +1343,76 @@ void RaytracingHandler::createRtShaderBindingTable(VulkanEngine* engine) {
 
 
 void RaytracingHandler::raytrace(VkCommandBuffer cmd, VulkanEngine* engine) {
-	// Ensure the uniform buffer is mapped
-	if (!m_uniformMappedPtr) {
-		throw std::runtime_error("Uniform buffer is not mapped!");
+	// Create the uniform buffer for the ray tracing global uniforms
+	AllocatedBuffer m_globalsBuffer = create_buffer(
+		&engine->_device,
+		&engine->_allocator,
+		sizeof(GlobalUniforms),
+		VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+		VMA_MEMORY_USAGE_CPU_TO_GPU
+	);
+
+	// Add the buffer to the deletion queue for cleanup
+	engine->get_current_frame()._deletionQueue.push_function([=, this]() {
+		destroy_buffer(m_globalsBuffer);
+		});
+
+	// Map memory using vmaMapMemory
+	void* mappedData = nullptr;
+	VkResult result = vmaMapMemory(engine->_allocator, m_globalsBuffer.allocation, &mappedData);
+	if (result != VK_SUCCESS) {
+		throw std::runtime_error("Failed to map memory for global uniform buffer!");
 	}
 
-	// At this point, update_scene has already written to the uniform buffer.
-	// If additional updates are needed here, perform them directly:
-	/*
-	m_uniformMappedPtr->someOtherUniform = someValue;
-	*/
+	// Copy uniform data into the mapped memory
+	std::memcpy(mappedData, m_uniformMappedPtr, sizeof(GlobalUniforms));
 
-	// Insert a memory barrier to ensure the uniform data is visible to the shaders
-	VkMemoryBarrier barrier = {};
-	barrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
-	barrier.srcAccessMask = VK_ACCESS_HOST_WRITE_BIT; // Host has written to the buffer
-	barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT; // Shader will read from the buffer
-	vkCmdPipelineBarrier(
-		cmd,
-		VK_PIPELINE_STAGE_HOST_BIT,                          // Source stage
-		VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR, // Destination stage
-		0,
-		1, &barrier,
-		0, nullptr,
-		0, nullptr
-	);
+	// Unmap the memory after copying the data
+	vmaUnmapMemory(engine->_allocator, m_globalsBuffer.allocation);
 
 	// Bind the ray tracing pipeline
 	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, m_rtPipeline);
 
-	// Bind descriptor sets using DescriptorWriter
+	// Allocate a descriptor set for the uniform buffer
+	VkDescriptorSet uniformsDescriptor = engine->get_current_frame()._frameDescriptors.allocate(engine->_device, m_descSetLayout);
+
+	// Bind the uniform buffer to the descriptor set using the DescriptorWriter
 	DescriptorWriter writer;
-	writer.write_buffer(0, m_bGlobals.buffer, sizeof(GlobalUniforms), 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
-	writer.update_set(engine->_device, m_descSet);
+	writer.write_buffer(0, m_globalsBuffer.buffer, sizeof(GlobalUniforms), 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+	writer.update_set(engine->_device, uniformsDescriptor);
 
-	std::vector<VkDescriptorSet> descSets{ m_rtDescSet, m_descSet };
-	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, m_rtPipelineLayout, 0,
-		static_cast<uint32_t>(descSets.size()), descSets.data(), 0, nullptr);
+	// Bind the ray tracing descriptor sets
+	std::vector<VkDescriptorSet> descSets{ m_rtDescSet, uniformsDescriptor };
+	vkCmdBindDescriptorSets(
+		cmd,
+		VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR,
+		m_rtPipelineLayout,
+		0,
+		static_cast<uint32_t>(descSets.size()),
+		descSets.data(),
+		0,
+		nullptr
+	);
 
-	// Update push constants if necessary
-	vkCmdPushConstants(cmd, m_rtPipelineLayout,
+	// Push constants to the pipeline if necessary
+	vkCmdPushConstants(
+		cmd,
+		m_rtPipelineLayout,
 		VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR | VK_SHADER_STAGE_MISS_BIT_KHR,
-		0, sizeof(PushConstantRay), &m_pcRay);
+		0,
+		sizeof(PushConstantRay),
+		&m_pcRay
+	);
 
 	// Issue the ray tracing command
-	vkCmdTraceRaysKHR(cmd, &m_rgenRegion, &m_missRegion, &m_hitRegion, &m_callRegion,
-		engine->_drawExtent.width, engine->_drawExtent.height, 1);
+	vkCmdTraceRaysKHR(
+		cmd,
+		&m_rgenRegion,
+		&m_missRegion,
+		&m_hitRegion,
+		&m_callRegion,
+		engine->_drawExtent.width,
+		engine->_drawExtent.height,
+		1
+	);
 }

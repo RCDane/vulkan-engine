@@ -13,7 +13,7 @@
 
 #include <vulkan/vulkan.h>
 #include <vulkan/vk_enum_string_helper.h>
-#include <vk_mem_alloc.h>
+#include "vk_mem_alloc.h"
 
 #include <fmt/core.h>
 
@@ -67,22 +67,29 @@ struct AccelKHR
 	}
 };
 
-struct Vertex {
-
-	glm::vec3 position;
-	float uv_x;
-	glm::vec3 normal;
-	float uv_y;
-	glm::vec4 color;
-    glm::vec4 tangent;
+struct alignas(16) Vertex {
+    glm::vec3 position;    // 12 bytes
+    float padding1;        // 4 bytes to align to 16 bytes
+    glm::vec3 normal;      // 12 bytes
+    float padding2;        // 4 bytes to align to 16 bytes
+    glm::vec2 uv;          // 8 bytes
+    float padding3[2];     // 8 bytes to align to 16 bytes
+    glm::vec4 color;       // 16 bytes
+    glm::vec4 tangent;     // 16 bytes
+    int32_t materialIndex; // 4 bytes
+    float padding4[3];     // 12 bytes to align struct size to 16 bytes
 };
+static_assert(sizeof(Vertex) == 96, "Vertex struct size should be 128 bytes.");
 
 // holds the resources needed for a mesh
 struct GPUMeshBuffers {
 
     AllocatedBuffer indexBuffer;
+    AllocatedBuffer indexBufferRaytracing;
     AllocatedBuffer vertexBuffer;
     VkDeviceAddress vertexBufferAddress;
+    VkDeviceAddress IndexBufferAddress;
+
     uint32_t vertexCount;
 };
 

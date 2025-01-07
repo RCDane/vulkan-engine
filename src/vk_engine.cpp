@@ -11,7 +11,6 @@
 #include <vk_pipelines.h>
 
 #include <vk_extensions.h>
-
 #include <glm/gtx/transform.hpp>
 
 
@@ -127,6 +126,7 @@ void VulkanEngine::init()
 
 	_raytracingHandler.setup(this);
 	_raytracingHandler.createDescriptorSetLayout(this);
+	//_raytracingHandler.prepareModelData(this);
 	_raytracingHandler.createBottomLevelAS(this);
 	_raytracingHandler.createTopLevelAS(this);
 	_raytracingHandler.createRtDescriptorSet(this);
@@ -424,22 +424,41 @@ void VulkanEngine::draw_geometry(VkCommandBuffer cmd)
 		});
 
 
-	//write the buffer
-	GPUSceneData* sceneUniformData = (GPUSceneData*)gpuSceneDataBuffer.allocation->GetMappedData();
-	*sceneUniformData = sceneData;
-	// Write lighting info
-	PointLight* lightingUniformData = (PointLight*)lightingDataBuffer.allocation->GetMappedData(); 
-	*lightingUniformData = pointLight;
 
-	DirectionalLighting* directionalLightingUniformData = (DirectionalLighting*)directionalLightingDataBuffer.allocation->GetMappedData();
-	*directionalLightingUniformData = _directionalLighting;
 
 
 	//create a descriptor set that binds that buffer and update it
+	// Map memory and write the data for each buffer
+	void* mappedData = nullptr;
+
+	// Map and write GPUSceneData
+	VkResult result = vmaMapMemory(_allocator, gpuSceneDataBuffer.allocation, &mappedData);
+	if (result != VK_SUCCESS) {
+		throw std::runtime_error("Failed to map memory for GPU scene data buffer!");
+	}
+	std::memcpy(mappedData, &sceneData, sizeof(GPUSceneData));
+	vmaUnmapMemory(_allocator, gpuSceneDataBuffer.allocation);
+
+	// Map and write PointLight data
+	result = vmaMapMemory(_allocator, lightingDataBuffer.allocation, &mappedData);
+	if (result != VK_SUCCESS) {
+		throw std::runtime_error("Failed to map memory for lighting data buffer!");
+	}
+	std::memcpy(mappedData, &pointLight, sizeof(PointLight));
+	vmaUnmapMemory(_allocator, lightingDataBuffer.allocation);
+
+	// Map and write DirectionalLighting data
+	result = vmaMapMemory(_allocator, directionalLightingDataBuffer.allocation, &mappedData);
+	if (result != VK_SUCCESS) {
+		throw std::runtime_error("Failed to map memory for directional lighting data buffer!");
+	}
+	std::memcpy(mappedData, &_directionalLighting, sizeof(DirectionalLighting));
+	vmaUnmapMemory(_allocator, directionalLightingDataBuffer.allocation);
+
+	// Create descriptor sets for the buffers
 	VkDescriptorSet globalDescriptor = get_current_frame()._frameDescriptors.allocate(_device, _gpuSceneDataDescriptorLayout);
 	VkDescriptorSet lightingDescriptor = get_current_frame()._frameDescriptors.allocate(_device, _lightingDescriptorLayout);
 	VkDescriptorSet directionalLightingDescriptor = get_current_frame()._frameDescriptors.allocate(_device, _shadowDescriptorLayout);
-
 
 	// TODO: Clean up shadow rendering
 	
@@ -507,7 +526,7 @@ void VulkanEngine::draw_geometry(VkCommandBuffer cmd)
 		// calculate final mesh matrix
 		GPUDrawPushConstants push_constants;
 		push_constants.worldMatrix = r.transform;
-		push_constants.vertexBuffer = r.vertexBufferAddress;
+		push_constants.vertexBuffer = r.vertexBufferAddressRasterization;
 		push_constants.hasTangents = r.hasTangents ? 1 : 0;
 		vkCmdPushConstants(
 			cmd, 
@@ -630,6 +649,12 @@ void VulkanEngine::run()
 			ImGui::InputFloat4("data4", (float*)& selected.data.data4);
 
 		}
+
+		ImGui::Begin("Main");
+		ImGui::Checkbox("Raytracing", &useRaytracing);
+		ImGui::End();
+
+
 
 		ImGui::Begin("Scene Data");
 		ImGui::Text("Directional Light");
@@ -1034,7 +1059,7 @@ void VulkanEngine::init_descriptors(){
 		};
 
 		_frames[i]._frameDescriptors = DescriptorAllocatorGrowable{};
-		_frames[i]._frameDescriptors.init(_device,&_allocator, 1000, frame_sizes);
+		_frames[i]._frameDescriptors.init(_device,&_allocator, 1000, frame_sizes,true);
 	
 		_mainDeletionQueue.push_function([&, i]() {
 			_frames[i]._frameDescriptors.destroy_pools(_device);
@@ -1195,7 +1220,11 @@ void VulkanEngine::init_background_pipelines()
 
 void VulkanEngine::immediate_submit(std::function<void(VkCommandBuffer cmd)>&& function)
 {
+	// Ensure the fence is not in use
+	VK_CHECK(vkWaitForFences(_device, 1, &_immFence, VK_TRUE, 1000000000)); // 1 second timeout
 	VK_CHECK(vkResetFences(_device, 1, &_immFence));
+
+	// Reset the command buffer before re-recording
 	VK_CHECK(vkResetCommandBuffer(_immCommandBuffer, 0));
 
 	VkCommandBuffer cmd = _immCommandBuffer;
@@ -1204,19 +1233,22 @@ void VulkanEngine::immediate_submit(std::function<void(VkCommandBuffer cmd)>&& f
 
 	VK_CHECK(vkBeginCommandBuffer(cmd, &cmdBeginInfo));
 
+	// Execute the user-provided function
 	function(cmd);
 
 	VK_CHECK(vkEndCommandBuffer(cmd));
 
+	// Prepare the command buffer for submission
 	VkCommandBufferSubmitInfo cmdinfo = vkinit::command_buffer_submit_info(cmd);
 	VkSubmitInfo2 submit = vkinit::submit_info(&cmdinfo, nullptr, nullptr);
 
-	// submit command buffer to the queue and execute it.
-	//  _renderFence will now block until the graphic commands finish execution
+	// Submit the command buffer
 	VK_CHECK(vkQueueSubmit2(_graphicsQueue, 1, &submit, _immFence));
 
-	VK_CHECK(vkWaitForFences(_device, 1, &_immFence, true, 9999999999));
+	// Wait for the GPU to finish execution
+	VK_CHECK(vkWaitForFences(_device, 1, &_immFence, VK_TRUE, 10000000000)); // 1 second timeout
 }
+
 
 void VulkanEngine::init_imgui()
 {
@@ -1300,49 +1332,75 @@ uint32_t findMaxVertexIndex(std::span<uint32_t> indices) {
 	return *std::max_element(indices.begin(), indices.end());
 }
 
-GPUMeshBuffers VulkanEngine::uploadMesh(std::span<uint32_t> indices, std::span<Vertex> vertices)
-{
+GPUMeshBuffers VulkanEngine::uploadMesh(
+	std::span<uint32_t> indices,
+	std::span<Vertex> vertices,
+	std::span<uint32_t> raytracingIndices
+) {
 	const size_t vertexBufferSize = vertices.size() * sizeof(Vertex);
 	const size_t indexBufferSize = indices.size() * sizeof(uint32_t);
+	const size_t raytracingIndexBufferSize = raytracingIndices.size() * sizeof(uint32_t);
 
 	GPUMeshBuffers newSurface;
-	//create vertex buffer
+
+	// Create vertex buffer
 	newSurface.vertexBuffer = create_buffer(&_device, &_allocator,
-		vertexBufferSize, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT 
-		| VK_BUFFER_USAGE_TRANSFER_DST_BIT 
-		| VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT 
+		vertexBufferSize, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
+		| VK_BUFFER_USAGE_TRANSFER_DST_BIT
+		| VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
 		| VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR,
 		VMA_MEMORY_USAGE_GPU_ONLY);
 
-	//find the adress of the vertex buffer
-	VkBufferDeviceAddressInfo deviceAdressInfo
-	{ 
+	// Find the address of the vertex buffer
+	VkBufferDeviceAddressInfo deviceAddressInfo{
 		.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
-		.buffer = newSurface.vertexBuffer.buffer 
+		.buffer = newSurface.vertexBuffer.buffer
 	};
-	newSurface.vertexBufferAddress = vkGetBufferDeviceAddress(_device, &deviceAdressInfo);
+	newSurface.vertexBufferAddress = vkGetBufferDeviceAddress(_device, &deviceAddressInfo);
 
-	//create index buffer
+	// Create index buffer
 	newSurface.indexBuffer = create_buffer(&_device, &_allocator,
-		indexBufferSize, VK_BUFFER_USAGE_INDEX_BUFFER_BIT 
-		| VK_BUFFER_USAGE_TRANSFER_DST_BIT 
+		indexBufferSize, VK_BUFFER_USAGE_INDEX_BUFFER_BIT
+		| VK_BUFFER_USAGE_TRANSFER_DST_BIT
 		| VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
 		| VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR,
 		VMA_MEMORY_USAGE_GPU_ONLY,
 		VK_BUFFER_CREATE_DEVICE_ADDRESS_CAPTURE_REPLAY_BIT);
+	// Find the address of the vertex buffer
+	VkBufferDeviceAddressInfo deviceAddressInfo1{
+		.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
+		.buffer = newSurface.indexBuffer.buffer
+	};
+	newSurface.IndexBufferAddress = vkGetBufferDeviceAddress(_device, &deviceAddressInfo1);
+	// Create raytracing index buffer only if raytracing indices are provided
+	if (!raytracingIndices.empty()) {
+		newSurface.indexBufferRaytracing = create_buffer(&_device, &_allocator,
+			raytracingIndexBufferSize, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
+			| VK_BUFFER_USAGE_TRANSFER_DST_BIT
+			| VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
+			| VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR,
+			VMA_MEMORY_USAGE_GPU_ONLY);
+	}
 
-
+	// Create staging buffer
+	const size_t stagingBufferSize = vertexBufferSize + indexBufferSize + raytracingIndexBufferSize;
 	AllocatedBuffer staging = create_buffer(&_device, &_allocator,
-		vertexBufferSize + indexBufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT 
-			| VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, VMA_MEMORY_USAGE_CPU_ONLY,
+		stagingBufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT
+		| VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, VMA_MEMORY_USAGE_CPU_ONLY,
 		VK_BUFFER_CREATE_DEVICE_ADDRESS_CAPTURE_REPLAY_BIT);
 
 	void* data = staging.allocation->GetMappedData();
 
-	// copy vertex buffer
+	// Copy vertex buffer data
 	memcpy(data, vertices.data(), vertexBufferSize);
-	// copy index buffer
+
+	// Copy index buffer data
 	memcpy((char*)data + vertexBufferSize, indices.data(), indexBufferSize);
+
+	// Copy raytracing index buffer data if provided
+	if (!raytracingIndices.empty()) {
+		memcpy((char*)data + vertexBufferSize + indexBufferSize, raytracingIndices.data(), raytracingIndexBufferSize);
+	}
 
 	immediate_submit([&](VkCommandBuffer cmd) {
 		VkBufferCopy vertexCopy{ 0 };
@@ -1358,43 +1416,22 @@ GPUMeshBuffers VulkanEngine::uploadMesh(std::span<uint32_t> indices, std::span<V
 		indexCopy.size = indexBufferSize;
 
 		vkCmdCopyBuffer(cmd, staging.buffer, newSurface.indexBuffer.buffer, 1, &indexCopy);
-		// Memory barriers to ensure data is visible to BLAS builds
-		VkBufferMemoryBarrier vertexBufferBarrier{};
-		vertexBufferBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-		vertexBufferBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-		vertexBufferBarrier.dstAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR;
-		vertexBufferBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-		vertexBufferBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-		vertexBufferBarrier.buffer = newSurface.vertexBuffer.buffer;
-		vertexBufferBarrier.offset = 0;
-		vertexBufferBarrier.size = VK_WHOLE_SIZE;
 
-		VkBufferMemoryBarrier indexBufferBarrier{};
-		indexBufferBarrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-		indexBufferBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-		indexBufferBarrier.dstAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR;
-		indexBufferBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-		indexBufferBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-		indexBufferBarrier.buffer = newSurface.indexBuffer.buffer;
-		indexBufferBarrier.offset = 0;
-		indexBufferBarrier.size = VK_WHOLE_SIZE;
-		VkBufferMemoryBarrier bufferBarriers[2] = { vertexBufferBarrier, indexBufferBarrier };
-		// Insert the barrier
-		vkCmdPipelineBarrier(
-			cmd,
-			VK_PIPELINE_STAGE_TRANSFER_BIT,                         // Source stage
-			VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR, // Destination stage
-			0,
-			0, nullptr,
-			2,bufferBarriers,
-			0, nullptr
-		);
-	});
+		if (!raytracingIndices.empty()) {
+			VkBufferCopy raytracingIndexCopy{ 0 };
+			raytracingIndexCopy.dstOffset = 0;
+			raytracingIndexCopy.srcOffset = vertexBufferSize + indexBufferSize;
+			raytracingIndexCopy.size = raytracingIndexBufferSize;
+
+			vkCmdCopyBuffer(cmd, staging.buffer, newSurface.indexBufferRaytracing.buffer, 1, &raytracingIndexCopy);
+		}
+		});
 
 	destroy_buffer(staging);
 
 	return newSurface;
 }
+
 
 void VulkanEngine::init_mesh_pipeline(){
 	VkShaderModule triangleFragShader;
@@ -1471,7 +1508,7 @@ void VulkanEngine::init_default_data(){
 
 	rect_vertices[0].position = {0.5,-0.5, 	0.};
 	rect_vertices[1].position = {0.5,0.5, 	0.};
-	rect_vertices[2].position = {-0.5,-0.5, 	0.};
+	rect_vertices[2].position = {-0.5,-0.5, 0.};
 	rect_vertices[3].position = {-0.5,0.5, 	0.};
 
 	rect_vertices[0].color = {0,0, 0,1};
@@ -1849,10 +1886,15 @@ void MeshNode::Draw(const glm::mat4& topMatrix, DrawContext& ctx)
 		def.firstVertex = s.startVertex;
 		def.maxVertex = s.maxVertex;
 		def.indexBuffer = mesh->meshBuffers.indexBuffer.buffer;
+		def.indexBufferRaytracing = mesh->meshBuffers.indexBufferRaytracing.buffer;
+		def.vertexBuffer = mesh->meshBuffers.vertexBuffer.buffer;
 		def.material = &s.material->data;
 		def.bounds = s.bounds;
 		def.transform = nodeMatrix;
-		def.vertexBufferAddress = mesh->meshBuffers.vertexBufferAddress;
+		def.vertexBufferAddressRaytracing = mesh->meshBuffers.vertexBufferAddress;
+		def.vertexBufferAddressRasterization = mesh->meshBuffers.vertexBufferAddress;
+
+		def.indexBufferAddressRaytracing = mesh->meshBuffers.IndexBufferAddress;
 		def.hasTangents = s.hasTangents;
 		if (s.material->data.passType == MaterialPass::Transparent) {
 			ctx.TransparentSurfaces.push_back(def);
@@ -1886,9 +1928,21 @@ void VulkanEngine::update_scene()
 	glm::mat4 projection = glm::perspective(
 		glm::radians(70.f),
 		(float)_windowExtent.width / (float)_windowExtent.height,
-		0.1f,      // Near plane
-		10000.f    // Far plane
+		10000.f,    // Far plane,
+		0.1f      // Near plane
 	);
+
+
+	glm::mat4 rayProjection = glm::perspective(
+		glm::radians(70.f),
+		(float)_windowExtent.width / (float)_windowExtent.height,
+		0.1f,      // Near plane
+		10000.f    // Far plane,
+	);
+	rayProjection[1][1] *= -1;
+
+	
+
 	sceneData.proj = projection;
 	// Invert the Y direction on projection matrix to match OpenGL and glTF conventions
 	sceneData.proj[1][1] *= -1;
@@ -1900,7 +1954,7 @@ void VulkanEngine::update_scene()
 	if (_raytracingHandler.m_uniformMappedPtr) {
 		_raytracingHandler.m_uniformMappedPtr->viewProj = sceneData.viewproj;
 		_raytracingHandler.m_uniformMappedPtr->viewInverse = glm::inverse(view);
-		_raytracingHandler.m_uniformMappedPtr->projInverse = glm::inverse(projection);
+		_raytracingHandler.m_uniformMappedPtr->projInverse = glm::inverse(rayProjection);
 		// Update additional uniforms as needed
 	}
 
@@ -1968,10 +2022,10 @@ void VulkanEngine::draw_shadows(VkCommandBuffer cmd) {
 
 	vkCmdSetScissor(cmd, 0, 1, &scissor);
 	
-	AllocatedBuffer gpuSceneDataBuffer = create_buffer(&_device, &_allocator, sizeof(GPUSceneData), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+	AllocatedBuffer gpuShadowSceneDataBuffer = create_buffer(&_device, &_allocator, sizeof(GPUSceneData), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
 
 	get_current_frame()._deletionQueue.push_function([=, this]() {
-		destroy_buffer(gpuSceneDataBuffer);
+		destroy_buffer(gpuShadowSceneDataBuffer);
 		});
 
 
@@ -2001,14 +2055,19 @@ void VulkanEngine::draw_shadows(VkCommandBuffer cmd) {
 	//shadowSceneData.cameraPosition = glm::vec4(shadow.positions,1.0f);
 	//shadowSceneData.proj[1][1] *= -1;
 
-
-	GPUSceneData* sceneUniformData = (GPUSceneData*)gpuSceneDataBuffer.allocation->GetMappedData();
-		*sceneUniformData = shadowSceneData;
+// Map memory and write the data for the buffer
+	void* mappedData = nullptr;
+	VkResult result = vmaMapMemory(_allocator, gpuShadowSceneDataBuffer.allocation, &mappedData);
+	if (result != VK_SUCCESS) {
+		throw std::runtime_error("Failed to map memory for GPU shadow scene data buffer!");
+	}
+	std::memcpy(mappedData, &shadowSceneData, sizeof(GPUSceneData));
+	vmaUnmapMemory(_allocator, gpuShadowSceneDataBuffer.allocation);
 
 	VkDescriptorSet globalDescriptor = get_current_frame()._frameDescriptors.allocate(_device, _gpuSceneDataDescriptorLayout);
 
 	DescriptorWriter writer;
-	writer.write_buffer(0, gpuSceneDataBuffer.buffer, sizeof(GPUSceneData), 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+	writer.write_buffer(0, gpuShadowSceneDataBuffer.buffer, sizeof(GPUSceneData), 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
 	writer.update_set(_device, globalDescriptor);
 
 	MaterialPipeline* lastPipeline = nullptr;
@@ -2032,10 +2091,16 @@ void VulkanEngine::draw_shadows(VkCommandBuffer cmd) {
 		// calculate final mesh matrix
 		GPUDrawPushConstants push_constants;
 		push_constants.worldMatrix = r.transform;
-		push_constants.vertexBuffer = r.vertexBufferAddress;
+		push_constants.vertexBuffer = r.vertexBufferAddressRasterization;
+
 		push_constants.hasTangents = r.hasTangents ? 1 : 0;
 
-		vkCmdPushConstants(cmd, _shadowPipeline->layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(GPUDrawPushConstants), &push_constants);
+		vkCmdPushConstants(cmd, 
+			_shadowPipeline->layout, 
+			VK_SHADER_STAGE_VERTEX_BIT | 
+			VK_SHADER_STAGE_FRAGMENT_BIT, 
+			0, sizeof(GPUDrawPushConstants),
+			&push_constants);
 
 		vkCmdDrawIndexed(cmd, r.indexCount, 1, r.firstIndex, 0, 0);
 		//stats
