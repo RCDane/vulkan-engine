@@ -30,6 +30,7 @@ using vec3  = glm::vec3;
 using vec4  = glm::vec4;
 using mat4  = glm::mat4;
 using uint  = unsigned int;
+using u64 = uint64_t;
 #endif
 
 // clang-format off
@@ -57,11 +58,12 @@ END_BINDING();
 // Information of a obj model when referenced in a shader
 struct ObjDesc
 {
-  int   txtOffset;             // Texture index offset in the array of textures
-  uvec2 vertexAddress;         // Address of the Vertex buffer
-  uvec2 indexAddress;          // Address of the index buffer
-  uvec2 materialAddress;       // Address of the material buffer
-  uvec2 materialIndexAddress;  // Address of the triangle material index buffer
+  uint64_t vertexAddress;         // Address of the Vertex buffer
+  uint64_t indexAddress;          // Address of the index buffer
+  uint64_t materialAddress;       // Address of the material buffer
+  uint64_t materialIndexAddress;  // Address of the triangle material index buffer
+  uint indexOffset;
+  int padding;
 };
 
 // Uniform buffer set at each frame

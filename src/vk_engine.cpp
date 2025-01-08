@@ -94,28 +94,32 @@ void VulkanEngine::init()
 	mainCamera.pitch = 0;
 	mainCamera.yaw = 0;
 
-	
 
 
 	std::string helmetPath = { "../assets/DamagedHelmet/glTF-Binary/DamagedHelmet.glb"};
-	std::string sponzaPath = { "../assets/sponza.glb"};
-
-
-    auto sponzaFile = loadGltf(this, sponzaPath);
 	auto helmetFile = loadGltf(this, helmetPath);
-
 	assert(helmetFile.has_value());
-	assert(sponzaFile.has_value());
+	
 
-    loadedScenes["sponza"] = *sponzaFile;
-	loadedScenes["sponza"]->rootTransform = glm::scale(glm::vec3(.1f)) * loadedScenes["sponza"]->rootTransform;
-
-
-	// 
 	loadedScenes["helmet"] = *helmetFile;
 	loadedScenes["helmet"]->rootTransform = glm::scale(glm::vec3(10.0f)) * loadedScenes["helmet"]->rootTransform;
 	loadedScenes["helmet"]->rootTransform = glm::translate(glm::vec3(0.0f, 20.0f, 0.0f)) * loadedScenes["helmet"]->rootTransform;
 	
+
+
+
+	std::string sponzaPath = { "../assets/sponza.glb" };
+	auto sponzaFile = loadGltf(this, sponzaPath);
+	assert(sponzaFile.has_value());
+
+
+
+	loadedScenes["sponza"] = *sponzaFile;
+	loadedScenes["sponza"]->rootTransform = glm::scale(glm::vec3(.1f)) * loadedScenes["sponza"]->rootTransform;
+
+
+
+
 	DescriptorWriter writer;
 	writer.write_texture_array(0, textureImages, textureSamplers, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 	writer.update_set(_device, _textureArrayDescriptor);
@@ -126,9 +130,10 @@ void VulkanEngine::init()
 
 	_raytracingHandler.setup(this);
 	_raytracingHandler.createDescriptorSetLayout(this);
-	_raytracingHandler.prepareModelData(this);
 	_raytracingHandler.createBottomLevelAS(this);
 	_raytracingHandler.createTopLevelAS(this);
+	_raytracingHandler.prepareModelData(this);
+
 	_raytracingHandler.createRtDescriptorSet(this);
 	_raytracingHandler.createRtPipeline(this);
 	_raytracingHandler.createRtShaderBindingTable(this);
@@ -715,11 +720,21 @@ void VulkanEngine::init_vulkan()
     vkb::InstanceBuilder builder;
 
 
+	//// Enable GPU-assisted validation
+	//VkValidationFeatureEnableEXT enabledFeatures[] = {
+	//	VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT
+	//};
+	//VkValidationFeaturesEXT validationFeatures = {};
+	//validationFeatures.sType = VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT;
+	//validationFeatures.enabledValidationFeatureCount = 1;
+	//validationFeatures.pEnabledValidationFeatures = enabledFeatures;
+
 	auto inst_ret = builder.set_app_name("Example Vulkan Application")
 		.request_validation_layers(bUseValidationLayers)
 		.add_validation_feature_disable(VK_VALIDATION_FEATURE_DISABLE_UNIQUE_HANDLES_EXT)
 		.use_default_debug_messenger()
 		.require_api_version(1, 3, 0)
+		.add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT) // Add validation features
 		.build();
 
     vkb::Instance vkb_inst = inst_ret.value();
@@ -730,7 +745,7 @@ void VulkanEngine::init_vulkan()
 
     SDL_Vulkan_CreateSurface(_window, _instance, &_surface);
 
-
+	
 
     VkPhysicalDeviceVulkan13Features features {.sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES};
     features.dynamicRendering = true;
@@ -750,6 +765,7 @@ void VulkanEngine::init_vulkan()
 	features12.runtimeDescriptorArray = true;
 	features12.shaderSampledImageArrayNonUniformIndexing = true;
 	features12.bufferDeviceAddressCaptureReplay = true;
+	
 	VkPhysicalDeviceVulkan11Features features11{ .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES };
 	features11.storageBuffer16BitAccess = true;
 	features11.uniformAndStorageBuffer16BitAccess = true;
@@ -771,15 +787,20 @@ void VulkanEngine::init_vulkan()
 	VkPhysicalDeviceRayTracingValidationFeaturesNV rtValidationFeatures{ .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_VALIDATION_FEATURES_NV };
 	rtValidationFeatures.rayTracingValidation = VK_TRUE;
 	
+	VkPhysicalDeviceFeatures deviceFeatures{};
 
+	deviceFeatures.shaderInt64 = true;
 
 	
 
     //use vkbootstrap to select a gpu. 
 	//We want a gpu that can write to the SDL surface and supports vulkan 1.3 with the correct features
 	vkb::PhysicalDeviceSelector selector{ vkb_inst };
+	
+
 	vkb::PhysicalDevice physicalDevice = selector
 		.set_minimum_version(1, 3)
+		.set_required_features(deviceFeatures)
 		.add_required_extension("VK_KHR_acceleration_structure")
 		.add_required_extension("VK_KHR_push_descriptor")
 		.add_required_extension("VK_KHR_buffer_device_address")
@@ -1058,7 +1079,7 @@ void VulkanEngine::init_descriptors(){
 		// create a descriptor pool
 		std::vector<DescriptorAllocatorGrowable::PoolSizeRatio> frame_sizes = { 
 			{ VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 3 },
-			{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 3 },
+			{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 100 },
 			{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 3 },
 			{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 4 },
 		};
@@ -1350,7 +1371,7 @@ GPUMeshBuffers VulkanEngine::uploadMesh(
 
 	// Create vertex buffer
 	newSurface.vertexBuffer = create_buffer(&_device, &_allocator,
-		vertexBufferSize, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
+		vertexBufferSize, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT
 		| VK_BUFFER_USAGE_TRANSFER_DST_BIT
 		| VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
 		| VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR,
@@ -1365,7 +1386,7 @@ GPUMeshBuffers VulkanEngine::uploadMesh(
 
 	// Create index buffer
 	newSurface.indexBuffer = create_buffer(&_device, &_allocator,
-		indexBufferSize, VK_BUFFER_USAGE_INDEX_BUFFER_BIT
+		indexBufferSize +20, VK_BUFFER_USAGE_INDEX_BUFFER_BIT
 		| VK_BUFFER_USAGE_TRANSFER_DST_BIT
 		| VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
 		| VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR,
@@ -1380,11 +1401,17 @@ GPUMeshBuffers VulkanEngine::uploadMesh(
 	// Create raytracing index buffer only if raytracing indices are provided
 	if (!raytracingIndices.empty()) {
 		newSurface.indexBufferRaytracing = create_buffer(&_device, &_allocator,
-			raytracingIndexBufferSize, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
+			raytracingIndexBufferSize, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | 
+			VK_BUFFER_USAGE_INDEX_BUFFER_BIT
 			| VK_BUFFER_USAGE_TRANSFER_DST_BIT
 			| VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
 			| VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR,
 			VMA_MEMORY_USAGE_GPU_ONLY);
+		VkBufferDeviceAddressInfo deviceAddressInfo2{
+		.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
+		.buffer = newSurface.indexBufferRaytracing.buffer
+		};
+		newSurface.IndexBufferAddressRaytracing = vkGetBufferDeviceAddress(_device, &deviceAddressInfo2);
 	}
 
 	// Create staging buffer
@@ -1624,10 +1651,10 @@ void VulkanEngine::init_default_data(){
 	materialResources.normalImage = _defaultNormalMap;
 	materialResources.normalSampler = _defaultSamplerLinear;
 	//set the uniform buffer for the material data
-	AllocatedBuffer materialConstants = create_buffer(&_device, &_allocator,sizeof(GLTFMetallic_Roughness::MaterialConstants), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+	AllocatedBuffer materialConstants = create_buffer(&_device, &_allocator,sizeof(MaterialConstants), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
 
 	//write the buffer
-	GLTFMetallic_Roughness::MaterialConstants* sceneUniformData = (GLTFMetallic_Roughness::MaterialConstants*)materialConstants.allocation->GetMappedData();
+	MaterialConstants* sceneUniformData = (MaterialConstants*)materialConstants.allocation->GetMappedData();
 	sceneUniformData->colorFactors = glm::vec4{1,1,1,1};
 	sceneUniformData->metal_rough_factors = glm::vec4{1,0.5,0,0};
 
@@ -1639,7 +1666,7 @@ void VulkanEngine::init_default_data(){
 	materialResources.dataBufferOffset = 0;
 
 	defaultData = metalRoughMaterial.write_material(this,MaterialPass::MainColor,materialResources, globalDescriptorAllocator);
-
+	defaultData.data = sceneUniformData;
 	for (auto& m : testMeshes) {
 		std::shared_ptr<MeshNode> newNode = std::make_shared<MeshNode>();
 		newNode->mesh = m;
@@ -1898,8 +1925,8 @@ void MeshNode::Draw(const glm::mat4& topMatrix, DrawContext& ctx)
 		def.transform = nodeMatrix;
 		def.vertexBufferAddressRaytracing = mesh->meshBuffers.vertexBufferAddress;
 		def.vertexBufferAddressRasterization = mesh->meshBuffers.vertexBufferAddress;
-
-		def.indexBufferAddressRaytracing = mesh->meshBuffers.IndexBufferAddress;
+		def.indexBufferAddressRasterization = mesh->meshBuffers.IndexBufferAddress;
+		def.indexBufferAddressRaytracing = mesh->meshBuffers.IndexBufferAddressRaytracing;
 		def.hasTangents = s.hasTangents;
 		if (s.material->data.passType == MaterialPass::Transparent) {
 			ctx.TransparentSurfaces.push_back(def);
@@ -1907,6 +1934,7 @@ void MeshNode::Draw(const glm::mat4& topMatrix, DrawContext& ctx)
 		else {
 			ctx.OpaqueSurfaces.push_back(def);
 		}
+		ctx.Both.push_back(def);
 	}
 
 	// recurse down

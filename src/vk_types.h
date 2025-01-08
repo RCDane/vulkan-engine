@@ -79,7 +79,7 @@ struct alignas(16) Vertex {
     int32_t materialIndex; // 4 bytes
     float padding4[3];     // 12 bytes to align struct size to 16 bytes
 };
-static_assert(sizeof(Vertex) == 96, "Vertex struct size should be 128 bytes.");
+static_assert(sizeof(Vertex) == 96, "Vertex struct size should be 96 bytes.");
 
 // holds the resources needed for a mesh
 struct GPUMeshBuffers {
@@ -89,10 +89,21 @@ struct GPUMeshBuffers {
     AllocatedBuffer vertexBuffer;
     VkDeviceAddress vertexBufferAddress;
     VkDeviceAddress IndexBufferAddress;
+    VkDeviceAddress IndexBufferAddressRaytracing;
+
 
     uint32_t vertexCount;
 };
-
+struct MaterialConstants {
+    glm::vec4 colorFactors;
+    glm::vec4 metal_rough_factors;
+    int colorIdx;
+    int normalIdx;
+    int metalIdx;
+    int padding;
+    //padding, we need it anyway for uniform buffers
+    glm::vec4 extra[13];
+};
 // push constants for our mesh object draws
 struct GPUDrawPushConstants {
     glm::mat4 worldMatrix;
@@ -111,6 +122,7 @@ struct MaterialPipeline {
 };
 
 struct MaterialInstance {
+    MaterialConstants* data;
     MaterialPipeline* pipeline;
     VkDescriptorSet materialSet;
     MaterialPass passType;

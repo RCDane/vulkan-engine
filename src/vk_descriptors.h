@@ -71,7 +71,7 @@ struct DescriptorWriter {
     std::vector<VkWriteDescriptorSet> writes;
 
     void write_image(int binding,VkImageView image,VkSampler sampler , VkImageLayout layout, VkDescriptorType type);
-    void write_buffer(int binding,VkBuffer buffer,size_t size, size_t offset,VkDescriptorType type); 
+    void write_buffer(int binding,VkBuffer buffer,size_t size, size_t offset,VkDescriptorType type, int count = 1); 
 	void write_acceleration_structure(int binding, VkWriteDescriptorSetAccelerationStructureKHR as);
     void write_texture_array(int binding, const std::vector<VkImageView>& images, const std::vector<VkSampler> samplers, VkDescriptorType type);
     void clear();

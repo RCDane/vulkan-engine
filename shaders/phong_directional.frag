@@ -5,7 +5,7 @@
 #extension GL_EXT_nonuniform_qualifier : enable
 
 #include "input_structures.glsl"
-
+#include "common/host_device.h"
 layout (location = 0) in vec3 inNormal;
 layout (location = 1) in vec3 inColor;
 layout (location = 2) in vec2 inUV;
@@ -21,14 +21,7 @@ layout (set = 3, binding = 0) uniform DirectionalLight {
 	vec4 color;
 	mat4 lightView;
 } directionalLight;
-struct Vertex {
-	vec3 position;
-	float uv_x;
-	vec3 normal;
-	float uv_y;
-	vec4 color;
-	vec4 tangent;
-}; 
+
 layout (set = 3, binding = 1) uniform sampler2D shadowMap;
 
 layout(buffer_reference, std430) readonly buffer VertexBuffer{ 

@@ -216,11 +216,15 @@ VkDescriptorSet DescriptorAllocatorGrowable::allocate(VkDevice device, VkDescrip
     return ds;
 }
 
-void DescriptorWriter::write_buffer(int binding, VkBuffer buffer, size_t size, size_t offset, VkDescriptorType type)
+void DescriptorWriter::write_buffer(int binding, VkBuffer buffer, size_t size, size_t offset, VkDescriptorType type, int count)
 {
+    // increase size such that it is divisible by 16
+
+    int minAlignment = 16;
+    VkDeviceSize ofset = (offset / minAlignment) * minAlignment;
 	VkDescriptorBufferInfo& info = bufferInfos.emplace_back(VkDescriptorBufferInfo{
 		.buffer = buffer,
-		.offset = offset,
+		.offset = 0,
 		.range = size
 		});
 

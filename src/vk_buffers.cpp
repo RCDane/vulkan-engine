@@ -11,7 +11,7 @@ AllocatedBuffer create_buffer(VkDevice *device, VmaAllocator *allocator,size_t a
 	bufferInfo.size = allocSize;
 	bufferInfo.flags = flags;
 	bufferInfo.usage = usage; 
-
+	
 	VmaAllocationCreateInfo vmaallocInfo = {};
 	vmaallocInfo.usage = memoryUsage;
 	vmaallocInfo.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT;

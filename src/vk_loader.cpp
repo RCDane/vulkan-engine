@@ -200,7 +200,7 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGltf(VulkanEngine* engine, std::s
 
     int materisals_size = std::max((int)gltf.materials.size(), 1);
 
-    file.descriptorPool.init(engine->_device,&engine->_allocator, materisals_size, sizes);
+    file.descriptorPool.init(engine->_device,&engine->_allocator, materisals_size, sizes,true);
 
     for (fastgltf::Sampler& sampler : gltf.samplers){
         VkSamplerCreateInfo sampl = 
@@ -244,7 +244,7 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGltf(VulkanEngine* engine, std::s
     }
 
      // create buffer to hold the material data
-    file.materialDataBuffer = create_buffer(&engine->_device, &engine->_allocator,sizeof(GLTFMetallic_Roughness::MaterialConstants) * materisals_size,
+    file.materialDataBuffer = create_buffer(&engine->_device, &engine->_allocator,sizeof(MaterialConstants) * materisals_size,
         VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
     int data_index = 0;
 
@@ -263,7 +263,7 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGltf(VulkanEngine* engine, std::s
 
 
 	int materialStart = engine->textureImages.size();
-    GLTFMetallic_Roughness::MaterialConstants* sceneMaterialConstants = (GLTFMetallic_Roughness::MaterialConstants*)file.materialDataBuffer.info.pMappedData;
+    MaterialConstants* sceneMaterialConstants = (MaterialConstants*)file.materialDataBuffer.info.pMappedData;
 
     for (fastgltf::Material& mat : gltf.materials) {
         std::shared_ptr<GLTFMaterial> newMat = std::make_shared<GLTFMaterial>();
@@ -274,7 +274,7 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGltf(VulkanEngine* engine, std::s
         
 
 
-        GLTFMetallic_Roughness::MaterialConstants constants;
+        MaterialConstants constants;
         constants.colorFactors.x = mat.pbrData.baseColorFactor[0];
         constants.colorFactors.y = mat.pbrData.baseColorFactor[1];
         constants.colorFactors.z = mat.pbrData.baseColorFactor[2];
@@ -286,7 +286,7 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGltf(VulkanEngine* engine, std::s
         constants.colorIdx = 0;
         constants.metalIdx = 1;
         constants.normalIdx = 2;
-
+        
         // write material parameters to buffer
 
         MaterialPass passType = MaterialPass::MainColor;
@@ -304,7 +304,7 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGltf(VulkanEngine* engine, std::s
         materialResources.normalSampler = engine->_defaultSamplerLinear;
         // set the uniform buffer for the material data
         materialResources.dataBuffer = file.materialDataBuffer.buffer;
-        materialResources.dataBufferOffset = data_index * sizeof(GLTFMetallic_Roughness::MaterialConstants);
+        materialResources.dataBufferOffset = data_index * sizeof(MaterialConstants);
         
         
         
@@ -396,10 +396,10 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGltf(VulkanEngine* engine, std::s
         }
 
         sceneMaterialConstants[data_index] = constants;
-
+        
         // build material
         newMat->data = engine->metalRoughMaterial.write_material(engine, passType, materialResources, file.descriptorPool);
-
+		newMat->data.data = &sceneMaterialConstants[data_index];
         data_index++;
     }
 
@@ -423,6 +423,7 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGltf(VulkanEngine* engine, std::s
 
         // Clear surfaces for the new mesh
         newmesh->surfaces.clear();
+        printf("new primitive:\n");
 
         for (auto&& p : mesh.primitives) {
             
@@ -437,7 +438,7 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGltf(VulkanEngine* engine, std::s
             {
                 fastgltf::Accessor& indexaccessor = gltf.accessors[p.indicesAccessor.value()];
                 indices.reserve(indices.size() + indexaccessor.count);
-
+				raytracingIndices.reserve(raytracingIndices.size() + indexaccessor.count);
                 fastgltf::iterateAccessor<std::uint32_t>(gltf, indexaccessor,
                     [&](std::uint32_t idx) {
                         indices.push_back(idx + initial_vtx); // Offset by initial_vtx
@@ -527,7 +528,7 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGltf(VulkanEngine* engine, std::s
             newSurface.maxVertex = *std::max_element(indices.begin(), indices.end());
             fastgltf::Accessor& posAccessor = gltf.accessors[p.findAttribute("POSITION")->second];
             newSurface.vertexCount = static_cast<uint32_t>(posAccessor.count);
-
+			newSurface.material = materials[primMaterial];
             // Alternatively:
 			printf("mesh vertex count: %d\n", newSurface.vertexCount);
 			printf("mesh index count: %d\n", newSurface.count);

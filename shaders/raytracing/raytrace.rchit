@@ -26,23 +26,34 @@
 #extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
 #extension GL_EXT_buffer_reference2 : require
 #extension GL_EXT_buffer_reference_uvec2 : require
-
+#extension  GL_EXT_shader_explicit_arithmetic_types_int64 : require
 #include "../common/raycommon.glsl"
 #include "../common/wavefront.glsl"
 
 hitAttributeEXT vec2 attribs;
-
+ 
 // clang-format off
 layout(location = 0) rayPayloadInEXT hitPayload prd;
 layout(location = 1) rayPayloadEXT bool isShadowed;
 
-layout(buffer_reference, scalar) buffer Vertices {Vertex v[]; }; // Positions of an object
-layout(buffer_reference, scalar) buffer Indices {ivec3 i[]; }; // Triangle indices
-layout(buffer_reference, scalar) buffer Materials {WaveFrontMaterial m[]; }; // Array of all materials on an object
-layout(buffer_reference, scalar) buffer MatIndices {int i[]; }; // Material ID for each triangle
+layout(buffer_reference, std430) buffer Vertices {Vertex v[]; }; // Positions of an object
+layout(buffer_reference, scalar) buffer Indices {int i[]; }; // Triangle indices
+// layout(buffer_reference, scalar) buffer Materials {WaveFrontMaterial m[]; }; // Array of all materials on an object
+// layout(buffer_reference, scalar) buffer MatIndices {int i[]; }; // Material ID for each triangle
 layout(set = 0, binding = eTlas) uniform accelerationStructureEXT topLevelAS;
 layout(set = 1, binding = eObjDescs, scalar) buffer ObjDesc_ { ObjDesc i[]; } objDesc;
 layout(set = 1, binding = eTextures) uniform sampler2D textureSamplers[];
+
+struct GLTFMaterialData{   
+	vec4 colorFactors;
+	vec4 metal_rough_factors;
+	int colorIdx;
+	int normalIdx;
+	int metalIdx;
+};
+
+layout(set = 1, binding = 3) buffer MaterialData_ {GLTFMaterialData data[];} materialData;
+
 
 layout(push_constant) uniform _PushConstantRay { PushConstantRay pcRay; };
 // clang-format on
@@ -65,24 +76,23 @@ vec3 getColorFromInstanceIndex(int index) {
 
 void main()
 {
-  prd.hitValue = vec3(getColorFromInstanceIndex(gl_InstanceCustomIndexEXT));
-  return;
-
+   
 
   // Object data
   ObjDesc    objResource = objDesc.i[gl_InstanceCustomIndexEXT];
-  MatIndices matIndices  = MatIndices(objResource.materialIndexAddress);
-  Materials  materials   = Materials(objResource.materialAddress);
   Indices    indices     = Indices(objResource.indexAddress);
   Vertices   vertices    = Vertices(objResource.vertexAddress);
-
-  // Indices of the triangle
-  ivec3 ind = indices.i[gl_PrimitiveID];
-
+  int idx = gl_PrimitiveID*3;
+  int ind0 = indices.i[idx];
+  int ind1 = indices.i[idx+1];
+  int ind2 = indices.i[idx+2];
+  
   // Vertex of the triangle
-  Vertex v0 = vertices.v[ind.x];
-  Vertex v1 = vertices.v[ind.y];
-  Vertex v2 = vertices.v[ind.z];
+  Vertex v0 = vertices.v[ind0];
+  Vertex v1 = vertices.v[ind1];
+  Vertex v2 = vertices.v[ind2];
+
+
 
   const vec3 barycentrics = vec3(1.0 - attribs.x - attribs.y, attribs.x, attribs.y);
 
@@ -93,73 +103,75 @@ void main()
   // Computing the normal at hit position
   const vec3 nrm      = v0.normal * barycentrics.x + v1.normal * barycentrics.y + v2.normal * barycentrics.z;
   const vec3 worldNrm = normalize(vec3(nrm * gl_WorldToObjectEXT));  // Transforming the normal to world space
+  
+  prd.hitValue = worldNrm;
+  return; 
+  // // Vector toward the light
+  // vec3  L;
+  // float lightIntensity = pcRay.lightIntensity;
+  // float lightDistance  = 100000.0;
+  // // Point light
+  // if(pcRay.lightType == 0)
+  // {
+  //   vec3 lDir      = pcRay.lightPosition - worldPos;
+  //   lightDistance  = length(lDir);
+  //   lightIntensity = pcRay.lightIntensity / (lightDistance * lightDistance);
+  //   L              = normalize(lDir);
+  // }
+  // else  // Directional light
+  // {
+  //   L = normalize(pcRay.lightPosition);
+  // }
 
-  // Vector toward the light
-  vec3  L;
-  float lightIntensity = pcRay.lightIntensity;
-  float lightDistance  = 100000.0;
-  // Point light
-  if(pcRay.lightType == 0)
-  {
-    vec3 lDir      = pcRay.lightPosition - worldPos;
-    lightDistance  = length(lDir);
-    lightIntensity = pcRay.lightIntensity / (lightDistance * lightDistance);
-    L              = normalize(lDir);
-  }
-  else  // Directional light
-  {
-    L = normalize(pcRay.lightPosition);
-  }
-
-  // Material of the object
-  int               matIdx = matIndices.i[gl_PrimitiveID];
-  WaveFrontMaterial mat    = materials.m[matIdx];
+  // // Material of the object
+  // int               matIdx = matIndices.i[gl_PrimitiveID];
+  // WaveFrontMaterial mat    = materials.m[matIdx];
 
 
-  // Diffuse
-  vec3 diffuse = computeDiffuse(mat, L, worldNrm);
-  if(mat.textureId >= 0)
-  {
-    uint txtId    = mat.textureId + objDesc.i[gl_InstanceCustomIndexEXT].txtOffset;
-    vec2 texCoord = v0.uv  * barycentrics.x + v1.uv * barycentrics.y + v2.uv  * barycentrics.z;
-    diffuse *= texture(textureSamplers[nonuniformEXT(txtId)], texCoord).xyz;
-  }
+  // // Diffuse
+  // vec3 diffuse = computeDiffuse(mat, L, worldNrm);
+  // if(mat.textureId >= 0)
+  // {
+  //   uint txtId    = mat.textureId + objDesc.i[gl_InstanceCustomIndexEXT].txtOffset;
+  //   vec2 texCoord = v0.uv  * barycentrics.x + v1.uv * barycentrics.y + v2.uv  * barycentrics.z;
+  //   diffuse *= texture(textureSamplers[nonuniformEXT(txtId)], texCoord).xyz;
+  // }
 
-  vec3  specular    = vec3(0);
-  float attenuation = 1;
+  // vec3  specular    = vec3(0);
+  // float attenuation = 1;
 
-  // Tracing shadow ray only if the light is visible from the surface
-  if(dot(worldNrm, L) > 0)
-  {
-    float tMin   = 0.001;
-    float tMax   = lightDistance;
-    vec3  origin = gl_WorldRayOriginEXT + gl_WorldRayDirectionEXT * gl_HitTEXT;
-    vec3  rayDir = L;
-    uint  flags  = gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsOpaqueEXT | gl_RayFlagsSkipClosestHitShaderEXT;
-    isShadowed   = true;
-    traceRayEXT(topLevelAS,  // acceleration structure
-                flags,       // rayFlags
-                0xFF,        // cullMask
-                0,           // sbtRecordOffset
-                0,           // sbtRecordStride
-                1,           // missIndex
-                origin,      // ray origin
-                tMin,        // ray min range
-                rayDir,      // ray direction
-                tMax,        // ray max range
-                1            // payload (location = 1)
-    );
+  // // Tracing shadow ray only if the light is visible from the surface
+  // if(dot(worldNrm, L) > 0)
+  // {
+  //   float tMin   = 0.001;
+  //   float tMax   = lightDistance;
+  //   vec3  origin = gl_WorldRayOriginEXT + gl_WorldRayDirectionEXT * gl_HitTEXT;
+  //   vec3  rayDir = L;
+  //   uint  flags  = gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsOpaqueEXT | gl_RayFlagsSkipClosestHitShaderEXT;
+  //   isShadowed   = true;
+  //   traceRayEXT(topLevelAS,  // acceleration structure
+  //               flags,       // rayFlags
+  //               0xFF,        // cullMask
+  //               0,           // sbtRecordOffset
+  //               0,           // sbtRecordStride
+  //               1,           // missIndex
+  //               origin,      // ray origin
+  //               tMin,        // ray min range
+  //               rayDir,      // ray direction
+  //               tMax,        // ray max range
+  //               1            // payload (location = 1)
+  //   );
 
-    if(isShadowed)
-    {
-      attenuation = 0.3;
-    }
-    else
-    {
-      // Specular
-      specular = computeSpecular(mat, gl_WorldRayDirectionEXT, L, worldNrm);
-    }
-  }
+  //   if(isShadowed)
+  //   {
+  //     attenuation = 0.3;
+  //   }
+  //   else
+  //   {
+  //     // Specular
+  //     specular = computeSpecular(mat, gl_WorldRayDirectionEXT, L, worldNrm);
+  //   }
+  // }
 
-  prd.hitValue = vec3(lightIntensity * attenuation * (diffuse + specular));
+  // prd.hitValue = vec3(lightIntensity * attenuation * (diffuse + specular));
 }

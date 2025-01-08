@@ -50,12 +50,15 @@ struct RenderObject {
 	VkDeviceAddress vertexBufferAddressRaytracing;
 	VkDeviceAddress vertexBufferAddressRasterization;
 	VkDeviceAddress indexBufferAddressRaytracing;
+	VkDeviceAddress indexBufferAddressRasterization;
+
 
 	bool hasTangents;
 };
 struct DrawContext {
 	std::vector<RenderObject> OpaqueSurfaces;
 	std::vector<RenderObject> TransparentSurfaces;
+	std::vector<RenderObject> Both;
 };
 struct EngineStats {
     float frametime;
@@ -118,16 +121,7 @@ struct GLTFMetallic_Roughness {
 
 	VkDescriptorSetLayout materialLayout;
 
-	struct MaterialConstants {
-		glm::vec4 colorFactors;
-		glm::vec4 metal_rough_factors;
-		int colorIdx;
-		int normalIdx;
-		int metalIdx;
-		int padding;
-		//padding, we need it anyway for uniform buffers
-		glm::vec4 extra[13];
-	};
+	
 
 	struct MaterialResources {
 		AllocatedImage colorImage;
