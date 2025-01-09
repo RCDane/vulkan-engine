@@ -3,6 +3,7 @@
 #extension GL_GOOGLE_include_directive : require
 #extension GL_EXT_buffer_reference : require
 #extension GL_EXT_nonuniform_qualifier : enable
+#extension  GL_EXT_shader_explicit_arithmetic_types_int64 : require
 
 #include "input_structures.glsl"
 #include "common/host_device.h"
@@ -64,7 +65,11 @@ float ShadowCalculation(vec4 fragPosLightSpace, vec3 normal)
     // float bias = max(0.00005 * (1.0 - dot(normalize(normal), normalize(-directionalLight.direction))), 0.00005);
     float bias = 0.0005;
     // Perform shadow test
-    float shadow = currentDepth < shadowDepth - bias ? 0.0 : 1.0;
+    // float shadow = currentDepth < shadowDepth - bias ? 0.0 : 1.0;
+    float shadow = 1.0;
+    if (currentDepth < shadowDepth - bias){
+        shadow = 0.0;
+    }
 
     return shadow;
 }

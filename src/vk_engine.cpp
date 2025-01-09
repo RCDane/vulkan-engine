@@ -39,7 +39,7 @@
 #include <filesystem>
 #include <iostream>
 
-constexpr bool bUseValidationLayers = true;
+constexpr bool bUseValidationLayers = false;
 
 
 VulkanEngine* loadedEngine = nullptr;
@@ -529,6 +529,7 @@ void VulkanEngine::draw_geometry(VkCommandBuffer cmd)
 
 				vkCmdSetScissor(cmd, 0, 1, &scissor);
 			}
+			// Bind material data for PBR
 			vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, r.material->pipeline->layout, 1, 1,
              &r.material->materialSet, 0, nullptr);
 		}

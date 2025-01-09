@@ -224,7 +224,7 @@ void DescriptorWriter::write_buffer(int binding, VkBuffer buffer, size_t size, s
     VkDeviceSize ofset = (offset / minAlignment) * minAlignment;
 	VkDescriptorBufferInfo& info = bufferInfos.emplace_back(VkDescriptorBufferInfo{
 		.buffer = buffer,
-		.offset = 0,
+		.offset = offset,
 		.range = size
 		});
 
