@@ -39,7 +39,7 @@
 #include <filesystem>
 #include <iostream>
 
-constexpr bool bUseValidationLayers = false;
+constexpr bool bUseValidationLayers = true;
 
 
 VulkanEngine* loadedEngine = nullptr;
@@ -1698,6 +1698,13 @@ void VulkanEngine::init_default_data(){
 	_directionalLighting.color = glm::vec4(1.f);
 	_directionalLighting.direction = sunDirection;
 	_directionalLighting.intensity = 1.f;
+
+	_raytracePushConstant.clearColor = glm::vec4(0.1, 0.2, 0.4, 0.97);
+	_raytracePushConstant.lightPosition = sunDirection;
+	_raytracePushConstant.lightType = 1;
+	_raytracePushConstant.lightIntensity = 2.f;
+
+
 
 }
 

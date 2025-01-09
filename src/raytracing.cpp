@@ -767,10 +767,21 @@ ObjDesc prepareModel(VulkanEngine* engine, RenderObject renderObject) {
 
 
 void RaytracingHandler::prepareModelData(VulkanEngine* engine) {
-
+	materialConstants.reserve(m_models->OpaqueSurfaces.size());
 	for (auto& obj : m_models->OpaqueSurfaces) {
 		objDescs.emplace_back(prepareModel(engine,obj));
+		materialConstants.push_back(*obj.material->data);
 	}
+
+	m_bmatDesc = create_buffer(
+		&engine->_device,
+		&engine->_allocator,
+		materialConstants.size() * sizeof(MaterialConstants),
+		VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
+		VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+		VMA_MEMORY_USAGE_CPU_TO_GPU
+	);
+
 	
 	
 	m_bObjDesc = create_buffer(
@@ -781,8 +792,23 @@ void RaytracingHandler::prepareModelData(VulkanEngine* engine) {
 		VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
 		VMA_MEMORY_USAGE_CPU_TO_GPU
 	);
-	// Map the buffer for CPU writes
+
+
+
+	// Map material constants
 	void* mappedData = nullptr;
+	vmaMapMemory(engine->_allocator, m_bmatDesc.allocation, &mappedData);
+	if (mappedData) {
+		// Copy ObjDesc data into the mapped buffer
+		memcpy(mappedData, materialConstants.data(), materialConstants.size() * sizeof(MaterialConstants));
+		vmaUnmapMemory(engine->_allocator, m_bmatDesc.allocation);
+	}
+	else {
+		throw std::runtime_error("Failed to map scratch buffer for material data.");
+	}
+
+	// map object descriptions
+	mappedData = nullptr;
 	vmaMapMemory(engine->_allocator, m_bObjDesc.allocation, &mappedData);
 	if (mappedData) {
 		// Copy ObjDesc data into the mapped buffer
@@ -1093,7 +1119,7 @@ void RaytracingHandler::createDescriptorSetLayout(VulkanEngine* engine) {
 	builder.add_binding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, flags);
 	builder.add_binding(1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, flags, 1000);
 	builder.add_binding(2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, flags, 1000);
-	builder.add_binding(3, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,flags, 1000);
+	builder.add_binding(3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,flags, 1000);
 
 	VkDescriptorSetLayoutCreateFlags createFlags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
 	m_descSetLayout = builder.build(engine->_device,
@@ -1380,18 +1406,18 @@ void RaytracingHandler::raytrace(VkCommandBuffer cmd, VulkanEngine* engine) {
 	vmaUnmapMemory(engine->_allocator, m_globalsBuffer.allocation);
 
 
-	// Map memory using vmaMapMemory
-	mappedData = nullptr;
-	result = vmaMapMemory(engine->_allocator, m_bObjDesc.allocation, &mappedData);
-	if (result != VK_SUCCESS) {
-		throw std::runtime_error("Failed to map memory for global uniform buffer!");
-	}
+	//// Map memory using vmaMapMemory
+	//mappedData = nullptr;
+	//result = vmaMapMemory(engine->_allocator, m_bObjDesc.allocation, &mappedData);
+	//if (result != VK_SUCCESS) {
+	//	throw std::runtime_error("Failed to map memory for global uniform buffer!");
+	//}
 
-	// Copy uniform data into the mapped memory
-	std::memcpy(mappedData, objDescs.data(), sizeof(ObjDesc)* objDescs.size());
+	//// Copy uniform data into the mapped memory
+	//std::memcpy(mappedData, objDescs.data(), sizeof(ObjDesc)* objDescs.size());
 
-	// Unmap the memory after copying the data
-	vmaUnmapMemory(engine->_allocator, m_bObjDesc.allocation);
+	//// Unmap the memory after copying the data
+	//vmaUnmapMemory(engine->_allocator, m_bObjDesc.allocation);
 
 
 	// Bind the ray tracing pipeline
@@ -1412,7 +1438,13 @@ void RaytracingHandler::raytrace(VkCommandBuffer cmd, VulkanEngine* engine) {
 		objDescs.size()
 	);
 	writer.write_texture_array(2, engine->textureImages, engine->textureSamplers, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
-	//writer.write_buffer(3, engine->)
+	writer.write_buffer(
+		3,
+		m_bmatDesc.buffer,
+		sizeof(MaterialConstants) * materialConstants.size(),
+		0,
+		VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+		materialConstants.size());
 	writer.update_set(engine->_device, uniformsDescriptor);
 
 	// Bind the ray tracing descriptor sets
@@ -1435,7 +1467,7 @@ void RaytracingHandler::raytrace(VkCommandBuffer cmd, VulkanEngine* engine) {
 		VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR | VK_SHADER_STAGE_MISS_BIT_KHR,
 		0,
 		sizeof(PushConstantRay),
-		&m_pcRay
+		&engine->_raytracePushConstant
 	);
 
 	// Issue the ray tracing command

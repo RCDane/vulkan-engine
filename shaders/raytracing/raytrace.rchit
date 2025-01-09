@@ -43,15 +43,9 @@ layout(set = 0, binding = eTlas) uniform accelerationStructureEXT topLevelAS;
 layout(set = 1, binding = eObjDescs, scalar) buffer ObjDesc_ { ObjDesc i[]; } objDesc;
 layout(set = 1, binding = eTextures) uniform sampler2D textureSamplers[];
 
-struct GLTFMaterialData{   
-	vec4 colorFactors;
-	vec4 metal_rough_factors;
-	int colorIdx;
-	int normalIdx;
-	int metalIdx;
-};
 
-layout(set = 1, binding = 3) buffer MaterialData_ {GLTFMaterialData data[];} materialData;
+
+layout(set = 1, binding = 3, scalar) buffer MaterialData_ {GLTFMaterialData data[];} materialData;
 
 
 layout(push_constant) uniform _PushConstantRay { PushConstantRay pcRay; };
@@ -103,29 +97,36 @@ void main()
   const vec3 nrm      = v0.normal * barycentrics.x + v1.normal * barycentrics.y + v2.normal * barycentrics.z;
   const vec3 worldNrm = normalize(vec3(nrm * gl_WorldToObjectEXT));  // Transforming the normal to world space
   
-  prd.hitValue = worldNrm;
-  return; 
-  // // Vector toward the light
-  // vec3  L;
-  // float lightIntensity = pcRay.lightIntensity;
-  // float lightDistance  = 100000.0;
-  // // Point light
-  // if(pcRay.lightType == 0)
-  // {
-  //   vec3 lDir      = pcRay.lightPosition - worldPos;
-  //   lightDistance  = length(lDir);
-  //   lightIntensity = pcRay.lightIntensity / (lightDistance * lightDistance);
-  //   L              = normalize(lDir);
-  // }
-  // else  // Directional light
-  // {
-  //   L = normalize(pcRay.lightPosition);
-  // }
+  
+  // Vector toward the light
+  vec3  L;
+  float lightIntensity = pcRay.lightIntensity;
+  float lightDistance  = 100000.0;
+  // Point light
+  if(pcRay.lightType == 0)
+  {
+    vec3 lDir      = pcRay.lightPosition - worldPos;
+    lightDistance  = length(lDir);
+    lightIntensity = pcRay.lightIntensity / (lightDistance * lightDistance);
+    L              = normalize(lDir);
+  } 
+  else  // Directional light
+  {
+    L = -normalize(pcRay.lightPosition);
+  }
 
-  // // Material of the object
-  // int               matIdx = matIndices.i[gl_PrimitiveID];
-  // WaveFrontMaterial mat    = materials.m[matIdx];
+  // Material of the object
+  
+  GLTFMaterialData mat    =materialData.data[gl_InstanceCustomIndexEXT];
 
+  vec2 uv = v0.uv  * barycentrics.x + v1.uv * barycentrics.y + v2.uv  * barycentrics.z;
+
+
+  vec3 baseColor = texture(textureSamplers[mat.colorIdx], uv).rgb * mat.colorFactors.rgb;
+
+  prd.hitValue = baseColor * lightIntensity * max(dot(worldNrm, L), 0.0);
+  // prd.hitValue = vec3(1.0 * lightIntensity * max(dot(worldNrm, L), 0.0));
+  return;
 
   // // Diffuse
   // vec3 diffuse = computeDiffuse(mat, L, worldNrm);

@@ -225,7 +225,7 @@ public:
 	VkDescriptorSetLayout _shadowDescriptorLayout;
 
 	DirectionalLighting _directionalLighting;
-
+	PushConstantRay _raytracePushConstant;
 	VkDescriptorSet _imgui_shadow_descriptor;
 
 	MaterialInstance defaultData;

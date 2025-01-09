@@ -1,3 +1,5 @@
+
+
 layout(set = 0, binding = 0) uniform  SceneData{   
 
 	mat4 view;
@@ -9,13 +11,14 @@ layout(set = 0, binding = 0) uniform  SceneData{
 	vec4 cameraPosition;
 } sceneData;
 
-layout(set = 1, binding = 0) uniform GLTFMaterialData{   
+layout(set = 1, binding = 0, scalar) uniform GLTFMaterialData{   
 
 	vec4 colorFactors;
 	vec4 metal_rough_factors;
 	int colorIdx;
 	int normalIdx;
 	int metalIdx;
+	int padding;
 } materialData;
 
 

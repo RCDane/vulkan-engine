@@ -86,7 +86,10 @@ private:
 	AllocatedBuffer m_rtCameraBuffer;
 	AllocatedBuffer m_globalsBuffer;
 	AllocatedBuffer m_bObjDesc;  // Device buffer of the OBJ descriptions
+	AllocatedBuffer m_bmatDesc;  // Device buffer of the material descriptions
+
 	std::vector<ObjDesc> objDescs;
+	std::vector<MaterialConstants> materialConstants;
 
 	VkDescriptorSet m_descSet;
 	RaytracingDescriptorSetBindings m_rtDescSetLayoutBind;

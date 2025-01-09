@@ -101,8 +101,6 @@ struct MaterialConstants {
     int normalIdx;
     int metalIdx;
     int padding;
-    //padding, we need it anyway for uniform buffers
-    glm::vec4 extra[13];
 };
 // push constants for our mesh object draws
 struct GPUDrawPushConstants {
