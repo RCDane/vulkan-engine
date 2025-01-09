@@ -101,6 +101,7 @@ struct PushConstantRay
   vec4  clearColor;
   vec3  lightPosition;
   float lightIntensity;
+  vec3 lightColor;
   int   lightType;
 };
 

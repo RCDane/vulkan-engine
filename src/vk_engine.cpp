@@ -1700,6 +1700,7 @@ void VulkanEngine::init_default_data(){
 	_directionalLighting.intensity = 1.f;
 
 	_raytracePushConstant.clearColor = glm::vec4(0.1, 0.2, 0.4, 0.97);
+	_raytracePushConstant.lightColor = glm::vec4(1, 1, 1, 1);
 	_raytracePushConstant.lightPosition = sunDirection;
 	_raytracePushConstant.lightType = 1;
 	_raytracePushConstant.lightIntensity = 2.f;

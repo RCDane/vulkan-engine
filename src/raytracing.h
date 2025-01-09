@@ -73,6 +73,7 @@ struct PushConstantRay
 	glm::vec4  clearColor;
 	glm::vec3  lightPosition;
 	float lightIntensity;
+	glm::vec3 lightColor;
 	int   lightType;
 };
 

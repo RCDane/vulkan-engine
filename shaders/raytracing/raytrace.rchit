@@ -98,6 +98,7 @@ void main()
   const vec3 worldNrm = normalize(vec3(nrm * gl_WorldToObjectEXT));  // Transforming the normal to world space
   
   
+  
   // Vector toward the light
   vec3  L;
   float lightIntensity = pcRay.lightIntensity;
@@ -115,6 +116,12 @@ void main()
     L = -normalize(pcRay.lightPosition);
   }
 
+
+  // View direction (from fragment to camera)
+  vec3 V = gl_WorldRayDirectionEXT;
+
+  // Halfway vector
+  vec3 H = normalize(L + V);
   // Material of the object
   
   GLTFMaterialData mat    =materialData.data[gl_InstanceCustomIndexEXT];
@@ -125,53 +132,96 @@ void main()
   vec3 baseColor = texture(textureSamplers[mat.colorIdx], uv).rgb * mat.colorFactors.rgb;
 
   prd.hitValue = baseColor * lightIntensity * max(dot(worldNrm, L), 0.0);
-  // prd.hitValue = vec3(1.0 * lightIntensity * max(dot(worldNrm, L), 0.0));
-  return;
 
-  // // Diffuse
-  // vec3 diffuse = computeDiffuse(mat, L, worldNrm);
-  // if(mat.textureId >= 0)
-  // {
-  //   uint txtId    = mat.textureId + objDesc.i[gl_InstanceCustomIndexEXT].txtOffset;
-  //   vec2 texCoord = v0.uv  * barycentrics.x + v1.uv * barycentrics.y + v2.uv  * barycentrics.z;
-  //   diffuse *= texture(textureSamplers[nonuniformEXT(txtId)], texCoord).xyz;
-  // }
+  // Roughness and metallic factors
+  float roughness = mat.metal_rough_factors.y;
+  float metallic = mat.metal_rough_factors.x;  
+  // If a metal roughness texture is bound
+  if (mat.metalIdx != 1){
+    // https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#_material_pbrmetallicroughness_metallicroughnesstexture
+    // The GLTF spec defines that metalness is stored in the B channel
+    // while the roughness is stored in the G channel of the MetallicRougnessTexture
+    vec2 metalRough = texture(textureSamplers[mat.metalIdx], uv).gb;
+    roughness = metalRough.x;
+    metallic = metalRough.y;
+  }   
 
-  // vec3  specular    = vec3(0);
-  // float attenuation = 1;
+// Shininess exponent for Blinn-Phong
+float shininess = max((1.0 - roughness) * 128.0, 1.0);
 
-  // // Tracing shadow ray only if the light is visible from the surface
-  // if(dot(worldNrm, L) > 0)
-  // {
-  //   float tMin   = 0.001;
-  //   float tMax   = lightDistance;
-  //   vec3  origin = gl_WorldRayOriginEXT + gl_WorldRayDirectionEXT * gl_HitTEXT;
-  //   vec3  rayDir = L;
-  //   uint  flags  = gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsOpaqueEXT | gl_RayFlagsSkipClosestHitShaderEXT;
-  //   isShadowed   = true;
-  //   traceRayEXT(topLevelAS,  // acceleration structure
-  //               flags,       // rayFlags
-  //               0xFF,        // cullMask
-  //               0,           // sbtRecordOffset
-  //               0,           // sbtRecordStride
-  //               1,           // missIndex
-  //               origin,      // ray origin
-  //               tMin,        // ray min range
-  //               rayDir,      // ray direction
-  //               tMax,        // ray max range
-  //               1            // payload (location = 1)
-  //   );
+vec3 tmpColor = vec3(1.0);
 
-  //   if(isShadowed)
-  //   {
-  //     attenuation = 0.3;
-  //   }
-  //   else
-  //   {
-  //     // Specular
-  //     specular = computeSpecular(mat, gl_WorldRayDirectionEXT, L, worldNrm);
-  //   }
-  // }
+
+// Light properties
+vec3 lightColor = tmpColor * lightIntensity;
+
+vec3 tmpAmbient = vec3(0.2);
+
+// Ambient component
+vec3 ambient = tmpAmbient * baseColor;
+
+// Diffuse component
+float diff = max(dot(worldNrm, L), 0.0);
+vec3 diffuse = diff * lightColor * baseColor;
+
+
+
+
+// Combine components    
+
+
+
+vec3  specular    = vec3(0);
+float attenuation = 1;
+  // Tracing shadow ray only if the light is visible from the surface
+  if(dot(worldNrm, L) > 0)
+  {
+    float tMin   = 0.001;
+    float tMax   = lightDistance;
+    vec3  origin = gl_WorldRayOriginEXT + gl_WorldRayDirectionEXT * gl_HitTEXT;
+    vec3  rayDir = L;
+    uint  flags  = gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsOpaqueEXT | gl_RayFlagsSkipClosestHitShaderEXT;
+    isShadowed   = true;
+    traceRayEXT(topLevelAS,  // acceleration structure
+                flags,       // rayFlags
+                0xFF,        // cullMask
+                0,           // sbtRecordOffset
+                0,           // sbtRecordStride
+                1,           // missIndex
+                origin,      // ray origin
+                tMin,        // ray min range
+                rayDir,      // ray direction
+                tMax,        // ray max range
+                1            // payload (location = 1)
+    );
+
+    if(isShadowed)
+    {
+      attenuation = 0.3;
+    }
+    else
+    {
+      // Specular
+    // Specular component
+    float specAngle = max(dot(worldNrm, H), 0.0);
+    float spec = pow(specAngle, shininess);
+
+    // Specular color (adjusted by metallic factor)
+    vec3 specularColor = mix(vec3(0.04), baseColor, metallic);
+    vec3 specular = spec * lightColor * specularColor;
+    }
+  }
+
+  // Apply shadow
+  if (isShadowed)
+  {
+    diffuse  *= 0.0;
+    specular *= 0.0;
+  }
+  
+
+  vec3 result = ambient + diffuse + specular;
+  prd.hitValue = result;
 
   // prd.hitValue = vec3(lightIntensity * attenuation * (diffuse + specular));
 }
