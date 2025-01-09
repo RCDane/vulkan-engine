@@ -21,6 +21,7 @@
 #include <fastgltf/parser.hpp>
 #include <fastgltf/tools.hpp>
 #include <vulkan/vulkan_core.h>
+#include <stdexcept>
 
 
 std::optional<AllocatedImage> load_image(VulkanEngine* engine, fastgltf::Asset& asset, fastgltf::Image& image)
@@ -410,6 +411,8 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGltf(VulkanEngine* engine, std::s
     std::vector<Vertex> vertices;
 
     bool hasTangents = false;
+    try {
+
     for (fastgltf::Mesh& mesh : gltf.meshes) {
         std::shared_ptr<MeshAsset> newmesh = std::make_shared<MeshAsset>();
         meshes.push_back(newmesh);
@@ -551,7 +554,10 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGltf(VulkanEngine* engine, std::s
  
     
     }
-
+    }
+    catch (const std::exception& e){
+        std::cout << "Exception " << e.what() << std::endl;
+    }
         // load all nodes and their meshes
     for (fastgltf::Node& node : gltf.nodes) {
         std::shared_ptr<Node> newNode;

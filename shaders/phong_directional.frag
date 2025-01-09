@@ -128,12 +128,15 @@ void main()
 {
     // Normalize input normal
 
-    mat3 TBN = calculate_TBN(inNormal, inUV);
-
-    vec3 textureNormal = texture(textureSamplers[materialData.normalIdx], inUV).xyz;
+    vec3 N = normalize(inNormal);
+    if (materialData.normalIdx != 2){
+       mat3 TBN = calculate_TBN(inNormal, inUV);
+       vec3 textureNormal = texture(textureSamplers[materialData.normalIdx], inUV).xyz;
+        
+       textureNormal = textureNormal * 255./127. - 128./127.;
+       N = normalize(TBN * textureNormal);
+    }
     
-    textureNormal = textureNormal * 255./127. - 128./127.;
-    vec3 N = normalize(TBN * textureNormal);
     // Light direction (from fragment to light)
     vec3 L = normalize(-directionalLight.direction);
 

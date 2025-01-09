@@ -245,7 +245,7 @@ public:
 	VkDescriptorSetLayout _textureArrayLayout;
 
 	VkDescriptorSet _textureArrayDescriptor;
-
+	DirectionalShadow directionalShadow;
 	bool resize_requested; 
 	bool useRaytracing = false;
     Camera mainCamera;

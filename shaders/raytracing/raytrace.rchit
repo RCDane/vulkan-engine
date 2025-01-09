@@ -131,7 +131,6 @@ void main()
 
   vec3 baseColor = texture(textureSamplers[mat.colorIdx], uv).rgb * mat.colorFactors.rgb;
 
-  prd.hitValue = baseColor * lightIntensity * max(dot(worldNrm, L), 0.0);
 
   // Roughness and metallic factors
   float roughness = mat.metal_rough_factors.y;
@@ -208,7 +207,7 @@ float attenuation = 1;
 
     // Specular color (adjusted by metallic factor)
     vec3 specularColor = mix(vec3(0.04), baseColor, metallic);
-    vec3 specular = spec * lightColor * specularColor;
+    specular = spec * lightColor * specularColor;
     }
   }
 

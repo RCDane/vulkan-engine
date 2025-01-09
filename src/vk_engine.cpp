@@ -111,11 +111,16 @@ void VulkanEngine::init()
 	std::string sponzaPath = { "../assets/sponza.glb" };
 	auto sponzaFile = loadGltf(this, sponzaPath);
 	assert(sponzaFile.has_value());
-
-
-
 	loadedScenes["sponza"] = *sponzaFile;
 	loadedScenes["sponza"]->rootTransform = glm::scale(glm::vec3(.1f)) * loadedScenes["sponza"]->rootTransform;
+
+
+	std::string dragonPath = { "../assets/dragon.glb" };
+	auto dragonFile = loadGltf(this, dragonPath);
+	assert(dragonFile.has_value());
+	loadedScenes["dragon"] = *dragonFile;
+	loadedScenes["dragon"]->rootTransform = glm::scale(glm::vec3(30.0f)) * loadedScenes["dragon"]->rootTransform;
+	loadedScenes["dragon"]->rootTransform = glm::translate(glm::vec3(20.0f, 10.0f, 0.0f)) * loadedScenes["dragon"]->rootTransform;
 
 
 
@@ -235,7 +240,6 @@ void VulkanEngine::draw()
 
     uint32_t swapchainImageIndex;
 
-	auto start = std::chrono::system_clock::now();
 
 
 
@@ -256,6 +260,7 @@ void VulkanEngine::draw()
 	_drawExtent.height = std::min(_swapchainExtent.height, _drawImage.imageExtent.height) * renderScale;
 	_drawExtent.width= std::min(_swapchainExtent.width, _drawImage.imageExtent.width) * renderScale;
 
+	auto start = std::chrono::system_clock::now();
 
    	VK_CHECK(vkBeginCommandBuffer(cmd, &cmdBeginInfo));
 
@@ -2003,6 +2008,9 @@ void VulkanEngine::update_scene()
 		_raytracingHandler.m_uniformMappedPtr->projInverse = glm::inverse(rayProjection);
 		// Update additional uniforms as needed
 	}
+	if (!useRaytracing) {
+		directionalShadow = prepare_directional_shadow(this, this->mainDrawContext, this->sceneData.sunlightDirection);
+	}
 
 	auto end = std::chrono::system_clock::now();
 
@@ -2075,12 +2083,11 @@ void VulkanEngine::draw_shadows(VkCommandBuffer cmd) {
 		});
 
 
-	DirectionalShadow shadow = prepare_directional_shadow(this, this->mainDrawContext, this->sceneData.sunlightDirection);
 
 
-	glm::mat4 lightProjection = shadow.projectionMatrix;
+	glm::mat4 lightProjection = directionalShadow.projectionMatrix;
 
-	glm::mat4 lightView = shadow.viewMatrix;
+	glm::mat4 lightView = directionalShadow.viewMatrix;
 	glm::mat4 lightSpaceMatrix = lightProjection * lightView;
 
 	GPUSceneData shadowSceneData = {};
