@@ -116,24 +116,6 @@ mat3 cotangent_frame( vec3 N, vec3 p, vec2 uv )
 mat3 calculate_TBN(vec3 normal, vec2 uv){
     mat3 TBN;
     if (PushConstants.hasTangent == 0){
-        
-        // vec3 N = normalize(normal);  // Interpolated normal
-
-        // // Get neighboring fragment positions (pseudo code; depends on your environment)
-        // // Use dFdx() and dFdy() to approximate derivatives of the position and UV coordinates
-        // vec3 dp1 = dFdx(vPos);
-        // vec3 dp2 = dFdy(vPos);
-        // vec2 duv1 = dFdx(uv);
-        // vec2 duv2 = dFdy(uv);
-
-        // // Calculate the tangent vector in the fragment shader
-        // float f = 1.0 / (duv1.x * duv2.y - duv2.x * duv1.y);
-        // vec3 T = normalize(f * (duv2.y * dp1 - duv1.y * dp2));
-
-        // // Calculate the bitangent vector
-        // vec3 B = normalize(cross(N, T));
-
-        // TBN = mat3(T, B, N);
         TBN = cotangent_frame(normal, -vPos, uv);
     }
     else{

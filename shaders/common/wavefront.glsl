@@ -26,6 +26,7 @@ struct GLTFMaterialData{
 	int normalIdx;
 	int metalIdx;
 	int padding;
+	vec4 padding2;
 };
 
 

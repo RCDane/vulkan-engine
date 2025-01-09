@@ -101,7 +101,10 @@ struct MaterialConstants {
     int normalIdx;
     int metalIdx;
     int padding;
+    glm::vec4 padding2;
 };
+static_assert(sizeof(MaterialConstants) == 64, "MaterialConstants struct size should be 64 bytes.");
+
 // push constants for our mesh object draws
 struct GPUDrawPushConstants {
     glm::mat4 worldMatrix;

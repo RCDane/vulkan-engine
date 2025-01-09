@@ -1460,6 +1460,10 @@ void RaytracingHandler::raytrace(VkCommandBuffer cmd, VulkanEngine* engine) {
 		nullptr
 	);
 
+
+	engine->_raytracePushConstant.lightColor = engine->sceneData.sunlightColor;
+	engine->_raytracePushConstant.lightIntensity = engine->_directionalLighting.intensity;
+	engine->_raytracePushConstant.lightPosition = engine->sceneData.sunlightDirection;
 	// Push constants to the pipeline if necessary
 	vkCmdPushConstants(
 		cmd,

@@ -118,7 +118,7 @@ void main()
 
 
   // View direction (from fragment to camera)
-  vec3 V = gl_WorldRayDirectionEXT;
+  vec3 V = -gl_WorldRayDirectionEXT;
 
   // Halfway vector
   vec3 H = normalize(L + V);
