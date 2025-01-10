@@ -101,6 +101,8 @@ void VulkanEngine::init()
 
 	std::string helmetPath = { "../assets/DamagedHelmet/glTF-Binary/DamagedHelmet.glb"};
 	auto helmetFile = loadGltf(this, helmetPath);
+	auto helmetFile2 = loadGltf(this, helmetPath);
+
 	assert(helmetFile.has_value());
 	
 
@@ -108,6 +110,10 @@ void VulkanEngine::init()
 	loadedScenes["helmet"]->rootTransform = glm::scale(glm::vec3(10.0f)) * loadedScenes["helmet"]->rootTransform;
 	loadedScenes["helmet"]->rootTransform = glm::translate(glm::vec3(0.0f, 20.0f, 0.0f)) * loadedScenes["helmet"]->rootTransform;
 	
+	loadedScenes["helmet2"] = *helmetFile2;
+	loadedScenes["helmet2"]->rootTransform = glm::scale(glm::vec3(10.0f)) * loadedScenes["helmet2"]->rootTransform;
+	loadedScenes["helmet2"]->rootTransform = glm::translate(glm::vec3(-20.0f, 20.0f, 0.0f)) * loadedScenes["helmet2"]->rootTransform;
+
 
 
 
@@ -1723,8 +1729,8 @@ void VulkanEngine::init_default_data(){
 
 	VkExtent3D shadowExtent;
 	shadowExtent.depth = 1;
-	shadowExtent.height = 4096;
-	shadowExtent.width = 4096;
+	shadowExtent.height = 2048;
+	shadowExtent.width = 2048;
 
 
 

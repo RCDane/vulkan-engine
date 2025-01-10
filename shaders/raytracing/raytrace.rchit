@@ -129,7 +129,12 @@ void main()
   vec2 uv = v0.uv  * barycentrics.x + v1.uv * barycentrics.y + v2.uv  * barycentrics.z;
 
 
-  vec3 baseColor = texture(textureSamplers[mat.colorIdx], uv).rgb * mat.colorFactors.rgb;
+  vec4 vertexColor = v0.color  * barycentrics.x + v1.color * barycentrics.y + v2.color  * barycentrics.z;
+
+  vec3 baseColor = vertexColor.rgb* mat.colorFactors.rgb;
+  if (mat.colorIdx != 1){
+    baseColor = baseColor*  texture(textureSamplers[mat.colorIdx], uv).rgb ;
+  }
 
 
   // Roughness and metallic factors
@@ -152,12 +157,12 @@ vec3 tmpColor = vec3(1.0);
 
 
 // Light properties
-vec3 lightColor = tmpColor * lightIntensity;
+vec3 lightColor = pcRay.lightColor * lightIntensity;
 
 vec3 tmpAmbient = vec3(0.2);
 
 // Ambient component
-vec3 ambient = tmpAmbient * baseColor;
+vec3 ambient = pcRay.ambientColor.xyz * baseColor;
 
 // Diffuse component
 float diff = max(dot(worldNrm, L), 0.0);
@@ -220,7 +225,6 @@ float attenuation = 1;
   
 
   vec3 result = ambient + diffuse + specular;
-  prd.hitValue = result;
 
-  // prd.hitValue = vec3(lightIntensity * attenuation * (diffuse + specular));
+  prd.hitValue = result;
 }

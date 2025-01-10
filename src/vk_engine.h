@@ -251,7 +251,7 @@ public:
 	VkDescriptorSet _textureArrayDescriptor;
 	DirectionalShadow directionalShadow;
 	bool resize_requested; 
-	bool useRaytracing = false;
+	bool useRaytracing = true;
     Camera mainCamera;
 
 
@@ -315,7 +315,6 @@ private:
 	void draw_geometry(VkCommandBuffer cmd);
 
 	void draw_shadows(VkCommandBuffer cmd);
-
 
 	void draw_imgui(VkCommandBuffer cmd, VkImageView targetImageView);
 

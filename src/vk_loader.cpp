@@ -426,7 +426,6 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGltf(VulkanEngine* engine, std::s
 
         // Clear surfaces for the new mesh
         newmesh->surfaces.clear();
-        printf("new primitive:\n");
 
         for (auto&& p : mesh.primitives) {
             
@@ -533,11 +532,7 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGltf(VulkanEngine* engine, std::s
             newSurface.vertexCount = static_cast<uint32_t>(posAccessor.count);
 			//newSurface.material = materials[primMaterial];
             // Alternatively:
-			printf("mesh vertex count: %d\n", newSurface.vertexCount);
-			printf("mesh index count: %d\n", newSurface.count);
-			printf("mesh max vertex: %d\n", newSurface.maxVertex);
-			printf("mesh start vertex: %d\n", newSurface.startVertex);
-			printf("mesh start index: %d\n", newSurface.startIndex);
+
 
             newmesh->surfaces.push_back(newSurface);
         }

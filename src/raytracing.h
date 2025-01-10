@@ -75,6 +75,7 @@ struct PushConstantRay
 	float lightIntensity;
 	glm::vec3 lightColor;
 	int   lightType;
+	glm::vec4 ambientColor;
 };
 
 class RaytracingHandler {

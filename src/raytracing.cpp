@@ -740,27 +740,15 @@ ObjDesc prepareModel(VulkanEngine* engine, RenderObject renderObject) {
 	VkDeviceAddress indexAddress = getBufferDeviceAddress(engine->_device, renderObject.indexBuffer);
 
 	VkDeviceAddress vertexAddress =
-		renderObject.vertexBufferAddressRasterization 
-		//+ renderObject.firstVertex * sizeof(Vertex)
-		;
-	std::cout << "before" << std::endl;
-	printAddressInHex(vertexAddress);
-	printAddressInHex(indexAddress);
+		renderObject.vertexBufferAddressRasterization;
+
 
 	indexAddress = indexAddress + renderObject.firstIndex * sizeof(int);
 
 	objModel.vertexAddress = vertexAddress;
 	objModel.indexAddress = indexAddress;
 	objModel.indexOffset = renderObject.firstIndex;
-	std::cout << "after" << std::endl;
 
-	// Debug prints
-	printAddressInHex(vertexAddress);
-	printAddressInHex(indexAddress);
-
-	std::cout << "First Vertex: " << renderObject.firstVertex << std::endl;
-	std::cout << "First Index: " << renderObject.firstIndex << std::endl;
-	std::cout << "Index Count: " << renderObject.indexCount << std::endl;
 
 	return objModel;
 }
@@ -1464,6 +1452,7 @@ void RaytracingHandler::raytrace(VkCommandBuffer cmd, VulkanEngine* engine) {
 	engine->_raytracePushConstant.lightColor = engine->sceneData.sunlightColor;
 	engine->_raytracePushConstant.lightIntensity = engine->_directionalLighting.intensity;
 	engine->_raytracePushConstant.lightPosition = engine->sceneData.sunlightDirection;
+	engine->_raytracePushConstant.ambientColor = engine->sceneData.ambientColor;
 	// Push constants to the pipeline if necessary
 	vkCmdPushConstants(
 		cmd,

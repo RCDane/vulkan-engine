@@ -152,7 +152,7 @@ void main()
 
 
     // Material properties
-    vec3 baseColor = inColor * texture(textureSamplers[materialData.colorIdx], inUV).rgb * materialData.colorFactors.rgb;
+    vec3 baseColor = inColor * texture(textureSamplers[materialData.colorIdx], inUV).rgb;
 
 
 
