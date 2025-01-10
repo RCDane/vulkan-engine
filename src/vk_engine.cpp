@@ -39,7 +39,7 @@
 #include <filesystem>
 #include <iostream>
 
-constexpr bool bUseValidationLayers = true;
+constexpr bool bUseValidationLayers = false;
 
 
 VulkanEngine* loadedEngine = nullptr;
@@ -68,9 +68,10 @@ void VulkanEngine::init()
         _windowExtent.width,
         _windowExtent.height,
         window_flags);
+	SDL_Renderer* renderer = SDL_CreateRenderer(_window, 0, SDL_RENDERER_ACCELERATED);
 
 	SDL_SetWindowFullscreen(_window, 0);
-
+	SDL_RenderSetVSync(renderer, 0);
     init_vulkan();
 
 
@@ -83,6 +84,8 @@ void VulkanEngine::init()
 	init_descriptors();	
 
 	init_pipelines();
+
+	init_timestamp_queries();
 
 	init_imgui();
 
@@ -173,7 +176,7 @@ void VulkanEngine::cleanup()
 
 
 		_mainDeletionQueue.flush();
-
+		vkDestroyQueryPool(_device, _timestampQueryPool, nullptr);
         destroy_swapchain();
 
 		vkDestroySurfaceKHR(_instance, _surface, nullptr);
@@ -187,44 +190,125 @@ void VulkanEngine::cleanup()
     // clear engine pointer
     loadedEngine = nullptr;
 }
-bool is_visible(const RenderObject& obj, const glm::mat4& viewproj) {
-	std::array<glm::vec3, 8> corners{
-		glm::vec3 { 1, 1, 1 },
-		glm::vec3 { 1, 1, -1 },
-		glm::vec3 { 1, -1, 1 },
-		glm::vec3 { 1, -1, -1 },
-		glm::vec3 { -1, 1, 1 },
-		glm::vec3 { -1, 1, -1 },
-		glm::vec3 { -1, -1, 1 },
-		glm::vec3 { -1, -1, -1 },
-	};
 
-	glm::mat4 matrix = viewproj * obj.transform;
+void extractFrustumPlanes(const glm::mat4& vpMatrix, glm::vec4 planes[6]) {
+	// Left Plane
+	planes[0] = glm::vec4(
+		vpMatrix[0][3] + vpMatrix[0][0],
+		vpMatrix[1][3] + vpMatrix[1][0],
+		vpMatrix[2][3] + vpMatrix[2][0],
+		vpMatrix[3][3] + vpMatrix[3][0]);
+	// Right Plane
+	planes[1] = glm::vec4(
+		vpMatrix[0][3] - vpMatrix[0][0],
+		vpMatrix[1][3] - vpMatrix[1][0],
+		vpMatrix[2][3] - vpMatrix[2][0],
+		vpMatrix[3][3] - vpMatrix[3][0]);
+	// Bottom Plane
+	planes[2] = glm::vec4(
+		vpMatrix[0][3] + vpMatrix[0][1],
+		vpMatrix[1][3] + vpMatrix[1][1],
+		vpMatrix[2][3] + vpMatrix[2][1],
+		vpMatrix[3][3] + vpMatrix[3][1]);
+	// Top Plane
+	planes[3] = glm::vec4(
+		vpMatrix[0][3] - vpMatrix[0][1],
+		vpMatrix[1][3] - vpMatrix[1][1],
+		vpMatrix[2][3] - vpMatrix[2][1],
+		vpMatrix[3][3] - vpMatrix[3][1]);
+	// Near Plane
+	planes[4] = glm::vec4(
+		vpMatrix[0][3] + vpMatrix[0][2],
+		vpMatrix[1][3] + vpMatrix[1][2],
+		vpMatrix[2][3] + vpMatrix[2][2],
+		vpMatrix[3][3] + vpMatrix[3][2]);
+	// Far Plane
+	planes[5] = glm::vec4(
+		vpMatrix[0][3] - vpMatrix[0][2],
+		vpMatrix[1][3] - vpMatrix[1][2],
+		vpMatrix[2][3] - vpMatrix[2][2],
+		vpMatrix[3][3] - vpMatrix[3][2]);
 
-	glm::vec3 min = { 1.5, 1.5, 1.5 };
-	glm::vec3 max = { -1.5, -1.5, -1.5 };
-
-	for (int c = 0; c < 8; c++) {
-		// project each corner into clip space
-		glm::vec4 v = matrix * glm::vec4(obj.bounds.origin + (corners[c] * obj.bounds.extents), 1.f);
-
-		// perspective correction
-		v.x = v.x / v.w;
-		v.y = v.y / v.w;
-		v.z = v.z / v.w;
-
-		min = glm::min(glm::vec3{ v.x, v.y, v.z }, min);
-		max = glm::max(glm::vec3{ v.x, v.y, v.z }, max);
-	}
-
-	// check the clip space box is within the view
-	if (min.z > 1.f || max.z < 0.f || min.x > 1.f || max.x < -1.f || min.y > 1.f || max.y < -1.f) {
-		return false;
-	}
-	else {
-		return true;
+	// Normalize the planes
+	for (int i = 0; i < 6; i++) {
+		float length = glm::length(glm::vec3(planes[i]));
+		planes[i] /= length;
 	}
 }
+bool is_visible(const RenderObject& obj, const glm::mat4& viewProjMatrix) {
+	// Extract frustum planes
+	glm::vec4 planes[6];
+	extractFrustumPlanes(viewProjMatrix, planes);
+
+	// Get the object's model matrix
+	glm::mat4 modelMatrix = obj.transform;
+
+	// Compute the object's bounding sphere center in world space
+	glm::vec3 centerWorld = glm::vec3(modelMatrix * glm::vec4(obj.bounds.origin, 1.0f));
+
+	// Extract scaling factors from the model matrix
+	glm::vec3 scale;
+	scale.x = glm::length(glm::vec3(modelMatrix[0]));
+	scale.y = glm::length(glm::vec3(modelMatrix[1]));
+	scale.z = glm::length(glm::vec3(modelMatrix[2]));
+
+	// Determine the maximum scale to uniformly scale the radius
+	float maxScale = std::max({ scale.x, scale.y,scale.z });
+	float scaledRadius = obj.bounds.sphereRadius * maxScale;
+
+
+
+	// Check against each frustum plane
+	for (int i = 0; i < 6; i++) {
+		float distance = glm::dot(glm::vec3(planes[i]), centerWorld) + planes[i].w;
+		if (distance < -scaledRadius) {
+			// Completely outside the frustum
+			return false;
+		}
+	}
+	// Inside or intersects the frustum
+	return true;
+}
+
+
+//bool is_visible(const RenderObject& obj, const glm::mat4& viewproj) {
+//	std::array<glm::vec3, 8> corners{
+//		glm::vec3 { 1, 1, 1 },
+//		glm::vec3 { 1, 1, -1 },
+//		glm::vec3 { 1, -1, 1 },
+//		glm::vec3 { 1, -1, -1 },
+//		glm::vec3 { -1, 1, 1 },
+//		glm::vec3 { -1, 1, -1 },
+//		glm::vec3 { -1, -1, 1 },
+//		glm::vec3 { -1, -1, -1 },
+//	};
+//
+//	glm::mat4 matrix = viewproj * obj.transform;
+//
+//	glm::vec3 min = { 1.5, 1.5, 1.5 };
+//	glm::vec3 max = { -1.5, -1.5, -1.5 };
+//
+//	for (int c = 0; c < 8; c++) {
+//		// project each corner into clip space
+//		glm::vec4 v = matrix * glm::vec4(obj.bounds.origin + (corners[c] * obj.bounds.extents), 1.f);
+//
+//		// perspective correction
+//		v.x = v.x / v.w;
+//		v.y = v.y / v.w;
+//		v.z = v.z / v.w;
+//
+//		min = glm::min(glm::vec3{ v.x, v.y, v.z }, min);
+//		max = glm::max(glm::vec3{ v.x, v.y, v.z }, max);
+//	}
+//
+//	// check the clip space box is within the view
+//	if (min.z > 1.f || max.z < 0.f || min.x > 1.f || max.x < -1.f || min.y > 1.f || max.y < -1.f) {
+//		return false;
+//	}
+//	else {
+//		return true;
+//	}
+//}
 
 void VulkanEngine::draw()
 {
@@ -260,9 +344,39 @@ void VulkanEngine::draw()
 	_drawExtent.height = std::min(_swapchainExtent.height, _drawImage.imageExtent.height) * renderScale;
 	_drawExtent.width= std::min(_swapchainExtent.width, _drawImage.imageExtent.width) * renderScale;
 
+	uint32_t lastframeIndex = (_frameNumber-1) % FRAME_OVERLAP;
+
+	if (_frameNumber > 0)
+		retrieve_timestamp_results(lastframeIndex);
+	//auto& currentFrame = _frames[frameIndex];
+
+	//// Calculate query indices
+	//currentFrame._queryStart = frameIndex * QUERIES_PER_FRAME;
+	//currentFrame._queryEnd = currentFrame._queryStart + 1;
+
+
 	auto start = std::chrono::system_clock::now();
 
    	VK_CHECK(vkBeginCommandBuffer(cmd, &cmdBeginInfo));
+
+	// Get current frame index
+	uint32_t frameIndex = _frameNumber % FRAME_OVERLAP;
+	auto& currentFrame = _frames[frameIndex];
+
+	// Calculate query indices
+	currentFrame._queryStart = frameIndex * QUERIES_PER_FRAME;
+	currentFrame._queryEnd = currentFrame._queryStart + 1;
+
+	// Reset query pool segment for the current frame
+	vkCmdResetQueryPool(cmd, _timestampQueryPool, currentFrame._queryStart, QUERIES_PER_FRAME);
+
+
+
+
+
+
+	// Write start timestamp
+	vkCmdWriteTimestamp(cmd, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, _timestampQueryPool, currentFrame._queryStart);
 
 	// transition our main draw image into general layout so we can write into it
 	// we will overwrite it all so we dont care about what was the older layout
@@ -309,6 +423,9 @@ void VulkanEngine::draw()
 	// set swapchain image layout to Present so we can draw it
 	vkutil::transition_image(cmd, _swapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 	
+	vkCmdWriteTimestamp(cmd, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, _timestampQueryPool, currentFrame._queryEnd);
+
+
 	VK_CHECK(vkEndCommandBuffer(cmd));
 
     //prepare the submission to the queue. 
@@ -349,9 +466,7 @@ void VulkanEngine::draw()
 
 	// Handling resizing
 	VkResult presentResult = vkQueuePresentKHR(_graphicsQueue, &presentInfo);
-	if (presentResult == VK_ERROR_OUT_OF_DATE_KHR) {
-		resize_requested = true;
-	}
+	
 
 
 	//increase the number of frames drawn
@@ -376,9 +491,9 @@ void VulkanEngine::draw_geometry(VkCommandBuffer cmd)
 	
 
 	for (uint32_t i = 0; i < mainDrawContext.OpaqueSurfaces.size(); i++) {
-		//if (is_visible(mainDrawContext.OpaqueSurfaces[i], sceneData.viewproj)) {
+		if (is_visible(mainDrawContext.OpaqueSurfaces[i], sceneData.viewproj)) {
 			opaque_draws.push_back(i);
-		//}
+		}
 	}
 
 
@@ -566,9 +681,9 @@ void VulkanEngine::draw_geometry(VkCommandBuffer cmd)
 		draw(mainDrawContext.OpaqueSurfaces[r]);
 	}
 
-	for (auto& r : mainDrawContext.TransparentSurfaces) {
+	/*for (auto& r : mainDrawContext.TransparentSurfaces) {
 		draw(r);
-	}
+	}*/
 
 
 
@@ -740,6 +855,8 @@ void VulkanEngine::init_vulkan()
 		.add_validation_feature_disable(VK_VALIDATION_FEATURE_DISABLE_UNIQUE_HANDLES_EXT)
 		.use_default_debug_messenger()
 		.require_api_version(1, 3, 0)
+		//.add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_BEST_PRACTICES_EXT)
+		.add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT)
 		.add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT) // Add validation features
 		.build();
 
@@ -756,7 +873,7 @@ void VulkanEngine::init_vulkan()
     VkPhysicalDeviceVulkan13Features features {.sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES};
     features.dynamicRendering = true;
     features.synchronization2 = true;
-	
+	features.privateData = true;
 	
 
     VkPhysicalDeviceVulkan12Features features12{ .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES };
@@ -771,6 +888,9 @@ void VulkanEngine::init_vulkan()
 	features12.runtimeDescriptorArray = true;
 	features12.shaderSampledImageArrayNonUniformIndexing = true;
 	features12.bufferDeviceAddressCaptureReplay = true;
+	features12.bufferDeviceAddress = true;
+	features12.hostQueryReset = true;
+
 	
 	VkPhysicalDeviceVulkan11Features features11{ .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES };
 	features11.storageBuffer16BitAccess = true;
@@ -811,12 +931,12 @@ void VulkanEngine::init_vulkan()
 		.set_required_features(deviceFeatures)
 		.add_required_extension("VK_KHR_acceleration_structure")
 		.add_required_extension("VK_KHR_push_descriptor")
-		.add_required_extension("VK_KHR_buffer_device_address")
+		//.add_required_extension("VK_KHR_buffer_device_address")
 		.add_required_extension("VK_KHR_ray_query")
 		.add_required_extension_features(rayQueryFeatures)
 		.add_required_extension_features(accelerationStructureFeatures)
 		.add_required_extension_features(rtPipelineFeatures)
-		.add_desired_extension("VK_EXT_private_data")
+		//.add_desired_extension("VK_EXT_private_data")
 		.add_desired_extension("VK_EXT_debug_utils")
 		.add_desired_extension("VK_EXT_validation_features")
 		.add_required_extension("VK_NV_ray_tracing_validation")
@@ -873,7 +993,7 @@ void VulkanEngine::create_swapchain(uint32_t width, uint32_t height)
 		//.use_default_format_selection()
 		.set_desired_format(VkSurfaceFormatKHR{ .format = _swapchainImageFormat, .colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR })
 		//use vsync present mode
-		.set_desired_present_mode(VK_PRESENT_MODE_FIFO_KHR)
+		.set_desired_present_mode(VK_PRESENT_MODE_IMMEDIATE_KHR)
 		.set_desired_extent(width, height)
 		.add_image_usage_flags(VK_IMAGE_USAGE_TRANSFER_DST_BIT)
 		.build()
@@ -1603,8 +1723,8 @@ void VulkanEngine::init_default_data(){
 
 	VkExtent3D shadowExtent;
 	shadowExtent.depth = 1;
-	shadowExtent.height = 2048;
-	shadowExtent.width = 2048;
+	shadowExtent.height = 4096;
+	shadowExtent.width = 4096;
 
 
 
@@ -1965,6 +2085,10 @@ void VulkanEngine::update_scene()
 	mainDrawContext.OpaqueSurfaces.clear();
 	glm::mat4 topMat = glm::mat4{ 1.f };
 	topMat = glm::scale(topMat, glm::vec3(1.0f));
+
+	
+
+
 	for (auto& n : loadedScenes) {
 		auto [name, node] = n;
 
@@ -2170,3 +2294,54 @@ void VulkanEngine::draw_shadows(VkCommandBuffer cmd) {
 	//mainDrawContext.OpaqueSurfaces.clear();
 }
 
+void VulkanEngine::init_timestamp_queries() {
+	VkQueryPoolCreateInfo queryPoolInfo{};
+	queryPoolInfo.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO;
+	queryPoolInfo.queryType = VK_QUERY_TYPE_TIMESTAMP;
+	queryPoolInfo.queryCount = FRAME_OVERLAP * QUERIES_PER_FRAME; // Start and End per frame
+
+	if (vkCreateQueryPool(_device, &queryPoolInfo, nullptr, &_timestampQueryPool) != VK_SUCCESS) {
+		throw std::runtime_error("Failed to create timestamp query pool!");
+	}
+
+	// Ensure the query pool is destroyed during cleanup
+	_mainDeletionQueue.push_function([&]() {
+		vkDestroyQueryPool(_device, _timestampQueryPool, nullptr);
+		});
+}
+
+void VulkanEngine::retrieve_timestamp_results(uint32_t frameIndex)
+{
+	FrameData& currentFrame = _frames[frameIndex];
+	uint32_t startQuery = currentFrame._queryStart;
+	uint32_t endQuery = currentFrame._queryEnd;
+
+	uint64_t timestamps[2] = {};
+
+	VkResult result = vkGetQueryPoolResults(
+		_device,
+		_timestampQueryPool,
+		startQuery,
+		QUERIES_PER_FRAME,
+		sizeof(timestamps),
+		timestamps,
+		sizeof(uint64_t),
+		VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT
+	);
+
+	if (result == VK_SUCCESS) {
+		// Retrieve timestamp period
+		VkPhysicalDeviceProperties deviceProperties;
+		vkGetPhysicalDeviceProperties(_chosenGPU, &deviceProperties);
+		double timestampPeriod = deviceProperties.limits.timestampPeriod; // in nanoseconds
+
+		// Calculate the elapsed time in milliseconds
+		double gpuTime = (timestamps[1] - timestamps[0]) * timestampPeriod / 1e6;
+
+		// Update the stats
+		stats.mesh_draw_time = static_cast<float>(gpuTime);
+	}
+	else {
+		std::cerr << "Failed to retrieve timestamp results!" << std::endl;
+	}
+}

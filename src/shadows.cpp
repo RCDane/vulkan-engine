@@ -152,15 +152,17 @@ DirectionalShadow prepare_directional_shadow(VulkanEngine* engine, DrawContext s
 		glm::vec3 extents = bounds.extents;
 
 		// Generate the 8 corners of the bounding box
-		std::vector<glm::vec3> corners;
-		corners.push_back(center + glm::vec3(-extents.x, -extents.y, -extents.z));
-		corners.push_back(center + glm::vec3(extents.x, -extents.y, -extents.z));
-		corners.push_back(center + glm::vec3(extents.x, extents.y, -extents.z));
-		corners.push_back(center + glm::vec3(-extents.x, extents.y, -extents.z));
-		corners.push_back(center + glm::vec3(-extents.x, -extents.y, extents.z));
-		corners.push_back(center + glm::vec3(extents.x, -extents.y, extents.z));
-		corners.push_back(center + glm::vec3(extents.x, extents.y, extents.z));
-		corners.push_back(center + glm::vec3(-extents.x, extents.y, extents.z));
+		std::array<glm::vec3, 8> corners{
+
+			center + glm::vec3(-extents.x, -extents.y, -extents.z),
+			center + glm::vec3(extents.x, -extents.y, -extents.z),
+			center + glm::vec3(extents.x, extents.y, -extents.z),
+			center + glm::vec3(-extents.x, extents.y, -extents.z),
+			center + glm::vec3(-extents.x, -extents.y, extents.z),
+			center + glm::vec3(extents.x, -extents.y, extents.z),
+			center + glm::vec3(extents.x, extents.y, extents.z),
+			center + glm::vec3(-extents.x, extents.y, extents.z)
+		};
 
 		// Transform each corner into light space
 		for (const glm::vec3& corner : corners) {

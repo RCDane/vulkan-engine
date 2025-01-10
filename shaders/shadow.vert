@@ -1,8 +1,8 @@
 #version 450
 
 #extension GL_GOOGLE_include_directive : require
-#extension GL_EXT_buffer_reference : require
-
+#extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
+#extension GL_EXT_buffer_reference2 : require
 #include "input_structures.glsl"
 #include "common/host_device.h"
 
@@ -28,6 +28,6 @@ void main()
 
 	vec4 worldPos=  PushConstants.render_matrix *position;
 	gl_Position = sceneData.viewproj * worldPos;
-	gl_Position = gl_Position / gl_Position.w;
+	gl_Position = gl_Position;
 
 }

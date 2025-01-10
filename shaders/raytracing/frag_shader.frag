@@ -56,44 +56,44 @@ layout(binding = eTextures) uniform sampler2D[] textureSamplers;
 void main()
 {
   // Material of the object
-  ObjDesc    objResource = objDesc.i[pcRaster.objIndex];
-  MatIndices matIndices  = MatIndices(objResource.materialIndexAddress);
-  Materials  materials   = Materials(objResource.materialAddress);
+  // ObjDesc    objResource = objDesc.i[pcRaster.objIndex];
+  // MatIndices matIndices  = MatIndices(objResource.materialIndexAddress);
+  // Materials  materials   = Materials(objResource.materialAddress);
 
-  int               matIndex = matIndices.i[gl_PrimitiveID];
-  WaveFrontMaterial mat      = materials.m[matIndex];
+  // int               matIndex = matIndices.i[gl_PrimitiveID];
+  // WaveFrontMaterial mat      = materials.m[matIndex];
 
-  vec3 N = normalize(i_worldNrm);
+  // vec3 N = normalize(i_worldNrm);
 
-  // Vector toward light
-  vec3  L;
-  float lightIntensity = pcRaster.lightIntensity;
-  if(pcRaster.lightType == 0)
-  {
-    vec3  lDir     = pcRaster.lightPosition - i_worldPos;
-    float d        = length(lDir);
-    lightIntensity = pcRaster.lightIntensity / (d * d);
-    L              = normalize(lDir);
-  }
-  else
-  {
-    L = normalize(pcRaster.lightPosition);
-  }
+  // // Vector toward light
+  // vec3  L;
+  // float lightIntensity = pcRaster.lightIntensity;
+  // if(pcRaster.lightType == 0)
+  // {
+  //   vec3  lDir     = pcRaster.lightPosition - i_worldPos;
+  //   float d        = length(lDir);
+  //   lightIntensity = pcRaster.lightIntensity / (d * d);
+  //   L              = normalize(lDir);
+  // }
+  // else
+  // {
+  //   L = normalize(pcRaster.lightPosition);
+  // }
 
 
-  // Diffuse
-  vec3 diffuse = computeDiffuse(mat, L, N);
-  if(mat.textureId >= 0)
-  {
-    int  txtOffset  = objDesc.i[pcRaster.objIndex].txtOffset;
-    uint txtId      = txtOffset + mat.textureId;
-    vec3 diffuseTxt = texture(textureSamplers[nonuniformEXT(txtId)], i_texCoord).xyz;
-    diffuse *= diffuseTxt;
-  }
+  // // Diffuse
+  // vec3 diffuse = computeDiffuse(mat, L, N);
+  // if(mat.textureId >= 0)
+  // {
+  //   int  txtOffset  = objDesc.i[pcRaster.objIndex].txtOffset;
+  //   uint txtId      = txtOffset + mat.textureId;
+  //   vec3 diffuseTxt = texture(textureSamplers[nonuniformEXT(txtId)], i_texCoord).xyz;
+  //   diffuse *= diffuseTxt;
+  // }
 
-  // Specular
-  vec3 specular = computeSpecular(mat, i_viewDir, L, N);
+  // // Specular
+  // vec3 specular = computeSpecular(mat, i_viewDir, L, N);
 
-  // Result
-  o_color = vec4(lightIntensity * (diffuse + specular), 1);
+  // // Result
+  // o_color = vec4(lightIntensity * (diffuse + specular), 1);
 }

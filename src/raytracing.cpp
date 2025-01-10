@@ -1016,7 +1016,7 @@ void RaytracingBuilder::buildTlas(
 	VkBufferDeviceAddressInfo bufferInfo = {};
 	bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
 	bufferInfo.buffer = instancesBuffer.buffer;
-	VkDeviceAddress instBufferAddr = vkGetBufferDeviceAddressKHR(engine->_device, &bufferInfo);
+	VkDeviceAddress instBufferAddr = vkGetBufferDeviceAddress(engine->_device, &bufferInfo);
 
 	// Step 4: Insert a memory barrier to ensure the instance data is available before TLAS build
 	VkMemoryBarrier barrier = {};

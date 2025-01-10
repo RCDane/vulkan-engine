@@ -97,6 +97,10 @@ struct FrameData {
 	DeletionQueue _deletionQueue;
 	DescriptorAllocatorGrowable _frameDescriptors;
 
+	// Add query indices for timestamp queries
+	uint32_t _queryStart;
+	uint32_t _queryEnd;
+
 };
 
 struct GPUSceneData {
@@ -251,6 +255,9 @@ public:
     Camera mainCamera;
 
 
+	VkQueryPool _timestampQueryPool;          // Query pool for timestamps
+	const uint32_t QUERIES_PER_FRAME = 2;     // Start and
+
 	bool _isInitialized{ false };
 	int _frameNumber {0};
 	bool stop_rendering{ false };
@@ -297,8 +304,8 @@ private:
 	void init_swapchain();
 	void init_commands();
 	void init_sync_structures();
-
-
+	void init_timestamp_queries();
+	void retrieve_timestamp_results(uint32_t frameIndex);
 	// swapchain
 	void create_swapchain(uint32_t width, uint32_t height);
 	void destroy_swapchain();
@@ -309,7 +316,6 @@ private:
 
 	void draw_shadows(VkCommandBuffer cmd);
 
-	void draw_raytraced(VkCommandBuffer cmd);
 
 	void draw_imgui(VkCommandBuffer cmd, VkImageView targetImageView);
 

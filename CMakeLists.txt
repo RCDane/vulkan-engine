@@ -51,7 +51,7 @@ foreach(GLSL ${GLSL_SOURCE_FILES})
   add_custom_command(
     OUTPUT ${SPIRV}
     COMMAND ${CMAKE_COMMAND} -E env "VK_LAYER_DISABLES=VK_VALIDATION_FEATURE_DISABLE_SHADER_VALIDATION_CACHE_EXT"
-            ${GLSL_VALIDATOR} -g --target-env vulkan1.2 -V ${GLSL} "${PROJECT_SOURCE_DIR}/myconfig.conf" -o ${SPIRV} 
+            ${GLSL_VALIDATOR} -g --target-env vulkan1.3 -V ${GLSL} "${PROJECT_SOURCE_DIR}/myconfig.conf" -o ${SPIRV} 
     DEPENDS ${GLSL})
   list(APPEND SPIRV_BINARY_FILES ${SPIRV})
 endforeach(GLSL)
