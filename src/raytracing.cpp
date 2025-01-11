@@ -4,7 +4,7 @@
 
 #include <vk_pipelines.h>
 #include <vulkan/vulkan_core.h>
-#include <algorithm> // Add this include for std::max
+#include <algorithm>
 #include <vk_extensions.h>
 #include <alignment.hpp>
 #include <vk_buffers.h>
@@ -46,7 +46,7 @@ uint32_t findMaxVertexIndex(const std::vector<uint32_t>& indices) {
 }
 
 BlasInput RaytracingBuilder::objectToVkGeometry(VulkanEngine* engine, const RenderObject& object) {
-	VkDeviceAddress vertexAddress = object.vertexBufferAddressRaytracing;
+	VkDeviceAddress vertexAddress = object.vertexBufferAddress;
 	VkDeviceAddress indexAddress = getBufferDeviceAddress(engine->_device, object.indexBufferRaytracing);
 
 	uint32_t maxPrimitiveCount = object.indexCount / 3;
@@ -190,8 +190,6 @@ public:
 	{
 		VkDeviceSize totalOriginalSize = 0;
 		VkDeviceSize totalCompactSize = 0;
-
-		std::string toString() const;
 	};
 
 
@@ -739,8 +737,7 @@ ObjDesc prepareModel(VulkanEngine* engine, RenderObject renderObject) {
 	ObjDesc objModel;
 	VkDeviceAddress indexAddress = getBufferDeviceAddress(engine->_device, renderObject.indexBuffer);
 
-	VkDeviceAddress vertexAddress =
-		renderObject.vertexBufferAddressRasterization;
+	VkDeviceAddress vertexAddress = renderObject.vertexBufferAddress;
 
 
 	indexAddress = indexAddress + renderObject.firstIndex * sizeof(int);

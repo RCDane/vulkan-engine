@@ -99,46 +99,45 @@ void VulkanEngine::init()
 
 
 
-	//std::string helmetPath = { "../assets/DamagedHelmet/glTF-Binary/DamagedHelmet.glb"};
-	//auto helmetFile = loadGltf(this, helmetPath);
-	//auto helmetFile2 = loadGltf(this, helmetPath);
+	std::string helmetPath = { "../assets/DamagedHelmet/glTF-Binary/DamagedHelmet.glb"};
+	auto helmetFile = loadGltf(this, helmetPath);
 
-	//assert(helmetFile.has_value());
-	//
+	assert(helmetFile.has_value());
+	
 
-	//loadedScenes["helmet"] = *helmetFile;
-	//loadedScenes["helmet"]->rootTransform = glm::scale(glm::vec3(10.0f)) * loadedScenes["helmet"]->rootTransform;
-	//loadedScenes["helmet"]->rootTransform = glm::translate(glm::vec3(0.0f, 20.0f, 0.0f)) * loadedScenes["helmet"]->rootTransform;
-	//
-	//loadedScenes["helmet2"] = *helmetFile2;
-	//loadedScenes["helmet2"]->rootTransform = glm::scale(glm::vec3(10.0f)) * loadedScenes["helmet2"]->rootTransform;
-	//loadedScenes["helmet2"]->rootTransform = glm::translate(glm::vec3(-20.0f, 20.0f, 0.0f)) * loadedScenes["helmet2"]->rootTransform;
+	loadedScenes["helmet"] = *helmetFile;
+	loadedScenes["helmet"]->rootTransform = glm::scale(glm::vec3(10.0f)) * loadedScenes["helmet"]->rootTransform;
+	loadedScenes["helmet"]->rootTransform = glm::translate(glm::vec3(0.0f, 20.0f, 0.0f)) * loadedScenes["helmet"]->rootTransform;
 
-
-
-
-	//std::string sponzaPath = { "../assets/sponza.glb" };
-	//auto sponzaFile = loadGltf(this, sponzaPath);
-	//assert(sponzaFile.has_value());
-	//loadedScenes["sponza"] = *sponzaFile;
-	//loadedScenes["sponza"]->rootTransform = glm::scale(glm::vec3(.1f)) * loadedScenes["sponza"]->rootTransform;
-
-
-	std::string plane_path = { "../assets/unit_plane.glb" };
-	auto planeFile = loadGltf(this, plane_path);
-	assert(planeFile.has_value());
-	loadedScenes["unit_plane"] = *planeFile;
-	loadedScenes["unit_plane"]->rootTransform = glm::scale(glm::vec3(45)) * loadedScenes["unit_plane"]->rootTransform;
-	loadedScenes["unit_plane"]->rootTransform = glm::translate(glm::vec3(20.f, 0.0f, 0.0f)) * loadedScenes["unit_plane"]->rootTransform;
+	std::string sponzaPath = { "../assets/sponza.glb" };
+	auto sponzaFile = loadGltf(this, sponzaPath);
+	assert(sponzaFile.has_value());
+	loadedScenes["sponza"] = *sponzaFile;
+	loadedScenes["sponza"]->rootTransform = glm::scale(glm::vec3(.1f)) * loadedScenes["sponza"]->rootTransform;
 
 
 
-	std::string dragonPath = { "../assets/dragon.glb" };
-	auto dragonFile = loadGltf(this, dragonPath);
-	assert(dragonFile.has_value());
-	loadedScenes["dragon"] = *dragonFile;
-	loadedScenes["dragon"]->rootTransform = glm::scale(glm::vec3(30.0f)) * loadedScenes["dragon"]->rootTransform;
-	loadedScenes["dragon"]->rootTransform = glm::translate(glm::vec3(20.0f, 10.0f, 0.0f)) * loadedScenes["dragon"]->rootTransform;
+
+
+
+
+
+	// Multiple dragons
+	//std::string plane_path = { "../assets/unit_plane.glb" };
+	//auto planeFile = loadGltf(this, plane_path);
+	//assert(planeFile.has_value());
+	//loadedScenes["unit_plane"] = *planeFile;
+	//loadedScenes["unit_plane"]->rootTransform = glm::scale(glm::vec3(45)) * loadedScenes["unit_plane"]->rootTransform;
+	//loadedScenes["unit_plane"]->rootTransform = glm::translate(glm::vec3(20.f, 0.0f, 0.0f)) * loadedScenes["unit_plane"]->rootTransform;
+
+
+
+	//std::string dragonPath = { "../assets/dragon.glb" };
+	//auto dragonFile = loadGltf(this, dragonPath);
+	//assert(dragonFile.has_value());
+	//loadedScenes["dragon"] = *dragonFile;
+	//loadedScenes["dragon"]->rootTransform = glm::scale(glm::vec3(30.0f)) * loadedScenes["dragon"]->rootTransform;
+	//loadedScenes["dragon"]->rootTransform = glm::translate(glm::vec3(20.0f, 10.0f, 0.0f)) * loadedScenes["dragon"]->rootTransform;
 
 
 
@@ -288,45 +287,6 @@ bool is_visible(const RenderObject& obj, const glm::mat4& viewProjMatrix) {
 	return true;
 }
 
-
-//bool is_visible(const RenderObject& obj, const glm::mat4& viewproj) {
-//	std::array<glm::vec3, 8> corners{
-//		glm::vec3 { 1, 1, 1 },
-//		glm::vec3 { 1, 1, -1 },
-//		glm::vec3 { 1, -1, 1 },
-//		glm::vec3 { 1, -1, -1 },
-//		glm::vec3 { -1, 1, 1 },
-//		glm::vec3 { -1, 1, -1 },
-//		glm::vec3 { -1, -1, 1 },
-//		glm::vec3 { -1, -1, -1 },
-//	};
-//
-//	glm::mat4 matrix = viewproj * obj.transform;
-//
-//	glm::vec3 min = { 1.5, 1.5, 1.5 };
-//	glm::vec3 max = { -1.5, -1.5, -1.5 };
-//
-//	for (int c = 0; c < 8; c++) {
-//		// project each corner into clip space
-//		glm::vec4 v = matrix * glm::vec4(obj.bounds.origin + (corners[c] * obj.bounds.extents), 1.f);
-//
-//		// perspective correction
-//		v.x = v.x / v.w;
-//		v.y = v.y / v.w;
-//		v.z = v.z / v.w;
-//
-//		min = glm::min(glm::vec3{ v.x, v.y, v.z }, min);
-//		max = glm::max(glm::vec3{ v.x, v.y, v.z }, max);
-//	}
-//
-//	// check the clip space box is within the view
-//	if (min.z > 1.f || max.z < 0.f || min.x > 1.f || max.x < -1.f || min.y > 1.f || max.y < -1.f) {
-//		return false;
-//	}
-//	else {
-//		return true;
-//	}
-//}
 
 void VulkanEngine::draw()
 {
@@ -680,7 +640,7 @@ void VulkanEngine::draw_geometry(VkCommandBuffer cmd)
 		// calculate final mesh matrix
 		GPUDrawPushConstants push_constants;
 		push_constants.worldMatrix = r.transform;
-		push_constants.vertexBuffer = r.vertexBufferAddressRasterization;
+		push_constants.vertexBuffer = r.vertexBufferAddress;
 		push_constants.hasTangents = r.hasTangents ? 1 : 0;
 		vkCmdPushConstants(
 			cmd, 
@@ -786,19 +746,19 @@ void VulkanEngine::run()
 		ImGui_ImplSDL2_NewFrame();
 		ImGui::NewFrame();
 
-		if (ImGui::Begin("background")) {
-			ImGui::SliderFloat("Render Scale",&renderScale, 0.3f, 1.f);
-			ComputeEffect& selected = backgroundEffects[currentBackgroundEffect];
+		//if (ImGui::Begin("background")) {
+		//	ImGui::SliderFloat("Render Scale",&renderScale, 0.3f, 1.f);
+		//	ComputeEffect& selected = backgroundEffects[currentBackgroundEffect];
 
-			ImGui::Text("Selected effect: ", selected.name);
-			ImGui::SliderInt("Effect Index", &currentBackgroundEffect, 0, backgroundEffects.size() - 1);
+		//	ImGui::Text("Selected effect: ", selected.name);
+		//	ImGui::SliderInt("Effect Index", &currentBackgroundEffect, 0, backgroundEffects.size() - 1);
 
-			ImGui::InputFloat4("data1", (float*)& selected.data.data1);
-			ImGui::InputFloat4("data2", (float*)& selected.data.data2);
-			ImGui::InputFloat4("data3", (float*)& selected.data.data3);
-			ImGui::InputFloat4("data4", (float*)& selected.data.data4);
+		//	ImGui::InputFloat4("data1", (float*)& selected.data.data1);
+		//	ImGui::InputFloat4("data2", (float*)& selected.data.data2);
+		//	ImGui::InputFloat4("data3", (float*)& selected.data.data3);
+		//	ImGui::InputFloat4("data4", (float*)& selected.data.data4);
 
-		}
+		//}
 
 		ImGui::Begin("Main");
 		ImGui::Checkbox("Raytracing", &useRaytracing);
@@ -832,14 +792,6 @@ void VulkanEngine::run()
 
 		ImGui::End();
 
-		//ImGui::Begin("Shadow debug");
-		//immediate_submit([&](VkCommandBuffer cmd) {
-		//	vkutil::transition_image(cmd, this->_shadowImage.image.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
-		//	});
-
-
-		//ImGui::Image((ImTextureID)_imgui_shadow_descriptor,ImVec2(256,256),ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f) );
-		//ImGui::End();
 
 		//make imgui calculate internal draw structures
 		ImGui::Render();
@@ -860,14 +812,6 @@ void VulkanEngine::init_vulkan()
     vkb::InstanceBuilder builder;
 
 
-	//// Enable GPU-assisted validation
-	//VkValidationFeatureEnableEXT enabledFeatures[] = {
-	//	VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT
-	//};
-	//VkValidationFeaturesEXT validationFeatures = {};
-	//validationFeatures.sType = VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT;
-	//validationFeatures.enabledValidationFeatureCount = 1;
-	//validationFeatures.pEnabledValidationFeatures = enabledFeatures;
 
 	auto inst_ret = builder.set_app_name("Example Vulkan Application")
 		.request_validation_layers(bUseValidationLayers)
@@ -918,14 +862,12 @@ void VulkanEngine::init_vulkan()
 	VkPhysicalDeviceRayTracingPipelineFeaturesKHR rtPipelineFeatures{
 		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR,
 		.rayTracingPipeline = VK_TRUE,
-		// .rayTraversalPrimitiveCulling = VK_TRUE, // optional
 	};
 
 	VkPhysicalDeviceAccelerationStructureFeaturesKHR accelerationStructureFeatures{ .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR };
 	accelerationStructureFeatures.accelerationStructure = true;
 	
-	//accelerationStructureFeatures.
-	//VkPhysicalDeviceFeatures features2{};
+
 
 
 
@@ -950,12 +892,10 @@ void VulkanEngine::init_vulkan()
 		.set_required_features(deviceFeatures)
 		.add_required_extension("VK_KHR_acceleration_structure")
 		.add_required_extension("VK_KHR_push_descriptor")
-		//.add_required_extension("VK_KHR_buffer_device_address")
 		.add_required_extension("VK_KHR_ray_query")
 		.add_required_extension_features(rayQueryFeatures)
 		.add_required_extension_features(accelerationStructureFeatures)
 		.add_required_extension_features(rtPipelineFeatures)
-		//.add_desired_extension("VK_EXT_private_data")
 		.add_desired_extension("VK_EXT_debug_utils")
 		.add_desired_extension("VK_EXT_validation_features")
 		.add_required_extension("VK_NV_ray_tracing_validation")
@@ -2080,8 +2020,7 @@ void MeshNode::Draw(const glm::mat4& topMatrix, DrawContext& ctx)
 		def.material = &s.material->data;
 		def.bounds = s.bounds;
 		def.transform = nodeMatrix;
-		def.vertexBufferAddressRaytracing = mesh->meshBuffers.vertexBufferAddress;
-		def.vertexBufferAddressRasterization = mesh->meshBuffers.vertexBufferAddress;
+		def.vertexBufferAddress = mesh->meshBuffers.vertexBufferAddress;
 		def.indexBufferAddressRasterization = mesh->meshBuffers.IndexBufferAddress;
 		def.indexBufferAddressRaytracing = mesh->meshBuffers.IndexBufferAddressRaytracing;
 		def.hasTangents = s.hasTangents;
@@ -2105,25 +2044,32 @@ void VulkanEngine::update_scene()
 	glm::mat4 topMat = glm::mat4{ 1.f };
 	topMat = glm::scale(topMat, glm::vec3(1.0f));
 
-	
-	int xAmount = 2;
-	int yAmount = 2;
-	int xSpacing = 20;
-	int ySpacing = 30;
 
+	// Is used for experiments with multiple instances of the same mesh
+	//int xAmount = 2;
+	//int yAmount = 2;
+	//int xSpacing = 20;
+	//int ySpacing = 30;
+
+
+	//for (auto& n : loadedScenes) {
+	//	auto [name, node] = n;
+
+	//	glm::mat4 root = topMat * node->rootTransform;
+	//	for (int i = 0; i < xAmount; i++) {
+	//		for (int j = 0; j < yAmount; j++) {
+	//			glm::mat4 displacement = glm::translate(glm::mat4{ 1.f }, glm::vec3(i * xSpacing, 0, j * ySpacing));
+	//			node->Draw(displacement * root, mainDrawContext);
+	//		}
+	//	}
+	//}
 
 	for (auto& n : loadedScenes) {
 		auto [name, node] = n;
 
 		glm::mat4 root = topMat * node->rootTransform;
-		for (int i = 0; i < xAmount; i++) {
-			for (int j = 0; j < yAmount; j++) {
-				glm::mat4 displacement = glm::translate(glm::mat4{ 1.f }, glm::vec3(i * xSpacing, 0, j * ySpacing));
-				node->Draw(displacement * root, mainDrawContext);
-				node->Draw(displacement * root, mainDrawContext);
-			}
+		node->Draw(root, mainDrawContext);
 
-		}
 	}
 
 	mainCamera.update();
@@ -2298,7 +2244,7 @@ void VulkanEngine::draw_shadows(VkCommandBuffer cmd) {
 		// calculate final mesh matrix
 		GPUDrawPushConstants push_constants;
 		push_constants.worldMatrix = r.transform;
-		push_constants.vertexBuffer = r.vertexBufferAddressRasterization;
+		push_constants.vertexBuffer = r.vertexBufferAddress;
 
 		push_constants.hasTangents = r.hasTangents ? 1 : 0;
 
@@ -2320,8 +2266,6 @@ void VulkanEngine::draw_shadows(VkCommandBuffer cmd) {
 	}
 
 	vkCmdEndRendering(cmd);
-	// we delete the draw commands now that we processed them
-	//mainDrawContext.OpaqueSurfaces.clear();
 }
 
 void VulkanEngine::init_timestamp_queries() {

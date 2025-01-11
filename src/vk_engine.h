@@ -47,8 +47,7 @@ struct RenderObject {
 	MaterialInstance* material;
 	Bounds bounds;
 	glm::mat4 transform;
-	VkDeviceAddress vertexBufferAddressRaytracing;
-	VkDeviceAddress vertexBufferAddressRasterization;
+	VkDeviceAddress vertexBufferAddress;
 	VkDeviceAddress indexBufferAddressRaytracing;
 	VkDeviceAddress indexBufferAddressRasterization;
 

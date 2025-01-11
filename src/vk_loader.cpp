@@ -272,9 +272,6 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGltf(VulkanEngine* engine, std::s
         file.materials[mat.name.c_str()] = newMat;
 
 
-        
-
-
         MaterialConstants constants;
         constants.colorFactors.x = mat.pbrData.baseColorFactor[0];
         constants.colorFactors.y = mat.pbrData.baseColorFactor[1];
@@ -530,24 +527,17 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGltf(VulkanEngine* engine, std::s
             newSurface.maxVertex = *std::max_element(indices.begin(), indices.end());
             fastgltf::Accessor& posAccessor = gltf.accessors[p.findAttribute("POSITION")->second];
             newSurface.vertexCount = static_cast<uint32_t>(posAccessor.count);
-			//newSurface.material = materials[primMaterial];
-            // Alternatively:
+
 
 
             newmesh->surfaces.push_back(newSurface);
         }
 
-
         if (!hasTangents) {
             // We have to calculate tangents ourselves
         }
 
-
         newmesh->meshBuffers = engine->uploadMesh(indices, vertices, raytracingIndices);
-		
-
- 
-    
     }
     }
     catch (const std::exception& e){

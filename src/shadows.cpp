@@ -179,14 +179,8 @@ DirectionalShadow prepare_directional_shadow(VulkanEngine* engine, DrawContext s
 			far = std::max(far, v.z);
 		}
 	}
-	//float nearPlane = -far;
-	//float farPlane = -near;
 
 	
-	
-
-	// Create an orthographic projection matrix based on the calculated bounds
-	//glm::mat4 projectionMatrix = glm::ortho(left, right, bottom, top, 1.0f, (far-near)+20.0f); // Added padding to far plane for normalizing moving camera back
 	float offset = (far - near);
 	float correctedFar = (far - near);
 	glm::mat4 projectionMatrix = glm::orthoRH_ZO(left, right, bottom, top, 0.001f, (correctedFar+1.0f)*1.1f);
@@ -196,7 +190,6 @@ DirectionalShadow prepare_directional_shadow(VulkanEngine* engine, DrawContext s
 	glm::vec3 eyePosition =  direction * (near*1.1f);
 	glm::vec3 lookAtPosition = direction + direction * offset;
 	viewMatrix = glm::lookAt(eyePosition, eyePosition + direction, newUp);
-	//projectionMatrix[1][1] *= -1; // Flip the y axis
 	engine->_directionalLighting.lightView =  projectionMatrix* viewMatrix;
 
 	
