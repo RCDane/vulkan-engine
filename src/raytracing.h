@@ -12,6 +12,7 @@ struct DrawContext;
 struct GlobalUniforms;
 
 struct BlasInput {
+	uint32_t id{ 0 };
 	std::vector<VkAccelerationStructureGeometryKHR>       asGeometry;
 	std::vector<VkAccelerationStructureBuildRangeInfoKHR> asBuildOffsetInfo;
 	VkBuildAccelerationStructureFlagsKHR                  flags{ 0 };

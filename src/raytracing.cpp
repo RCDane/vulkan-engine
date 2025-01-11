@@ -668,7 +668,7 @@ void RaytracingBuilder::buildBlas(VulkanEngine* engine, const std::vector<BlasIn
 		blasBuildData[idx].finalizeGeometry(engine->_device, VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR);
 	}
 
-	VkDeviceSize hintMaxBudget{ 256'000'000 };  // 256 MB
+	VkDeviceSize hintMaxBudget{ 300'000'0000 };  // 256 MB
 	bool hasCompaction = hasFlag(flags, VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_COMPACTION_BIT_KHR);
 	BlasBuilder blasBuilder(&engine->globalDescriptorAllocator, engine->_device);
 
@@ -1393,19 +1393,6 @@ void RaytracingHandler::raytrace(VkCommandBuffer cmd, VulkanEngine* engine) {
 	// Unmap the memory after copying the data
 	vmaUnmapMemory(engine->_allocator, m_globalsBuffer.allocation);
 
-
-	//// Map memory using vmaMapMemory
-	//mappedData = nullptr;
-	//result = vmaMapMemory(engine->_allocator, m_bObjDesc.allocation, &mappedData);
-	//if (result != VK_SUCCESS) {
-	//	throw std::runtime_error("Failed to map memory for global uniform buffer!");
-	//}
-
-	//// Copy uniform data into the mapped memory
-	//std::memcpy(mappedData, objDescs.data(), sizeof(ObjDesc)* objDescs.size());
-
-	//// Unmap the memory after copying the data
-	//vmaUnmapMemory(engine->_allocator, m_bObjDesc.allocation);
 
 
 	// Bind the ray tracing pipeline

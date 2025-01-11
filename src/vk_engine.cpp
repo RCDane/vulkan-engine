@@ -99,29 +99,38 @@ void VulkanEngine::init()
 
 
 
-	std::string helmetPath = { "../assets/DamagedHelmet/glTF-Binary/DamagedHelmet.glb"};
-	auto helmetFile = loadGltf(this, helmetPath);
-	auto helmetFile2 = loadGltf(this, helmetPath);
+	//std::string helmetPath = { "../assets/DamagedHelmet/glTF-Binary/DamagedHelmet.glb"};
+	//auto helmetFile = loadGltf(this, helmetPath);
+	//auto helmetFile2 = loadGltf(this, helmetPath);
 
-	assert(helmetFile.has_value());
-	
+	//assert(helmetFile.has_value());
+	//
 
-	loadedScenes["helmet"] = *helmetFile;
-	loadedScenes["helmet"]->rootTransform = glm::scale(glm::vec3(10.0f)) * loadedScenes["helmet"]->rootTransform;
-	loadedScenes["helmet"]->rootTransform = glm::translate(glm::vec3(0.0f, 20.0f, 0.0f)) * loadedScenes["helmet"]->rootTransform;
-	
-	loadedScenes["helmet2"] = *helmetFile2;
-	loadedScenes["helmet2"]->rootTransform = glm::scale(glm::vec3(10.0f)) * loadedScenes["helmet2"]->rootTransform;
-	loadedScenes["helmet2"]->rootTransform = glm::translate(glm::vec3(-20.0f, 20.0f, 0.0f)) * loadedScenes["helmet2"]->rootTransform;
-
-
+	//loadedScenes["helmet"] = *helmetFile;
+	//loadedScenes["helmet"]->rootTransform = glm::scale(glm::vec3(10.0f)) * loadedScenes["helmet"]->rootTransform;
+	//loadedScenes["helmet"]->rootTransform = glm::translate(glm::vec3(0.0f, 20.0f, 0.0f)) * loadedScenes["helmet"]->rootTransform;
+	//
+	//loadedScenes["helmet2"] = *helmetFile2;
+	//loadedScenes["helmet2"]->rootTransform = glm::scale(glm::vec3(10.0f)) * loadedScenes["helmet2"]->rootTransform;
+	//loadedScenes["helmet2"]->rootTransform = glm::translate(glm::vec3(-20.0f, 20.0f, 0.0f)) * loadedScenes["helmet2"]->rootTransform;
 
 
-	std::string sponzaPath = { "../assets/sponza.glb" };
-	auto sponzaFile = loadGltf(this, sponzaPath);
-	assert(sponzaFile.has_value());
-	loadedScenes["sponza"] = *sponzaFile;
-	loadedScenes["sponza"]->rootTransform = glm::scale(glm::vec3(.1f)) * loadedScenes["sponza"]->rootTransform;
+
+
+	//std::string sponzaPath = { "../assets/sponza.glb" };
+	//auto sponzaFile = loadGltf(this, sponzaPath);
+	//assert(sponzaFile.has_value());
+	//loadedScenes["sponza"] = *sponzaFile;
+	//loadedScenes["sponza"]->rootTransform = glm::scale(glm::vec3(.1f)) * loadedScenes["sponza"]->rootTransform;
+
+
+	std::string plane_path = { "../assets/unit_plane.glb" };
+	auto planeFile = loadGltf(this, plane_path);
+	assert(planeFile.has_value());
+	loadedScenes["unit_plane"] = *planeFile;
+	loadedScenes["unit_plane"]->rootTransform = glm::scale(glm::vec3(45)) * loadedScenes["unit_plane"]->rootTransform;
+	loadedScenes["unit_plane"]->rootTransform = glm::translate(glm::vec3(20.f, 0.0f, 0.0f)) * loadedScenes["unit_plane"]->rootTransform;
+
 
 
 	std::string dragonPath = { "../assets/dragon.glb" };
@@ -130,6 +139,9 @@ void VulkanEngine::init()
 	loadedScenes["dragon"] = *dragonFile;
 	loadedScenes["dragon"]->rootTransform = glm::scale(glm::vec3(30.0f)) * loadedScenes["dragon"]->rootTransform;
 	loadedScenes["dragon"]->rootTransform = glm::translate(glm::vec3(20.0f, 10.0f, 0.0f)) * loadedScenes["dragon"]->rootTransform;
+
+
+
 
 
 
@@ -350,15 +362,7 @@ void VulkanEngine::draw()
 	_drawExtent.height = std::min(_swapchainExtent.height, _drawImage.imageExtent.height) * renderScale;
 	_drawExtent.width= std::min(_swapchainExtent.width, _drawImage.imageExtent.width) * renderScale;
 
-	uint32_t lastframeIndex = (_frameNumber-1) % FRAME_OVERLAP;
-
-	if (_frameNumber > 0)
-		retrieve_timestamp_results(lastframeIndex);
-	//auto& currentFrame = _frames[frameIndex];
-
-	//// Calculate query indices
-	//currentFrame._queryStart = frameIndex * QUERIES_PER_FRAME;
-	//currentFrame._queryEnd = currentFrame._queryStart + 1;
+	
 
 
 	auto start = std::chrono::system_clock::now();
@@ -388,7 +392,7 @@ void VulkanEngine::draw()
 	// we will overwrite it all so we dont care about what was the older layout
 	vkutil::transition_image(cmd, _drawImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
 
-	draw_background(cmd);
+	//draw_background(cmd);
 
 
 	if (useRaytracing) {
@@ -449,11 +453,18 @@ void VulkanEngine::draw()
 	// _renderFence will now block until the graphic commands finish execution
 	VK_CHECK(vkQueueSubmit2(_graphicsQueue, 1, &submit, get_current_frame()._renderFence));
 
+
+
 	auto end = std::chrono::system_clock::now();
 
 	//convert to microseconds (integer), and then come back to miliseconds
 	auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
-	stats.mesh_draw_time = elapsed.count() / 1000.f;
+
+	uint32_t lastframeIndex = _frameNumber % FRAME_OVERLAP;
+
+	if (_frameNumber > 0)
+		retrieve_timestamp_results(lastframeIndex);
+
 
     //prepare present
 	// this will put the image we just rendered to into the visible window.
@@ -515,9 +526,11 @@ void VulkanEngine::draw_geometry(VkCommandBuffer cmd)
 		}
 		});
 	
+	glm::vec4 clearColor = glm::vec4(0.1, 0.2, 0.4, 0.97);
 
+	VkClearValue clearValue = { {clearColor.r, clearColor.g, clearColor.b, clearColor.a} };
 	//begin a render pass  connected to our draw image
-	VkRenderingAttachmentInfo colorAttachment = vkinit::attachment_info(_drawImage.imageView, nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+	VkRenderingAttachmentInfo colorAttachment = vkinit::attachment_info(_drawImage.imageView, &clearValue , VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 	VkRenderingAttachmentInfo depthAttachment = vkinit::depth_attachment_info(_depthImage.imageView, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
 	
 
@@ -2093,13 +2106,24 @@ void VulkanEngine::update_scene()
 	topMat = glm::scale(topMat, glm::vec3(1.0f));
 
 	
+	int xAmount = 2;
+	int yAmount = 2;
+	int xSpacing = 20;
+	int ySpacing = 30;
 
 
 	for (auto& n : loadedScenes) {
 		auto [name, node] = n;
 
 		glm::mat4 root = topMat * node->rootTransform;
-		node->Draw(root, mainDrawContext);
+		for (int i = 0; i < xAmount; i++) {
+			for (int j = 0; j < yAmount; j++) {
+				glm::mat4 displacement = glm::translate(glm::mat4{ 1.f }, glm::vec3(i * xSpacing, 0, j * ySpacing));
+				node->Draw(displacement * root, mainDrawContext);
+				node->Draw(displacement * root, mainDrawContext);
+			}
+
+		}
 	}
 
 	mainCamera.update();
