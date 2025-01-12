@@ -110,6 +110,7 @@ struct GPUDrawPushConstants {
     glm::mat4 worldMatrix;
     VkDeviceAddress vertexBuffer;
     int hasTangents;
+    int usePCF;
 };
 
 enum class MaterialPass :uint8_t {

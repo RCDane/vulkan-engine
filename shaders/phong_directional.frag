@@ -33,11 +33,12 @@ layout(buffer_reference, std430) readonly buffer VertexBuffer{
 layout(set = 4, binding=0) uniform sampler2D[] textureSamplers;
 
 //push constants block
-layout( push_constant ) uniform constants
+layout( push_constant,scalar ) uniform constants
 {
 	mat4 render_matrix;
 	VertexBuffer vertexBuffer;
 	int hasTangent;
+    int useCPF;
 } PushConstants;
  #define EPSILON 0.00001
 float ShadowCalculation(vec4 fragPosLightSpace, vec3 normal)
@@ -63,19 +64,29 @@ float ShadowCalculation(vec4 fragPosLightSpace, vec3 normal)
     // float bias = max(0.05 * (1.0 - dot(normalize(normal), normalize(-directionalLight.direction))), 0.05);
     float bias = 0.005;
 
-    float shadow = 0.0;
-    vec2 texelSize = 1.0 / textureSize(shadowMap, 0);
-    
-    for (int y = -1 ; y <= 1 ; y++) {
-        for (int x = -1 ; x <= 1 ; x++) {
-            vec2 Offsets = vec2(x * texelSize.x, y * texelSize.y);
-            vec2 UVC = vec2(projCoords.xy + Offsets);
-            shadow += texture(shadowMap, UVC.xy).r -bias > currentDepth ? 0.0 : 1.0;
-        }
-    }
-    shadow /= 9.0;
 
-    return (shadow);;
+    float shadow = 0.0;
+    if (PushConstants.useCPF == 1){
+        // Percentage-closer filtering
+        vec2 texelSize = 1.0 / textureSize(shadowMap, 0);
+        
+        for (int y = -1 ; y <= 1 ; y++) {
+            for (int x = -1 ; x <= 1 ; x++) {
+                vec2 Offsets = vec2(x * texelSize.x, y * texelSize.y);
+                vec2 UVC = vec2(projCoords.xy + Offsets);
+                shadow += texture(shadowMap, UVC.xy).r -bias > currentDepth ? 0.0 : 1.0;
+            }
+        }
+        shadow /= 9.0;
+    }
+    else {
+        // Simple shadows
+        float textureDepth = texture(shadowMap, projCoords.xy).r;
+        shadow = textureDepth -bias > currentDepth ? 0.0 : 1.0;
+    }
+
+
+    return shadow;
 }
 // Taken from:http://www.thetenthplanet.de/archives/1180
 mat3 inverse3x3( mat3 M ) { 

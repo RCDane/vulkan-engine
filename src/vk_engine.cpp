@@ -99,21 +99,21 @@ void VulkanEngine::init()
 
 
 
-	std::string helmetPath = { "../assets/DamagedHelmet/glTF-Binary/DamagedHelmet.glb"};
-	auto helmetFile = loadGltf(this, helmetPath);
+	//std::string helmetPath = { "../assets/DamagedHelmet/glTF-Binary/DamagedHelmet.glb"};
+	//auto helmetFile = loadGltf(this, helmetPath);
 
-	assert(helmetFile.has_value());
-	
+	//assert(helmetFile.has_value());
+	//
 
-	loadedScenes["helmet"] = *helmetFile;
-	loadedScenes["helmet"]->rootTransform = glm::scale(glm::vec3(10.0f)) * loadedScenes["helmet"]->rootTransform;
-	loadedScenes["helmet"]->rootTransform = glm::translate(glm::vec3(0.0f, 20.0f, 0.0f)) * loadedScenes["helmet"]->rootTransform;
+	//loadedScenes["helmet"] = *helmetFile;
+	//loadedScenes["helmet"]->rootTransform = glm::scale(glm::vec3(10.0f)) * loadedScenes["helmet"]->rootTransform;
+	//loadedScenes["helmet"]->rootTransform = glm::translate(glm::vec3(0.0f, 20.0f, 0.0f)) * loadedScenes["helmet"]->rootTransform;
 
-	std::string sponzaPath = { "../assets/sponza.glb" };
-	auto sponzaFile = loadGltf(this, sponzaPath);
-	assert(sponzaFile.has_value());
-	loadedScenes["sponza"] = *sponzaFile;
-	loadedScenes["sponza"]->rootTransform = glm::scale(glm::vec3(.1f)) * loadedScenes["sponza"]->rootTransform;
+	//std::string sponzaPath = { "../assets/sponza.glb" };
+	//auto sponzaFile = loadGltf(this, sponzaPath);
+	//assert(sponzaFile.has_value());
+	//loadedScenes["sponza"] = *sponzaFile;
+	//loadedScenes["sponza"]->rootTransform = glm::scale(glm::vec3(.1f)) * loadedScenes["sponza"]->rootTransform;
 
 
 
@@ -123,21 +123,21 @@ void VulkanEngine::init()
 
 
 	// Multiple dragons
-	//std::string plane_path = { "../assets/unit_plane.glb" };
-	//auto planeFile = loadGltf(this, plane_path);
-	//assert(planeFile.has_value());
-	//loadedScenes["unit_plane"] = *planeFile;
-	//loadedScenes["unit_plane"]->rootTransform = glm::scale(glm::vec3(45)) * loadedScenes["unit_plane"]->rootTransform;
-	//loadedScenes["unit_plane"]->rootTransform = glm::translate(glm::vec3(20.f, 0.0f, 0.0f)) * loadedScenes["unit_plane"]->rootTransform;
+	std::string plane_path = { "../assets/unit_plane.glb" };
+	auto planeFile = loadGltf(this, plane_path);
+	assert(planeFile.has_value());
+	loadedScenes["unit_plane"] = *planeFile;
+	loadedScenes["unit_plane"]->rootTransform = glm::scale(glm::vec3(45)) * loadedScenes["unit_plane"]->rootTransform;
+	loadedScenes["unit_plane"]->rootTransform = glm::translate(glm::vec3(20.f, 0.0f, 0.0f)) * loadedScenes["unit_plane"]->rootTransform;
 
 
 
-	//std::string dragonPath = { "../assets/dragon.glb" };
-	//auto dragonFile = loadGltf(this, dragonPath);
-	//assert(dragonFile.has_value());
-	//loadedScenes["dragon"] = *dragonFile;
-	//loadedScenes["dragon"]->rootTransform = glm::scale(glm::vec3(30.0f)) * loadedScenes["dragon"]->rootTransform;
-	//loadedScenes["dragon"]->rootTransform = glm::translate(glm::vec3(20.0f, 10.0f, 0.0f)) * loadedScenes["dragon"]->rootTransform;
+	std::string dragonPath = { "../assets/dragon.glb" };
+	auto dragonFile = loadGltf(this, dragonPath);
+	assert(dragonFile.has_value());
+	loadedScenes["dragon"] = *dragonFile;
+	loadedScenes["dragon"]->rootTransform = glm::scale(glm::vec3(30.0f)) * loadedScenes["dragon"]->rootTransform;
+	loadedScenes["dragon"]->rootTransform = glm::translate(glm::vec3(20.0f, 10.0f, 0.0f)) * loadedScenes["dragon"]->rootTransform;
 
 
 
@@ -642,6 +642,7 @@ void VulkanEngine::draw_geometry(VkCommandBuffer cmd)
 		push_constants.worldMatrix = r.transform;
 		push_constants.vertexBuffer = r.vertexBufferAddress;
 		push_constants.hasTangents = r.hasTangents ? 1 : 0;
+		push_constants.usePCF = usePCF ? 1 : 0;
 		vkCmdPushConstants(
 			cmd, 
 			r.material->pipeline->layout, 
@@ -762,6 +763,7 @@ void VulkanEngine::run()
 
 		ImGui::Begin("Main");
 		ImGui::Checkbox("Raytracing", &useRaytracing);
+		ImGui::Checkbox("Use PCF", &usePCF);
 		ImGui::End();
 
 
@@ -790,7 +792,6 @@ void VulkanEngine::run()
         ImGui::Text("draws %i", stats.drawcall_count);
         ImGui::End();
 
-		ImGui::End();
 
 
 		//make imgui calculate internal draw structures

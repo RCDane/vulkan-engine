@@ -155,6 +155,8 @@ constexpr unsigned int FRAME_OVERLAP = 2;
 class VulkanEngine {
 public:
 
+	bool usePCF = false;
+
 	VkInstance _instance;
 	VkDebugUtilsMessengerEXT _debug_messenger;
 	VkPhysicalDevice _chosenGPU;
