@@ -7,13 +7,11 @@ Features:
 - Frustum Culling.
 - Directional Light.
 - Directional Shadow Mapping.
-
+- Hardware Accelerated Raytracing.
+- Raytraced Shadows.
 
 Planned Features
-- PBR shading. 
-- Hardware Accelerated Raytracing.
 - Raytraced Ambient Occlusion.
-- Raytraced Shadows.
 - Raytraced Reflections.
 
 
