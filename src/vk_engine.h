@@ -79,14 +79,7 @@ struct PointLight {
 	glm::vec4 color;
 };
 
-struct ComputeEffect {
-    const char* name;
 
-	VkPipeline pipeline;
-	VkPipelineLayout layout;
-
-	ComputePushConstants data;
-};
 
 struct FrameData {
 	VkCommandPool _commandPool;
@@ -209,8 +202,6 @@ public:
 
 	GPUMeshBuffers rectangle;
 
-	std::vector<ComputeEffect> backgroundEffects;
-	int currentBackgroundEffect{0};
 
 	std::vector<std::shared_ptr<MeshAsset>> testMeshes;
 
@@ -311,7 +302,6 @@ private:
 	void create_swapchain(uint32_t width, uint32_t height);
 	void destroy_swapchain();
 
-	void draw_background(VkCommandBuffer cmd);
 
 	void draw_geometry(VkCommandBuffer cmd);
 
@@ -322,7 +312,6 @@ private:
 	void init_descriptors();
 
 	void init_pipelines();
-	void init_background_pipelines();
 
 	void init_imgui();
 

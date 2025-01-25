@@ -76,10 +76,8 @@ struct alignas(16) Vertex {
     float padding3[2];     // 8 bytes to align to 16 bytes
     glm::vec4 color;       // 16 bytes
     glm::vec4 tangent;     // 16 bytes
-    int32_t materialIndex; // 4 bytes
-    float padding4[3];     // 12 bytes to align struct size to 16 bytes
 };
-static_assert(sizeof(Vertex) == 96, "Vertex struct size should be 96 bytes.");
+static_assert(sizeof(Vertex) == 80, "Vertex struct size should be 96 bytes.");
 
 // holds the resources needed for a mesh
 struct GPUMeshBuffers {

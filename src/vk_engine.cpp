@@ -99,21 +99,21 @@ void VulkanEngine::init()
 
 
 
-	//std::string helmetPath = { "../assets/DamagedHelmet/glTF-Binary/DamagedHelmet.glb"};
-	//auto helmetFile = loadGltf(this, helmetPath);
+	std::string helmetPath = { "../assets/DamagedHelmet/glTF-Binary/DamagedHelmet.glb"};
+	auto helmetFile = loadGltf(this, helmetPath);
 
-	//assert(helmetFile.has_value());
-	//
+	assert(helmetFile.has_value());
+	
 
-	//loadedScenes["helmet"] = *helmetFile;
-	//loadedScenes["helmet"]->rootTransform = glm::scale(glm::vec3(10.0f)) * loadedScenes["helmet"]->rootTransform;
-	//loadedScenes["helmet"]->rootTransform = glm::translate(glm::vec3(0.0f, 20.0f, 0.0f)) * loadedScenes["helmet"]->rootTransform;
+	loadedScenes["helmet"] = *helmetFile;
+	loadedScenes["helmet"]->rootTransform = glm::scale(glm::vec3(10.0f)) * loadedScenes["helmet"]->rootTransform;
+	loadedScenes["helmet"]->rootTransform = glm::translate(glm::vec3(0.0f, 20.0f, 0.0f)) * loadedScenes["helmet"]->rootTransform;
 
-	//std::string sponzaPath = { "../assets/sponza.glb" };
-	//auto sponzaFile = loadGltf(this, sponzaPath);
-	//assert(sponzaFile.has_value());
-	//loadedScenes["sponza"] = *sponzaFile;
-	//loadedScenes["sponza"]->rootTransform = glm::scale(glm::vec3(.1f)) * loadedScenes["sponza"]->rootTransform;
+	std::string sponzaPath = { "../assets/sponza.glb" };
+	auto sponzaFile = loadGltf(this, sponzaPath);
+	assert(sponzaFile.has_value());
+	loadedScenes["sponza"] = *sponzaFile;
+	loadedScenes["sponza"]->rootTransform = glm::scale(glm::vec3(.1f)) * loadedScenes["sponza"]->rootTransform;
 
 
 
@@ -123,12 +123,12 @@ void VulkanEngine::init()
 
 
 	// Multiple dragons
-	std::string plane_path = { "../assets/unit_plane.glb" };
-	auto planeFile = loadGltf(this, plane_path);
-	assert(planeFile.has_value());
-	loadedScenes["unit_plane"] = *planeFile;
-	loadedScenes["unit_plane"]->rootTransform = glm::scale(glm::vec3(45)) * loadedScenes["unit_plane"]->rootTransform;
-	loadedScenes["unit_plane"]->rootTransform = glm::translate(glm::vec3(20.f, 0.0f, 0.0f)) * loadedScenes["unit_plane"]->rootTransform;
+	//std::string plane_path = { "../assets/unit_plane.glb" };
+	//auto planeFile = loadGltf(this, plane_path);
+	//assert(planeFile.has_value());
+	//loadedScenes["unit_plane"] = *planeFile;
+	//loadedScenes["unit_plane"]->rootTransform = glm::scale(glm::vec3(45)) * loadedScenes["unit_plane"]->rootTransform;
+	//loadedScenes["unit_plane"]->rootTransform = glm::translate(glm::vec3(20.f, 0.0f, 0.0f)) * loadedScenes["unit_plane"]->rootTransform;
 
 
 
@@ -351,8 +351,6 @@ void VulkanEngine::draw()
 	// transition our main draw image into general layout so we can write into it
 	// we will overwrite it all so we dont care about what was the older layout
 	vkutil::transition_image(cmd, _drawImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
-
-	//draw_background(cmd);
 
 
 	if (useRaytracing) {
@@ -676,31 +674,6 @@ void VulkanEngine::draw_geometry(VkCommandBuffer cmd)
 }
 
 
-void VulkanEngine::draw_background(VkCommandBuffer cmd)
-{
-	//make a clear-color from frame number. This will flash with a 120 frame period.
-	VkClearColorValue clearValue;
-	float flash = std::abs(std::sin(_frameNumber / 120.f));
-	clearValue = { { 0.0f, 0.0f, flash, 1.0f } };
-
-	VkImageSubresourceRange clearRange = vkinit::image_subresource_range(VK_IMAGE_ASPECT_COLOR_BIT);
-
-	ComputeEffect& effect = backgroundEffects[currentBackgroundEffect];
-
-	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, effect.pipeline);
-
-	// bind the descriptor set containing the draw image for the compute pipeline
-	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _gradientPipelineLayout, 0, 1, &_drawImageDescriptors, 0, nullptr);
-
-	
-	vkCmdPushConstants(cmd, _gradientPipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(ComputePushConstants), &effect.data);
-
-
-	// execute the compute pipeline dispatch. We are using 16x16 workgroup size so we need to divide by it
-	vkCmdDispatch(cmd, std::ceil(_drawExtent.width / 16.0), std::ceil(_drawExtent.height / 16.0), 1);
-
-}
-
 
 
 void VulkanEngine::run()
@@ -747,19 +720,6 @@ void VulkanEngine::run()
 		ImGui_ImplSDL2_NewFrame();
 		ImGui::NewFrame();
 
-		//if (ImGui::Begin("background")) {
-		//	ImGui::SliderFloat("Render Scale",&renderScale, 0.3f, 1.f);
-		//	ComputeEffect& selected = backgroundEffects[currentBackgroundEffect];
-
-		//	ImGui::Text("Selected effect: ", selected.name);
-		//	ImGui::SliderInt("Effect Index", &currentBackgroundEffect, 0, backgroundEffects.size() - 1);
-
-		//	ImGui::InputFloat4("data1", (float*)& selected.data.data1);
-		//	ImGui::InputFloat4("data2", (float*)& selected.data.data2);
-		//	ImGui::InputFloat4("data3", (float*)& selected.data.data3);
-		//	ImGui::InputFloat4("data4", (float*)& selected.data.data4);
-
-		//}
 
 		ImGui::Begin("Main");
 		ImGui::Checkbox("Raytracing", &useRaytracing);
@@ -1184,7 +1144,7 @@ void VulkanEngine::init_descriptors(){
 }
 
 void VulkanEngine::init_pipelines(){
-	init_background_pipelines();
+	// Removed for now
 
 	
 	// init_triangle_pipeline();
@@ -1254,85 +1214,7 @@ void VulkanEngine::init_triangle_pipeline(){
 
 
 
-void VulkanEngine::init_background_pipelines()
-{
 
-	VkPipelineLayoutCreateInfo computeLayout{};
-	computeLayout.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-	computeLayout.pNext = nullptr;
-	computeLayout.pSetLayouts = &_drawImageDescriptorLayout;
-	computeLayout.setLayoutCount = 1;
-
-	VkPushConstantRange pushConstant{};
-	pushConstant.offset = 0;
-	pushConstant.size = sizeof(ComputePushConstants) ;
-	pushConstant.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
-
-	computeLayout.pPushConstantRanges = &pushConstant;
-	computeLayout.pushConstantRangeCount = 1;
-
-	VK_CHECK(vkCreatePipelineLayout(_device, &computeLayout, nullptr, &_gradientPipelineLayout));
-
-	
-	VkShaderModule gradientShader;
-	if (!vkutil::load_shader_module("../shaders/spv/gradient_color.comp.spv", _device, &gradientShader)) {
-		fmt::print("Error when building the compute shader \n");
-	}
-
-	VkShaderModule skyShader;
-	if (!vkutil::load_shader_module("../shaders/spv/sky.comp.spv", _device, &skyShader)) {
-		fmt::print("Error when building the compute shader \n");
-	}
-
-	VkPipelineShaderStageCreateInfo stageinfo{};
-	stageinfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-	stageinfo.pNext = nullptr;
-	stageinfo.stage = VK_SHADER_STAGE_COMPUTE_BIT;
-	stageinfo.module = gradientShader;
-	stageinfo.pName = "main";
-
-	VkComputePipelineCreateInfo computePipelineCreateInfo{};
-	computePipelineCreateInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
-	computePipelineCreateInfo.pNext = nullptr;
-	computePipelineCreateInfo.layout = _gradientPipelineLayout;
-	computePipelineCreateInfo.stage = stageinfo;
-
-	ComputeEffect gradient;
-	gradient.layout = _gradientPipelineLayout;
-	gradient.name = "gradient";
-	gradient.data = {};
-
-	//default colors
-	gradient.data.data1 = glm::vec4(1, 0, 0, 1);
-	gradient.data.data2 = glm::vec4(0, 0, 1, 1);
-
-	VK_CHECK(vkCreateComputePipelines(_device, VK_NULL_HANDLE, 1, &computePipelineCreateInfo, nullptr, &gradient.pipeline));
-
-	//change the shader module only to create the sky shader
-	computePipelineCreateInfo.stage.module = skyShader;
-
-	ComputeEffect sky;
-	sky.layout = _gradientPipelineLayout;
-	sky.name = "sky";
-	sky.data = {};
-	//default sky parameters
-	sky.data.data1 = glm::vec4(0.1, 0.2, 0.4 ,0.97);
-
-	VK_CHECK(vkCreateComputePipelines(_device, VK_NULL_HANDLE, 1, &computePipelineCreateInfo, nullptr, &sky.pipeline));
-
-	//add the 2 background effects into the array
-	backgroundEffects.push_back(gradient);
-	backgroundEffects.push_back(sky);
-
-	//destroy structures properly
-	vkDestroyShaderModule(_device, gradientShader, nullptr);
-	vkDestroyShaderModule(_device, skyShader, nullptr);
-	_mainDeletionQueue.push_function([=]() {
-		vkDestroyPipelineLayout(_device, _gradientPipelineLayout, nullptr);
-		vkDestroyPipeline(_device, sky.pipeline, nullptr);
-		vkDestroyPipeline(_device, gradient.pipeline, nullptr);
-	});
-}
 
 void VulkanEngine::immediate_submit(std::function<void(VkCommandBuffer cmd)>&& function)
 {

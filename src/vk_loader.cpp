@@ -468,7 +468,6 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGltf(VulkanEngine* engine, std::s
                         newvtx.normal = { 1, 0, 0 };
                         newvtx.color = glm::vec4{ 1.f };
                         newvtx.uv = glm::vec2(0.0f);
-						newvtx.materialIndex = primMaterial;
                         vertices[initial_vtx + index] = newvtx;
                     });
             }
