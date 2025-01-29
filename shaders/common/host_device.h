@@ -25,6 +25,7 @@
 #include <glm/glm.hpp>
 // GLSL Type
 using vec2  = glm::vec2;
+using ivec2 = glm::ivec2;
 using uvec2 = glm::uvec2;
 using vec3  = glm::vec3;
 using vec4  = glm::vec4;
@@ -72,6 +73,7 @@ struct GlobalUniforms
 	mat4 viewProj;     // Camera view * projection
 	mat4 viewInverse;  // Camera inverse view matrix
 	mat4 projInverse;  // Camera inverse projection matrix
+	ivec2 viewPort;
 };
 
 

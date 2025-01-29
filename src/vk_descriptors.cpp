@@ -268,6 +268,24 @@ void DescriptorWriter::write_texture_array(int binding, const std::vector<VkImag
     writes.push_back(write);
 }
 
+
+void DescriptorWriter::write_cube_map(int binding, const CubeMap& image, VkImageLayout layout, VkDescriptorType type) {
+    VkDescriptorImageInfo& info = imageInfos.emplace_back(VkDescriptorImageInfo{
+        .sampler = image.sampler,
+        .imageView = image.image.imageView,
+        .imageLayout = layout,
+        });
+    VkWriteDescriptorSet write = { .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET };
+
+    write.dstBinding = binding;
+    write.dstSet = VK_NULL_HANDLE; //left empty for now until we need to write it
+    write.descriptorCount = 1;
+    write.descriptorType = type;
+    write.pImageInfo = &info;
+
+    writes.push_back(write);
+}
+
 void DescriptorWriter::write_image(int binding,VkImageView image, VkSampler sampler,  VkImageLayout layout, VkDescriptorType type)
 {
     VkDescriptorImageInfo& info = imageInfos.emplace_back(VkDescriptorImageInfo{

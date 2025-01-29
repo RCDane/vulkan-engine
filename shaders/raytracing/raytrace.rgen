@@ -32,6 +32,13 @@ void main()
   uint  rayFlags = gl_RayFlagsOpaqueEXT;
   float tMin     = 0.001;
   float tMax     = 10000.0;
+  prd.depth       = 0;
+  prd.hitValue    = vec3(0);
+  prd.attenuation = vec3(1.f, 1.f, 1.f);
+  prd.done        = 1;
+  prd.rayOrigin   = origin.xyz;
+  prd.rayDir      = direction.xyz;
+  prd.currentIoR  = 1.0;
   traceRayEXT(topLevelAS,     // acceleration structure
               rayFlags,       // rayFlags
               0xFF,           // cullMask
@@ -44,6 +51,6 @@ void main()
               tMax,           // ray max range
               0               // payload (location = 0)
   );
-
+  
   imageStore(image, ivec2(gl_LaunchIDEXT.xy), vec4(prd.hitValue, 1.0));
 }
