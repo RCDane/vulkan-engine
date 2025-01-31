@@ -12,9 +12,13 @@
 #include <shadows.h>
 #include <raytracing.h>
 #include "vk_mem_alloc.h"  // No #define VMA_IMPLEMENTATION here
+#include "iridescence.h"
 
+// forward declarations
 struct ShadowImage;
 struct ShadowPipeline;
+class IridescenceHandler;
+
 
 struct DeletionQueue
 {
@@ -73,6 +77,8 @@ struct ComputePushConstants {
 	glm::vec4 data3;
 	glm::vec4 data4;
 };
+
+
 struct PointLight {
 	glm::vec3 position;
 	float intensity;
@@ -109,6 +115,7 @@ struct GlobalUniforms
 	glm::mat4 viewProj;     // Camera view * projection
 	glm::mat4 viewInverse;  // Camera inverse view matrix
 	glm::mat4 projInverse;  // Camera inverse projection matrix
+	glm::ivec2 resolution;  // Framebuffer resolution
 };
 
 struct GLTFMetallic_Roughness {
@@ -150,6 +157,8 @@ public:
 
 	bool usePCF = false;
 
+
+	CubeMap _cubeMap;
 	VkInstance _instance;
 	VkDebugUtilsMessengerEXT _debug_messenger;
 	VkPhysicalDevice _chosenGPU;
@@ -186,8 +195,8 @@ public:
 	VkDescriptorSet _drawImageDescriptors;
 	VkDescriptorSetLayout _drawImageDescriptorLayout;
 
-	VkPipeline _gradientPipeline;
-	VkPipelineLayout _gradientPipelineLayout;
+	VkPipeline _environmentBackgroundPipeline;
+	VkPipelineLayout _environmentBackgroundLayout;
 
 	// immediate submit structures
     VkFence _immFence;
@@ -226,6 +235,8 @@ public:
 
 	MaterialInstance defaultData;
 	GLTFMetallic_Roughness metalRoughMaterial;
+	VkDescriptorSet environmentMapDescriptor;
+
 
 	std::vector<VkImageView> textureImages;
 	std::vector<VkSampler> textureSamplers;
@@ -236,7 +247,7 @@ public:
     std::unordered_map<std::string, std::shared_ptr<Node>> loadedNodes;
 
 	VkDescriptorSetLayout _singleImageDescriptorLayout;
-	VkDescriptorSetLayout _gpuSceneDataDescriptorLayout;
+	VkDescriptorSetLayout _gpuSceneDataDescriptorLayout; // Vertex data
 	VkDescriptorSetLayout _lightingDescriptorLayout;
 	VkDescriptorSetLayout _textureArrayLayout;
 
@@ -279,6 +290,8 @@ public:
 
 	GPUMeshBuffers uploadMesh(std::span<uint32_t> indices, std::span<Vertex>, std::span<uint32_t> raytracingIndices = {});
 	AllocatedImage create_image(VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped = false);
+	AllocatedImage create_cube_map_image(VkExtent3D size, VkFormat format, VkImageUsageFlags usage);
+
 	AllocatedImage create_image(void* data, VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped = false);
 	void destroy_image(const AllocatedImage& img);
 	
@@ -297,6 +310,7 @@ private:
 	void init_commands();
 	void init_sync_structures();
 	void init_timestamp_queries();
+	void init_background_pipelines();
 	void retrieve_timestamp_results(uint32_t frameIndex);
 	// swapchain
 	void create_swapchain(uint32_t width, uint32_t height);
@@ -306,6 +320,8 @@ private:
 	void draw_geometry(VkCommandBuffer cmd);
 
 	void draw_shadows(VkCommandBuffer cmd);
+	
+	void draw_environment(VkCommandBuffer cmd);
 
 	void draw_imgui(VkCommandBuffer cmd, VkImageView targetImageView);
 

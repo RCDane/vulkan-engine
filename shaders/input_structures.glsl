@@ -19,6 +19,13 @@ layout(set = 1, binding = 0, scalar) uniform GLTFMaterialData{
 	int colorIdx;
 	int normalIdx;
 	int metalIdx;
+	// int padding; // actually needs padding here normally
+
+	// for gamejam
+	int isIridescent;
+	float iridescenceFactor;
+	float iridescenceThickness;
+	float iridescenceIoR;
 	int padding;
 } materialData;
 
