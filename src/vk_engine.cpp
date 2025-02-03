@@ -39,53 +39,12 @@
 #include <filesystem>
 #include <iostream>
 
-constexpr bool bUseValidationLayers = false;
+constexpr bool bUseValidationLayers = true;
 
 
 VulkanEngine* loadedEngine = nullptr;
 
-// Temporary function for turning gltf objects to bubbles.
-void MakeIridescent(VulkanEngine* engine,LoadedGLTF& model, float factor, float thickness, float ior) {
-	DescriptorWriter writer;
 
-	for (auto& [k, v] : model.materials) {
-		MaterialInstance data = v->data;
-		data.data->isIridescent = true;
-		data.data->iridescenceThickness = thickness;
-		data.data->iridescenceIoR = ior;
-		data.data->iridescenceFactor = factor;
-
-
-		// upload data
-		AllocatedBuffer buffer = create_buffer(
-			&engine->_device,
-			&engine->_allocator,
-			sizeof(MaterialConstants),
-			VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-			VMA_MEMORY_USAGE_CPU_TO_GPU
-		);
-		void* mappedData = nullptr;
-
-		// Map and write GPUSceneData
-		VkResult result = vmaMapMemory(engine->_allocator, buffer.allocation, &mappedData);
-		if (result != VK_SUCCESS) {
-			throw std::runtime_error("Failed to map memory for GPU scene data buffer!");
-		}
-		std::memcpy(mappedData, &data.data, sizeof(MaterialConstants));
-		vmaUnmapMemory(engine->_allocator, buffer.allocation);
-
-
-
-
-
-
-		writer.write_buffer(0, buffer.buffer, sizeof(MaterialConstants), 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
-
-		writer.update_set(engine->_device, data.materialSet);
-		writer.clear();
-	}
-	
-}
 
 
 VulkanEngine& VulkanEngine::Get() { return *loadedEngine; }
@@ -144,17 +103,16 @@ void VulkanEngine::init()
 
 
 
-	std::string spherePath = { "../assets/simple_sphere.glb"};
-	auto sphereFile = loadGltf(this, spherePath);
+	//std::string spherePath = { "../assets/simple_sphere.glb"};
+	//auto sphereFile = loadGltf(this, spherePath);
 
-	assert(sphereFile.has_value());
-	
+	//assert(sphereFile.has_value());
+	//
 
-	loadedScenes["sphere"] = *sphereFile;
-	loadedScenes["sphere"]->rootTransform = glm::scale(glm::vec3(10.0f)) * loadedScenes["sphere"]->rootTransform;
-	loadedScenes["sphere"]->rootTransform = glm::translate(glm::vec3(0.0f, 20.0f, 0.0f)) * loadedScenes["sphere"]->rootTransform;
+	//loadedScenes["sphere"] = *sphereFile;
+	//loadedScenes["sphere"]->rootTransform = glm::scale(glm::vec3(10.0f)) * loadedScenes["sphere"]->rootTransform;
+	//loadedScenes["sphere"]->rootTransform = glm::translate(glm::vec3(0.0f, 20.0f, 0.0f)) * loadedScenes["sphere"]->rootTransform;
 
-	MakeIridescent(this, *loadedScenes["sphere"], 1.5, 2000.0, 3.5);
 
 	
 
@@ -171,11 +129,11 @@ void VulkanEngine::init()
 	//loadedScenes["helmet"]->rootTransform = glm::scale(glm::vec3(10.0f)) * loadedScenes["helmet"]->rootTransform;
 	//loadedScenes["helmet"]->rootTransform = glm::translate(glm::vec3(0.0f, 20.0f, 0.0f)) * loadedScenes["helmet"]->rootTransform;
 
-	//std::string sponzaPath = { "../assets/sponza.glb" };
-	//auto sponzaFile = loadGltf(this, sponzaPath);
-	//assert(sponzaFile.has_value());
-	//loadedScenes["sponza"] = *sponzaFile;
-	//loadedScenes["sponza"]->rootTransform = glm::scale(glm::vec3(.1f)) * loadedScenes["sponza"]->rootTransform;
+	std::string sponzaPath = { "../assets/sponza.glb" };
+	auto sponzaFile = loadGltf(this, sponzaPath);
+	assert(sponzaFile.has_value());
+	loadedScenes["sponza"] = *sponzaFile;
+	loadedScenes["sponza"]->rootTransform = glm::scale(glm::vec3(.1f)) * loadedScenes["sponza"]->rootTransform;
 
 
 
@@ -198,7 +156,6 @@ void VulkanEngine::init()
 	loadedScenes["dragon"] = *dragonFile;
 	loadedScenes["dragon"]->rootTransform = glm::scale(glm::vec3(30.0f)) * loadedScenes["dragon"]->rootTransform;
 	loadedScenes["dragon"]->rootTransform = glm::translate(glm::vec3(20.0f, 10.0f, 20.0f)) * loadedScenes["dragon"]->rootTransform;
-	MakeIridescent(this, *loadedScenes["dragon"], 1.5, 2000.0, 3.5);
 
 
 
@@ -888,6 +845,7 @@ void VulkanEngine::init_vulkan()
 	features12.bufferDeviceAddressCaptureReplay = true;
 	features12.bufferDeviceAddress = true;
 	features12.hostQueryReset = true;
+	features12.timelineSemaphore = true;
 
 	
 	VkPhysicalDeviceVulkan11Features features11{ .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES };
@@ -1432,7 +1390,7 @@ GPUMeshBuffers VulkanEngine::uploadMesh(
 
 	// Create index buffer
 	newSurface.indexBuffer = create_buffer(&_device, &_allocator,
-		indexBufferSize +20, VK_BUFFER_USAGE_INDEX_BUFFER_BIT
+		indexBufferSize, VK_BUFFER_USAGE_INDEX_BUFFER_BIT
 		| VK_BUFFER_USAGE_TRANSFER_DST_BIT
 		| VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
 		| VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR,
@@ -1648,15 +1606,6 @@ void VulkanEngine::init_default_data(){
 	
 	_shadowImage = std::make_unique<ShadowImage>();
 	_shadowImage->prepare_image(shadowExtent, this);
-
-	
-
-	//// TODO: Should do something about this?
-	//_imgui_shadow_descriptor =  
-	//	(VkDescriptorSet)ImGui_ImplVulkan_AddTexture(
-	//	_shadowImage.sampler, 
-	//	_shadowImage.image.imageView, 
-	//	VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
 
 	VkSamplerCreateInfo sampl = {.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
@@ -1909,9 +1858,6 @@ void GLTFMetallic_Roughness::build_pipelines(VulkanEngine* engine)
 
     DescriptorLayoutBuilder layoutBuilder;
     layoutBuilder.add_binding(0,VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
- //   layoutBuilder.add_binding(1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
-	//layoutBuilder.add_binding(2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
-	//layoutBuilder.add_binding(3, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 
 
     materialLayout = layoutBuilder.build(engine->_device, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);

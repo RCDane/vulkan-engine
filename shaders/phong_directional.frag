@@ -152,10 +152,7 @@ void main()
        N = normalize(TBN * textureNormal);
     }
     
-    if (materialData.isIridescent == 1){
-        outFragColor = texture(cubeMap, N);
-        return;
-    }
+
     
     // Light direction (from fragment to light)
     vec3 L = normalize(-directionalLight.direction);

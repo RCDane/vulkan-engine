@@ -105,15 +105,10 @@ struct MaterialConstants {
     int colorIdx;
     int normalIdx;
     int metalIdx;
-    //int padding;
-    //glm::vec4 padding2;
-    int isIridescent;
-    float iridescenceFactor;
-    float iridescenceThickness;
-    float iridescenceIoR;
     int padding;
+    glm::vec4 padding2;
 };
-static_assert(sizeof(MaterialConstants) == 64, "MaterialConstants struct size should be 64 bytes.");
+static_assert(sizeof(MaterialConstants) == 64, "MaterialConstants struct size should be 48 bytes.");
 
 // push constants for our mesh object draws
 struct GPUDrawPushConstants {
