@@ -31,8 +31,6 @@ add_executable(engine
   alignment.hpp
   vk_buffers.cpp
   vk_buffers.h
-  iridescence.h
-  iridescence.cpp
   )
 
 set_property(TARGET engine PROPERTY CXX_STANDARD 20)

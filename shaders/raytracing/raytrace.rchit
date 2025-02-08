@@ -7,9 +7,7 @@
 #extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
 #extension GL_EXT_buffer_reference2 : require
 
-#include "../common/raycommon.glsl"
-#include "../common/wavefront.glsl"
-
+#include "../common/host_device.h"
 hitAttributeEXT vec2 attribs;
  
 // clang-format off
@@ -30,7 +28,7 @@ layout(set = 1, binding=4) uniform samplerCube cubeMap;
 
 
 layout(push_constant) uniform _PushConstantRay { PushConstantRay pcRay; };
-// clang-format on
+
 vec3 getColorFromInstanceIndex(int index) {
 	// Normalize the index to a range [0, 1]
 	float normalizedIndex = float(index % 256) / 255.0;

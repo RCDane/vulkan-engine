@@ -6,7 +6,6 @@
 #include "vk_descriptors.h"
 #include <unordered_map>
 #include <filesystem>
-#include "iridescence.h"
 struct GLTFMaterial {
 	MaterialInstance data;
 };

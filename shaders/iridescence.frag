@@ -17,6 +17,7 @@ layout (location = 5) in mat3 inTBN;
 
 layout (location = 0) out vec4 outFragColor;
 
+layout(set = 1, binding = 0, scalar) uniform _GLTFMaterialData {GLTFMaterialData materialData;};
 layout (set = 3, binding = 0) uniform DirectionalLight {
 	vec3 direction;
 	float intensity;

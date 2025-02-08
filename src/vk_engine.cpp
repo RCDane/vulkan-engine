@@ -812,7 +812,7 @@ void VulkanEngine::init_vulkan()
 		.require_api_version(1, 3, 0)
 		//.add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_BEST_PRACTICES_EXT)
 		.add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT)
-		.add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT) // Add validation features
+		//.add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT) // Add validation features
 		.build();
 
     vkb::Instance vkb_inst = inst_ret.value();
@@ -1138,7 +1138,9 @@ void VulkanEngine::init_descriptors(){
 			VK_SHADER_STAGE_VERTEX_BIT | // Might not be needed in Vertex shader. 
 			VK_SHADER_STAGE_RAYGEN_BIT_KHR |
 			VK_SHADER_STAGE_FRAGMENT_BIT |
-			VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR);
+			VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR,
+			NULL,
+			VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT);
 
 	}
 	
@@ -1146,14 +1148,13 @@ void VulkanEngine::init_descriptors(){
 
 
 	_drawImageDescriptors = updatingGlobalDescriptorAllocator.allocate(_device,_drawImageDescriptorLayout);	
-	_textureArrayDescriptor = globalDescriptorAllocator.allocate(_device, _textureArrayLayout);
+	_textureArrayDescriptor = updatingGlobalDescriptorAllocator.allocate(_device, _textureArrayLayout);
 
 
 
 	//make sure both the descriptor allocator and the new layout get cleaned up properly
 	_mainDeletionQueue.push_function([&]() {
 		globalDescriptorAllocator.destroy_pools(_device);
-
 		vkDestroyDescriptorSetLayout(_device, _drawImageDescriptorLayout, nullptr);
 	});
 
