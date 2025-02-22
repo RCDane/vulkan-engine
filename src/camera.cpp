@@ -54,3 +54,21 @@ glm::mat4 Camera::getRotationMatrix()
 
     return glm::toMat4(yawRotation) * glm::toMat4(pitchRotation);
 }
+
+glm::mat4 Camera::getProjectionMatrix(bool raytracing) {
+    float Near = raytracing ? zNear : zFar;
+    float Far = raytracing ? zFar: zNear;
+
+    
+    if (isPerspective) {
+        glm::mat4 perspective = glm::perspective(fov, aspectRatio, Near, Far);
+        perspective[1, 1] *= -1.0f;
+        return perspective;
+    }
+    else if (isOrtographic) {
+        glm::mat4 ortho = glm::orthoRH_ZO(-xMag, xMag, -yMag, yMag, Near, Far);
+        ortho[1, 1] *= -1.0f;
+
+        return ortho;
+    }
+}

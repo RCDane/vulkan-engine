@@ -6,6 +6,7 @@
 #include "vk_descriptors.h"
 #include <unordered_map>
 #include <filesystem>
+#include <camera.h>
 struct GLTFMaterial {
 	MaterialInstance data;
 };
@@ -47,7 +48,7 @@ struct LoadedGLTF : public IRenderable {
     std::vector<std::shared_ptr<Node>> topNodes;
 
     std::vector<VkSampler> samplers;
-
+    std::shared_ptr<Camera> camera = NULL;
     DescriptorAllocatorGrowable descriptorPool;
 
     AllocatedBuffer materialDataBuffer;

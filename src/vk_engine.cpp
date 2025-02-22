@@ -91,11 +91,7 @@ void VulkanEngine::init()
 
 
 
-	mainCamera.velocity = glm::vec3(0.f);
- 	mainCamera.position = glm::vec3(0.f, 0.f, 0.f);
-	
-	mainCamera.pitch = 0;
-	mainCamera.yaw = 0;
+
 
 
 	_cubeMap = load_cube_map(this, "../assets/skybox");
@@ -119,23 +115,32 @@ void VulkanEngine::init()
 
 
 
-	//std::string helmetPath = { "../assets/DamagedHelmet/glTF-Binary/DamagedHelmet.glb"};
-	//std::optional<std::shared_ptr<LoadedGLTF>> helmetFile = loadGltf(this, helmetPath);
+	std::string helmetPath = { "../assets/DamagedHelmet/glTF-Binary/DamagedHelmet.glb"};
+	std::optional<std::shared_ptr<LoadedGLTF>> helmetFile = loadGltf(this, helmetPath);
 
-	//assert(helmetFile.has_value());
-	//
+	assert(helmetFile.has_value());
+	
 
-	//loadedScenes["helmet"] = *helmetFile;
-	//loadedScenes["helmet"]->rootTransform = glm::scale(glm::vec3(10.0f)) * loadedScenes["helmet"]->rootTransform;
-	//loadedScenes["helmet"]->rootTransform = glm::translate(glm::vec3(0.0f, 20.0f, 0.0f)) * loadedScenes["helmet"]->rootTransform;
+	loadedScenes["helmet"] = *helmetFile;
+	loadedScenes["helmet"]->rootTransform = glm::scale(glm::vec3(10.0f)) * loadedScenes["helmet"]->rootTransform;
+	loadedScenes["helmet"]->rootTransform = glm::translate(glm::vec3(0.0f, 20.0f, 0.0f)) * loadedScenes["helmet"]->rootTransform;
 
 	std::string sponzaPath = { "../assets/sponza.glb" };
 	auto sponzaFile = loadGltf(this, sponzaPath);
 	assert(sponzaFile.has_value());
 	loadedScenes["sponza"] = *sponzaFile;
-	loadedScenes["sponza"]->rootTransform = glm::scale(glm::vec3(.1f)) * loadedScenes["sponza"]->rootTransform;
 
+	if (loadedScenes["sponza"]->camera != NULL) {
+		mainCamera = loadedScenes["sponza"]->camera;
+	}
+	else {
+		mainCamera = std::make_shared<Camera>();
+		mainCamera->velocity = glm::vec3(0.f);
+		mainCamera->position = glm::vec3(0.f, 0.f, 0.f);
 
+		mainCamera->pitch = 0;
+		mainCamera->yaw = 0;
+	}
 
 
 
@@ -493,7 +498,7 @@ void VulkanEngine::draw_geometry(VkCommandBuffer cmd)
 	opaque_draws.clear();
 	opaque_draws.reserve(mainDrawContext.OpaqueSurfaces.size());
 
-	glm::mat4 view = mainCamera.getViewMatrix();
+	glm::mat4 view = mainCamera->getViewMatrix();
 	
 
 	for (uint32_t i = 0; i < mainDrawContext.OpaqueSurfaces.size(); i++) {
@@ -720,7 +725,7 @@ void VulkanEngine::run()
             // close the window when user alt-f4s or clicks the X button
             if (e.type == SDL_QUIT)
                 bQuit = true;
-		    mainCamera.processSDLEvent(e);
+		    mainCamera->processSDLEvent(e);
 
 
             if (e.type == SDL_WINDOWEVENT) {
@@ -2010,40 +2015,42 @@ void VulkanEngine::update_scene()
 
 	}
 
-	mainCamera.update();
+	mainCamera->update();
 
-	glm::mat4 view = mainCamera.getViewMatrix();
+	glm::mat4 view = mainCamera->getViewMatrix();
+	glm::mat4 rasterizationProjection = mainCamera->getProjectionMatrix(false);
+	glm::mat4 rayTracingProjection = mainCamera->getProjectionMatrix(true);
+
 	// Corrected camera projection with near < far
-	glm::mat4 projection = glm::perspective(
-		glm::radians(70.f),
-		(float)_windowExtent.width / (float)_windowExtent.height,
-		10000.f,    // Far plane,
-		0.1f      // Near plane
-	);
+	//glm::mat4 projection = glm::perspective(
+	//	glm::radians(70.f),
+	//	(float)_windowExtent.width / (float)_windowExtent.height,
+	//	10000.f,    // Far plane,
+	//	0.1f      // Near plane
+	//);
 
 
-	glm::mat4 rayProjection = glm::perspective(
-		glm::radians(70.f),
-		(float)_windowExtent.width / (float)_windowExtent.height,
-		0.1f,      // Near plane
-		10000.f    // Far plane,
-	);
-	rayProjection[1][1] *= -1;
+	//glm::mat4 rayProjection = glm::perspective(
+	//	glm::radians(70.f),
+	//	(float)_windowExtent.width / (float)_windowExtent.height,
+	//	0.1f,      // Near plane
+	//	10000.f    // Far plane,
+	//);
+	//rayProjection[1][1] *= -1;
 
 	
 
-	sceneData.proj = projection;
+	sceneData.proj = rasterizationProjection;
 	// Invert the Y direction on projection matrix to match OpenGL and glTF conventions
-	sceneData.proj[1][1] *= -1;
 	sceneData.view = view;
 	sceneData.viewproj = sceneData.proj * sceneData.view;
-	sceneData.cameraPosition = glm::vec4(mainCamera.position, 1.0f);
+	sceneData.cameraPosition = glm::vec4(mainCamera->position, 1.0f);
 
 	// Directly write to the mapped uniform buffer
 	if (_raytracingHandler.m_uniformMappedPtr) {
 		_raytracingHandler.m_uniformMappedPtr->viewProj = sceneData.viewproj;
 		_raytracingHandler.m_uniformMappedPtr->viewInverse = glm::inverse(view);
-		_raytracingHandler.m_uniformMappedPtr->projInverse = glm::inverse(rayProjection);
+		_raytracingHandler.m_uniformMappedPtr->projInverse = glm::inverse(rayTracingProjection);
 		_raytracingHandler.m_uniformMappedPtr->resolution = glm::ivec2(_windowExtent.width, _windowExtent.height);
 		// Update additional uniforms as needed
 	}
@@ -2130,24 +2137,12 @@ void VulkanEngine::draw_shadows(VkCommandBuffer cmd) {
 	glm::mat4 lightSpaceMatrix = lightProjection * lightView;
 
 	GPUSceneData shadowSceneData = {};
-	/*shadowSceneData.view = lightView;
-	shadowSceneData.proj = lightProjection;
-	shadowSceneData.proj[1][1] *= -1;
-
-	shadowSceneData.viewproj = lightSpaceMatrix;
-	*/
-	mainCamera.update();
 
 	shadowSceneData.proj = lightProjection;
 
-		//// invert the Y direction on projection matrix so that we are more similar
-		//// to opengl and gltf axis
 	shadowSceneData.view = lightView;
 	shadowSceneData.viewproj = lightSpaceMatrix;
-	//shadowSceneData.cameraPosition = glm::vec4(shadow.positions,1.0f);
-	//shadowSceneData.proj[1][1] *= -1;
 
-// Map memory and write the data for the buffer
 	void* mappedData = nullptr;
 	VkResult result = vmaMapMemory(_allocator, gpuShadowSceneDataBuffer.allocation, &mappedData);
 	if (result != VK_SUCCESS) {

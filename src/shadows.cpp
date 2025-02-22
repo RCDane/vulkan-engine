@@ -183,11 +183,11 @@ DirectionalShadow prepare_directional_shadow(VulkanEngine* engine, DrawContext s
 	
 	float offset = (far - near);
 	float correctedFar = (far - near);
-	glm::mat4 projectionMatrix = glm::orthoRH_ZO(left, right, bottom, top, 0.001f, (correctedFar+1.0f)*1.1f);
+	glm::mat4 projectionMatrix = glm::orthoRH_ZO(left, right, bottom, top, 0.001f, (correctedFar+1.0f)*1.5f);
 	
 
 
-	glm::vec3 eyePosition =  direction * (near*1.1f);
+	glm::vec3 eyePosition =  direction * (near);
 	glm::vec3 lookAtPosition = direction + direction * offset;
 	viewMatrix = glm::lookAt(eyePosition, eyePosition + direction, newUp);
 	engine->_directionalLighting.lightView =  projectionMatrix* viewMatrix;

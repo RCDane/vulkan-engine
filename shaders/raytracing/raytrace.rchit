@@ -8,6 +8,7 @@
 #extension GL_EXT_buffer_reference2 : require
 
 #include "../common/host_device.h"
+#include "../common/PBR_functions.glsl"
 hitAttributeEXT vec2 attribs;
  
 // clang-format off
@@ -121,7 +122,8 @@ void main()
 
 	// Roughness and metallic factors
 	float roughness = mat.metal_rough_factors.y;
-	float metallic = mat.metal_rough_factors.x;  
+	float metallic = mat.metal_rough_factors.x;
+	
 	// If a metal roughness texture is bound
 	if (mat.metalIdx != 1){
 		// https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#_material_pbrmetallicroughness_metallicroughnesstexture
@@ -183,30 +185,74 @@ void main()
 
 		if(isShadowed)
 		{
-		attenuation = 0.3;
+			attenuation = 0.3;
 		}
 		else
 		{
-		// Specular
-		// Specular component
-		float specAngle = max(dot(worldNrm, H), 0.0);
-		float spec = pow(specAngle, shininess);
+			// Specular
+			// Specular component
+			float specAngle = max(dot(worldNrm, H), 0.0);
+			float spec = pow(specAngle, shininess);
 
-		// Specular color (adjusted by metallic factor)
-		vec3 specularColor = mix(vec3(0.04), baseColor, metallic);
-		specular = spec * lightColor * specularColor;
+			// Specular color (adjusted by metallic factor)
+			vec3 specularColor = mix(vec3(0.04), baseColor, metallic);
+			specular = spec * lightColor * specularColor;
 		}
 	}
+	
+	// Perfect specular reflection
+	vec3 R = reflect(-V, worldNrm);
+	vec3 specularReflection = vec3(0);
+	if (prd.depth < 2){
+		float tMin   = 0.001;
+		float tMax   = 1000000000.0;
+		vec3  origin = gl_WorldRayOriginEXT + gl_WorldRayDirectionEXT * gl_HitTEXT;
+		vec3  rayDir = R;
+		uint  flags  = gl_RayFlagsNoneEXT;
+		prd.depth++;
+		prd.hitValue = vec3(0);
+		traceRayEXT(topLevelAS,  // acceleration structure
+					flags,       // rayFlags
+					0xFF,        // cullMask
+					0,           // sbtRecordOffset
+					0,           // sbtRecordStride
+					0,           // missIndex
+					origin,      // ray origin
+					tMin,        // ray min range
+					rayDir,      // ray direction
+					tMax,        // ray max range
+					0            // payload (location = 1)
+		);
+		// We should now have the color of the reflected light. The intensity of this light is based on the fresnel equation
+		vec3 F0 = mix(vec3(0.04), baseColor, metallic);
+    	float k = (roughness + 1.0) * (roughness + 1.0) / 8.0;  // Use direct lighting formula
 
-	// Apply shadow
+		float NDF = DistributionGGX(worldNrm, H, k);
+		float G   = GeometrySmith(worldNrm, V, L, k);
+		vec3 F = Schlick(normalize(worldNrm), normalize(V), 1.0, 2.0) * F0;
+		specularReflection = NDF * G  * F;
+		vec3 kS = F;
+
+		vec3 kD = vec3(1.0) - kS;
+		
+		kD *= 1.0 - metallic;
+
+		float NdotV = max(dot(worldNrm, V), 0.0001);
+		float NdotR = max(dot(worldNrm, R), 0.0001);
+		vec3 spec = F * G * NDF / max(4 * NdotV * NdotR, 0.001);
+		specularReflection = spec;
+		diffuse = kD  * lightColor * baseColor;	
+		prd.depth--;
+	}
+
+  	// Apply shadow
 	if (isShadowed)
 	{
 		diffuse  *= 0.0;
 		specular *= 0.0;
 	}
-  
 
-	vec3 result = ambient + diffuse + specular;
+	vec3 result = ambient + diffuse + specular + specularReflection;
 
 	prd.hitValue = result;
 }

@@ -21,6 +21,7 @@
 #include <fastgltf/glm_element_traits.hpp>
 #include <fastgltf/parser.hpp>
 #include <fastgltf/tools.hpp>
+#include <fastgltf/types.hpp>
 #include <vulkan/vulkan_core.h>
 #include <stdexcept>
 
@@ -143,6 +144,35 @@ VkSamplerMipmapMode extract_mipmap_mode(fastgltf::Filter filter)
 
 
 
+std::optional<Camera> loadCamera(fastgltf::Camera& camera) {
+    if (std::holds_alternative<fastgltf::Camera::Perspective>(camera.camera)) {
+        Camera newCamera;
+        auto gltfCam = std::get< fastgltf::Camera::Perspective>(camera.camera);
+        newCamera.isPerspective = true;
+        newCamera.zFar = gltfCam.zfar.has_value() ? gltfCam.zfar.value() : 0.0f;
+        newCamera.zNear = gltfCam.znear;
+        newCamera.fov = gltfCam.yfov;
+        newCamera.aspectRatio = gltfCam.aspectRatio.has_value() ? gltfCam.aspectRatio.value() : 1.0f;
+        return newCamera;
+    }
+    else if (std::holds_alternative<fastgltf::Camera::Orthographic>(camera.camera)) {
+        Camera newCamera;
+        auto gltfCam = std::get< fastgltf::Camera::Orthographic>(camera.camera);
+
+
+
+        newCamera.isOrtographic = true;
+        newCamera.xMag = gltfCam.xmag;
+        newCamera.yMag = gltfCam.ymag;
+        newCamera.zFar = gltfCam.zfar;
+        newCamera.zNear = gltfCam.znear;
+
+        return newCamera;
+    }
+}
+
+
+
 
 
 std::unordered_map<size_t, int> textureMap;
@@ -159,6 +189,7 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGltf(VulkanEngine* engine, std::s
     std::shared_ptr<LoadedGLTF> scene = std::make_shared<LoadedGLTF>();
     scene->creator = engine;
     LoadedGLTF& file = *scene.get();
+
 
     fastgltf::Parser parser {};
 
@@ -229,6 +260,22 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGltf(VulkanEngine* engine, std::s
     std::vector<std::shared_ptr<Node>> nodes;
     std::vector<AllocatedImage> images;
     std::vector<std::shared_ptr<GLTFMaterial>> materials;
+    
+    
+    bool cameraLoaded = false;
+    std::optional<Camera> camera; 
+    std::shared_ptr<Camera> loadedCamera;
+
+    if (gltf.cameras.size() > 0) {
+        auto camera = loadCamera(gltf.cameras[0]);
+        if (camera.has_value())
+        {
+            loadedCamera = std::make_shared<Camera>(camera.value());
+            cameraLoaded = true;
+        }
+    }
+    
+    
 
     // load all textures
     for (fastgltf::Image& image : gltf.images) {
@@ -578,8 +625,18 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGltf(VulkanEngine* engine, std::s
                            newNode->localTransform = tm * rm * sm;
                        } },
             node.transform);
-    }
 
+        if (node.cameraIndex.has_value()) {
+            loadedCamera->position = newNode->localTransform[3];
+            glm::quat rotation = glm::quat_cast(newNode->localTransform);
+            glm::vec3 eulerAngles = glm::eulerAngles(rotation);
+            loadedCamera->pitch = eulerAngles.x;
+            loadedCamera->yaw = -eulerAngles.y;
+        }
+    }
+    if (cameraLoaded) {
+        scene->camera = loadedCamera;
+    }
     // run loop again to setup transform hierarchy
     for (int i = 0; i < gltf.nodes.size(); i++) {
         fastgltf::Node& node = gltf.nodes[i];

@@ -255,7 +255,7 @@ public:
 	DirectionalShadow directionalShadow;
 	bool resize_requested; 
 	bool useRaytracing = true;
-    Camera mainCamera;
+    std::shared_ptr<Camera> mainCamera;
 
 
 	VkQueryPool _timestampQueryPool;          // Query pool for timestamps
