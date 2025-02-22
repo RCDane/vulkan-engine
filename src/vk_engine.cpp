@@ -44,17 +44,15 @@ constexpr bool bUseValidationLayers = false;
 
 VulkanEngine* loadedEngine = nullptr;
 
+
+
+
 VulkanEngine& VulkanEngine::Get() { return *loadedEngine; }
 void VulkanEngine::init()
 {
     // only one engine initialization is allowed with the application.
     assert(loadedEngine == nullptr);
     loadedEngine = this;
-
-	// Print current path
-	std::filesystem::path cwd = std::filesystem::current_path() / "filename.txt";
-
-	std::cout << cwd << std::endl;
 
     // We initialize SDL and create a window with it.
     SDL_Init(SDL_INIT_VIDEO);
@@ -74,7 +72,6 @@ void VulkanEngine::init()
 	SDL_RenderSetVSync(renderer, 0);
     init_vulkan();
 
-
     init_swapchain();
     
     init_commands();
@@ -82,6 +79,7 @@ void VulkanEngine::init()
     init_sync_structures();
 
 	init_descriptors();	
+	init_background_pipelines();
 
 	init_pipelines();
 
@@ -91,16 +89,34 @@ void VulkanEngine::init()
 
 	init_default_data();
 
-	mainCamera.velocity = glm::vec3(0.f);
- 	mainCamera.position = glm::vec3(0.f, 0.f, 0.f);
+
+
+
+
+
+	_cubeMap = load_cube_map(this, "../assets/skybox");
+
+
+
+
+	//std::string spherePath = { "../assets/simple_sphere.glb"};
+	//auto sphereFile = loadGltf(this, spherePath);
+
+	//assert(sphereFile.has_value());
+	//
+
+	//loadedScenes["sphere"] = *sphereFile;
+	//loadedScenes["sphere"]->rootTransform = glm::scale(glm::vec3(10.0f)) * loadedScenes["sphere"]->rootTransform;
+	//loadedScenes["sphere"]->rootTransform = glm::translate(glm::vec3(0.0f, 20.0f, 0.0f)) * loadedScenes["sphere"]->rootTransform;
+
+
 	
-	mainCamera.pitch = 0;
-	mainCamera.yaw = 0;
+
 
 
 
 	std::string helmetPath = { "../assets/DamagedHelmet/glTF-Binary/DamagedHelmet.glb"};
-	auto helmetFile = loadGltf(this, helmetPath);
+	std::optional<std::shared_ptr<LoadedGLTF>> helmetFile = loadGltf(this, helmetPath);
 
 	assert(helmetFile.has_value());
 	
@@ -113,11 +129,18 @@ void VulkanEngine::init()
 	auto sponzaFile = loadGltf(this, sponzaPath);
 	assert(sponzaFile.has_value());
 	loadedScenes["sponza"] = *sponzaFile;
-	loadedScenes["sponza"]->rootTransform = glm::scale(glm::vec3(.1f)) * loadedScenes["sponza"]->rootTransform;
 
+	if (loadedScenes["sponza"]->camera != NULL) {
+		mainCamera = loadedScenes["sponza"]->camera;
+	}
+	else {
+		mainCamera = std::make_shared<Camera>();
+		mainCamera->velocity = glm::vec3(0.f);
+		mainCamera->position = glm::vec3(0.f, 0.f, 0.f);
 
-
-
+		mainCamera->pitch = 0;
+		mainCamera->yaw = 0;
+	}
 
 
 
@@ -137,18 +160,29 @@ void VulkanEngine::init()
 	assert(dragonFile.has_value());
 	loadedScenes["dragon"] = *dragonFile;
 	loadedScenes["dragon"]->rootTransform = glm::scale(glm::vec3(30.0f)) * loadedScenes["dragon"]->rootTransform;
-	loadedScenes["dragon"]->rootTransform = glm::translate(glm::vec3(20.0f, 10.0f, 0.0f)) * loadedScenes["dragon"]->rootTransform;
-
-
+	loadedScenes["dragon"]->rootTransform = glm::translate(glm::vec3(20.0f, 10.0f, 20.0f)) * loadedScenes["dragon"]->rootTransform;
 
 
 
 
 
 	DescriptorWriter writer;
+
 	writer.write_texture_array(0, textureImages, textureSamplers, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+	writer.write_cube_map(1, _cubeMap, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 	writer.update_set(_device, _textureArrayDescriptor);
+	writer.clear();
 	_raytracingHandler.init_raytracing(this);
+
+
+
+	writer.write_image(0, _drawImage.imageView, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+	writer.write_cube_map(1, _cubeMap, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+
+	writer.update_set(_device, _drawImageDescriptors);
+
+	writer.clear();
+
 
 
 	update_scene();
@@ -353,6 +387,8 @@ void VulkanEngine::draw()
 	vkutil::transition_image(cmd, _drawImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
 
 
+	draw_environment(cmd);
+
 	if (useRaytracing) {
 
 		_raytracingHandler.raytrace(cmd, this);
@@ -462,7 +498,7 @@ void VulkanEngine::draw_geometry(VkCommandBuffer cmd)
 	opaque_draws.clear();
 	opaque_draws.reserve(mainDrawContext.OpaqueSurfaces.size());
 
-	glm::mat4 view = mainCamera.getViewMatrix();
+	glm::mat4 view = mainCamera->getViewMatrix();
 	
 
 	for (uint32_t i = 0; i < mainDrawContext.OpaqueSurfaces.size(); i++) {
@@ -486,9 +522,9 @@ void VulkanEngine::draw_geometry(VkCommandBuffer cmd)
 	
 	glm::vec4 clearColor = glm::vec4(0.1, 0.2, 0.4, 0.97);
 
-	VkClearValue clearValue = { {clearColor.r, clearColor.g, clearColor.b, clearColor.a} };
+	//VkClearValue clearValue = { {clearColor.r, clearColor.g, clearColor.b, clearColor.a} };
 	//begin a render pass  connected to our draw image
-	VkRenderingAttachmentInfo colorAttachment = vkinit::attachment_info(_drawImage.imageView, &clearValue , VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+	VkRenderingAttachmentInfo colorAttachment = vkinit::attachment_info(_drawImage.imageView, NULL , VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 	VkRenderingAttachmentInfo depthAttachment = vkinit::depth_attachment_info(_depthImage.imageView, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
 	
 
@@ -689,7 +725,7 @@ void VulkanEngine::run()
             // close the window when user alt-f4s or clicks the X button
             if (e.type == SDL_QUIT)
                 bQuit = true;
-		    mainCamera.processSDLEvent(e);
+		    mainCamera->processSDLEvent(e);
 
 
             if (e.type == SDL_WINDOWEVENT) {
@@ -781,7 +817,7 @@ void VulkanEngine::init_vulkan()
 		.require_api_version(1, 3, 0)
 		//.add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_BEST_PRACTICES_EXT)
 		.add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT)
-		.add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT) // Add validation features
+		//.add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT) // Add validation features
 		.build();
 
     vkb::Instance vkb_inst = inst_ret.value();
@@ -814,6 +850,7 @@ void VulkanEngine::init_vulkan()
 	features12.bufferDeviceAddressCaptureReplay = true;
 	features12.bufferDeviceAddress = true;
 	features12.hostQueryReset = true;
+	features12.timelineSemaphore = true;
 
 	
 	VkPhysicalDeviceVulkan11Features features11{ .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES };
@@ -858,6 +895,7 @@ void VulkanEngine::init_vulkan()
 		.add_required_extension_features(accelerationStructureFeatures)
 		.add_required_extension_features(rtPipelineFeatures)
 		.add_desired_extension("VK_EXT_debug_utils")
+		.add_required_extension("VK_EXT_descriptor_buffer")
 		.add_desired_extension("VK_EXT_validation_features")
 		.add_required_extension("VK_NV_ray_tracing_validation")
 		.add_required_extension_features(rtValidationFeatures)
@@ -1064,6 +1102,7 @@ void VulkanEngine::init_descriptors(){
 		
 		DescriptorLayoutBuilder builder;
 		builder.add_binding(0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, flags);
+		builder.add_binding(1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 		_drawImageDescriptorLayout = builder.build(_device, 
 			VK_SHADER_STAGE_COMPUTE_BIT, 
 			NULL, 
@@ -1072,6 +1111,7 @@ void VulkanEngine::init_descriptors(){
 	{
 		DescriptorLayoutBuilder builder;
 		builder.add_binding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+		
 		_gpuSceneDataDescriptorLayout = builder.build(_device, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
 	}
 	{
@@ -1093,15 +1133,19 @@ void VulkanEngine::init_descriptors(){
 
 	}
 	{
+		VkDescriptorBindingFlags flags = VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT;
+
 		// Descriptor layout for Texture array
 		DescriptorLayoutBuilder layoutBuilder;
-		layoutBuilder.add_binding(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 0, 1000);
-		
+		layoutBuilder.add_binding(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, flags, 1000);
+		layoutBuilder.add_binding(1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, flags, 1);
 		_textureArrayLayout = layoutBuilder.build(_device, 
 			VK_SHADER_STAGE_VERTEX_BIT | // Might not be needed in Vertex shader. 
 			VK_SHADER_STAGE_RAYGEN_BIT_KHR |
 			VK_SHADER_STAGE_FRAGMENT_BIT |
-			VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR);
+			VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR,
+			NULL,
+			VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT);
 
 	}
 	
@@ -1109,19 +1153,13 @@ void VulkanEngine::init_descriptors(){
 
 
 	_drawImageDescriptors = updatingGlobalDescriptorAllocator.allocate(_device,_drawImageDescriptorLayout);	
-	_textureArrayDescriptor = globalDescriptorAllocator.allocate(_device, _textureArrayLayout);
+	_textureArrayDescriptor = updatingGlobalDescriptorAllocator.allocate(_device, _textureArrayLayout);
 
-	DescriptorWriter writer;
-	writer.write_image(0, _drawImage.imageView, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 
-	writer.update_set(_device,_drawImageDescriptors);
-
-	writer.clear();
 
 	//make sure both the descriptor allocator and the new layout get cleaned up properly
 	_mainDeletionQueue.push_function([&]() {
 		globalDescriptorAllocator.destroy_pools(_device);
-
 		vkDestroyDescriptorSetLayout(_device, _drawImageDescriptorLayout, nullptr);
 	});
 
@@ -1358,7 +1396,7 @@ GPUMeshBuffers VulkanEngine::uploadMesh(
 
 	// Create index buffer
 	newSurface.indexBuffer = create_buffer(&_device, &_allocator,
-		indexBufferSize +20, VK_BUFFER_USAGE_INDEX_BUFFER_BIT
+		indexBufferSize, VK_BUFFER_USAGE_INDEX_BUFFER_BIT
 		| VK_BUFFER_USAGE_TRANSFER_DST_BIT
 		| VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
 		| VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR,
@@ -1575,15 +1613,6 @@ void VulkanEngine::init_default_data(){
 	_shadowImage = std::make_unique<ShadowImage>();
 	_shadowImage->prepare_image(shadowExtent, this);
 
-	
-
-	//// TODO: Should do something about this?
-	//_imgui_shadow_descriptor =  
-	//	(VkDescriptorSet)ImGui_ImplVulkan_AddTexture(
-	//	_shadowImage.sampler, 
-	//	_shadowImage.image.imageView, 
-	//	VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-
 
 	VkSamplerCreateInfo sampl = {.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
 
@@ -1696,6 +1725,43 @@ void VulkanEngine::resize_swapchain()
 	resize_requested = false;
 }
 
+
+AllocatedImage VulkanEngine::create_cube_map_image(VkExtent3D size, VkFormat format, VkImageUsageFlags usage)
+{
+	AllocatedImage newImage;
+	newImage.imageFormat = format;
+	newImage.imageExtent = size;
+
+	VkImageCreateInfo img_info = vkinit::image_create_info(format, usage, size);
+	img_info.mipLevels = 1;
+	img_info.flags |= VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
+	
+	// always allocate images on dedicated GPU memory
+	VmaAllocationCreateInfo allocinfo = {};
+	allocinfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
+	allocinfo.requiredFlags = VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+	// allocate and create the image
+	VK_CHECK(vmaCreateImage(_allocator, &img_info, &allocinfo, &newImage.image, &newImage.allocation, nullptr));
+
+	// if the format is a depth format, we will need to have it use the correct
+	// aspect flag
+	VkImageAspectFlags aspectFlag = VK_IMAGE_ASPECT_COLOR_BIT;
+	if (format == VK_FORMAT_D32_SFLOAT) {
+		aspectFlag = VK_IMAGE_ASPECT_DEPTH_BIT;
+	}
+
+	// build a image-view for the image
+	VkImageViewCreateInfo view_info = vkinit::imageview_create_info(format, newImage.image, aspectFlag);
+	view_info.viewType = VK_IMAGE_VIEW_TYPE_CUBE;
+	view_info.subresourceRange.layerCount = 6;
+
+	VK_CHECK(vkCreateImageView(_device, &view_info, nullptr, &newImage.imageView));
+
+	return newImage;
+}
+
+
 AllocatedImage VulkanEngine::create_image(VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped)
 {
 	AllocatedImage newImage;
@@ -1798,9 +1864,6 @@ void GLTFMetallic_Roughness::build_pipelines(VulkanEngine* engine)
 
     DescriptorLayoutBuilder layoutBuilder;
     layoutBuilder.add_binding(0,VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
- //   layoutBuilder.add_binding(1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
-	//layoutBuilder.add_binding(2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
-	//layoutBuilder.add_binding(3, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 
 
     materialLayout = layoutBuilder.build(engine->_device, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
@@ -1874,9 +1937,6 @@ MaterialInstance GLTFMetallic_Roughness::write_material(VulkanEngine *engine, Ma
 
 	writer.clear();
 	writer.write_buffer(0, resources.dataBuffer, sizeof(MaterialConstants), resources.dataBufferOffset, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
-	//writer.write_image(1, resources.colorImage.imageView, resources.colorSampler, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
-	//writer.write_image(2, resources.metalRoughImage.imageView, resources.metalRoughSampler, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
-	//writer.write_image(3, resources.normalImage.imageView, resources.normalSampler, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 
 	writer.update_set(engine->_device, matData.materialSet);
 
@@ -1955,40 +2015,43 @@ void VulkanEngine::update_scene()
 
 	}
 
-	mainCamera.update();
+	mainCamera->update();
 
-	glm::mat4 view = mainCamera.getViewMatrix();
+	glm::mat4 view = mainCamera->getViewMatrix();
+	glm::mat4 rasterizationProjection = mainCamera->getProjectionMatrix(false);
+	glm::mat4 rayTracingProjection = mainCamera->getProjectionMatrix(true);
+
 	// Corrected camera projection with near < far
-	glm::mat4 projection = glm::perspective(
-		glm::radians(70.f),
-		(float)_windowExtent.width / (float)_windowExtent.height,
-		10000.f,    // Far plane,
-		0.1f      // Near plane
-	);
+	//glm::mat4 projection = glm::perspective(
+	//	glm::radians(70.f),
+	//	(float)_windowExtent.width / (float)_windowExtent.height,
+	//	10000.f,    // Far plane,
+	//	0.1f      // Near plane
+	//);
 
 
-	glm::mat4 rayProjection = glm::perspective(
-		glm::radians(70.f),
-		(float)_windowExtent.width / (float)_windowExtent.height,
-		0.1f,      // Near plane
-		10000.f    // Far plane,
-	);
-	rayProjection[1][1] *= -1;
+	//glm::mat4 rayProjection = glm::perspective(
+	//	glm::radians(70.f),
+	//	(float)_windowExtent.width / (float)_windowExtent.height,
+	//	0.1f,      // Near plane
+	//	10000.f    // Far plane,
+	//);
+	//rayProjection[1][1] *= -1;
 
 	
 
-	sceneData.proj = projection;
+	sceneData.proj = rasterizationProjection;
 	// Invert the Y direction on projection matrix to match OpenGL and glTF conventions
-	sceneData.proj[1][1] *= -1;
 	sceneData.view = view;
 	sceneData.viewproj = sceneData.proj * sceneData.view;
-	sceneData.cameraPosition = glm::vec4(mainCamera.position, 1.0f);
+	sceneData.cameraPosition = glm::vec4(mainCamera->position, 1.0f);
 
 	// Directly write to the mapped uniform buffer
 	if (_raytracingHandler.m_uniformMappedPtr) {
 		_raytracingHandler.m_uniformMappedPtr->viewProj = sceneData.viewproj;
 		_raytracingHandler.m_uniformMappedPtr->viewInverse = glm::inverse(view);
-		_raytracingHandler.m_uniformMappedPtr->projInverse = glm::inverse(rayProjection);
+		_raytracingHandler.m_uniformMappedPtr->projInverse = glm::inverse(rayTracingProjection);
+		_raytracingHandler.m_uniformMappedPtr->resolution = glm::ivec2(_windowExtent.width, _windowExtent.height);
 		// Update additional uniforms as needed
 	}
 	if (!useRaytracing) {
@@ -2074,24 +2137,12 @@ void VulkanEngine::draw_shadows(VkCommandBuffer cmd) {
 	glm::mat4 lightSpaceMatrix = lightProjection * lightView;
 
 	GPUSceneData shadowSceneData = {};
-	/*shadowSceneData.view = lightView;
-	shadowSceneData.proj = lightProjection;
-	shadowSceneData.proj[1][1] *= -1;
-
-	shadowSceneData.viewproj = lightSpaceMatrix;
-	*/
-	mainCamera.update();
 
 	shadowSceneData.proj = lightProjection;
 
-		//// invert the Y direction on projection matrix so that we are more similar
-		//// to opengl and gltf axis
 	shadowSceneData.view = lightView;
 	shadowSceneData.viewproj = lightSpaceMatrix;
-	//shadowSceneData.cameraPosition = glm::vec4(shadow.positions,1.0f);
-	//shadowSceneData.proj[1][1] *= -1;
 
-// Map memory and write the data for the buffer
 	void* mappedData = nullptr;
 	VkResult result = vmaMapMemory(_allocator, gpuShadowSceneDataBuffer.allocation, &mappedData);
 	if (result != VK_SUCCESS) {
@@ -2150,6 +2201,86 @@ void VulkanEngine::draw_shadows(VkCommandBuffer cmd) {
 
 	vkCmdEndRendering(cmd);
 }
+
+
+void VulkanEngine::init_background_pipelines()
+{
+
+	VkPipelineLayoutCreateInfo computeLayout{};
+	computeLayout.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+	computeLayout.pNext = nullptr;
+	computeLayout.pSetLayouts = &_drawImageDescriptorLayout;
+	computeLayout.setLayoutCount = 1;
+
+	VkPushConstantRange pushConstant{};
+	pushConstant.offset = 0;
+	pushConstant.size = sizeof(GlobalUniforms);
+	pushConstant.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+
+	computeLayout.pPushConstantRanges = &pushConstant;
+	computeLayout.pushConstantRangeCount = 1;
+
+	VK_CHECK(vkCreatePipelineLayout(_device, &computeLayout, nullptr, &_environmentBackgroundLayout));
+
+
+	VkShaderModule backgroundShader;
+	if (!vkutil::load_shader_module("../shaders/spv/environment_map_background.comp.spv", _device, &backgroundShader)) {
+		fmt::print("Error when building the compute shader \n");
+	}
+
+
+
+	VkPipelineShaderStageCreateInfo stageinfo{};
+	stageinfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	stageinfo.pNext = nullptr;
+	stageinfo.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+	stageinfo.module = backgroundShader;
+	stageinfo.pName = "main";
+
+	VkComputePipelineCreateInfo computePipelineCreateInfo{};
+	computePipelineCreateInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+	computePipelineCreateInfo.pNext = nullptr;
+	computePipelineCreateInfo.layout = _environmentBackgroundLayout;
+	computePipelineCreateInfo.stage = stageinfo;
+
+	VK_CHECK(vkCreateComputePipelines(_device, VK_NULL_HANDLE, 1, &computePipelineCreateInfo, nullptr, &_environmentBackgroundPipeline));
+
+
+	//destroy structures properly
+	vkDestroyShaderModule(_device, backgroundShader, nullptr);
+	_mainDeletionQueue.push_function([=]() {
+		vkDestroyPipelineLayout(_device, _environmentBackgroundLayout, nullptr);
+		vkDestroyPipeline(_device, _environmentBackgroundPipeline, nullptr);
+		});
+}
+
+
+
+void  VulkanEngine::draw_environment(VkCommandBuffer cmd) {
+	//make a clear-color from frame number. This will flash with a 120 frame period.
+	VkClearColorValue clearValue;
+	float flash = std::abs(std::sin(_frameNumber / 120.f));
+	clearValue = { { 0.0f, 0.0f, flash, 1.0f } };
+
+	VkImageSubresourceRange clearRange = vkinit::image_subresource_range(VK_IMAGE_ASPECT_COLOR_BIT);
+
+	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _environmentBackgroundPipeline);
+
+	// bind the descriptor set containing the draw image for the compute pipeline
+	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _environmentBackgroundLayout, 0, 1, &_drawImageDescriptors, 0, nullptr);
+
+
+	
+
+
+	vkCmdPushConstants(cmd, _environmentBackgroundLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GlobalUniforms), _raytracingHandler.m_uniformMappedPtr);
+
+
+	// execute the compute pipeline dispatch. We are using 16x16 workgroup size so we need to divide by it
+	vkCmdDispatch(cmd, std::ceil(_drawExtent.width / 16.0), std::ceil(_drawExtent.height / 16.0), 1);
+}
+
+
 
 void VulkanEngine::init_timestamp_queries() {
 	VkQueryPoolCreateInfo queryPoolInfo{};

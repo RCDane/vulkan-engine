@@ -17,6 +17,7 @@ layout (location = 5) in mat3 inTBN;
 
 layout (location = 0) out vec4 outFragColor;
 
+layout(set = 1, binding = 0, scalar) uniform _GLTFMaterialData {GLTFMaterialData materialData;};
 layout (set = 3, binding = 0) uniform DirectionalLight {
 	vec3 direction;
 	float intensity;
@@ -31,6 +32,7 @@ layout(buffer_reference, std430) readonly buffer VertexBuffer{
 };
 
 layout(set = 4, binding=0) uniform sampler2D[] textureSamplers;
+layout(set = 4, binding=1) uniform samplerCube cubeMap;
 
 //push constants block
 layout( push_constant,scalar ) uniform constants
@@ -150,6 +152,8 @@ void main()
        textureNormal = textureNormal * 255./127. - 128./127.;
        N = normalize(TBN * textureNormal);
     }
+    
+
     
     // Light direction (from fragment to light)
     vec3 L = normalize(-directionalLight.direction);

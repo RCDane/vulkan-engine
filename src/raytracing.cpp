@@ -1105,13 +1105,15 @@ void RaytracingHandler::createDescriptorSetLayout(VulkanEngine* engine) {
 	builder.add_binding(1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, flags, 1000);
 	builder.add_binding(2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, flags, 1000);
 	builder.add_binding(3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,flags, 1000);
+	builder.add_binding(4, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, flags, 1);
 
 	VkDescriptorSetLayoutCreateFlags createFlags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
 	m_descSetLayout = builder.build(engine->_device,
 		VK_SHADER_STAGE_VERTEX_BIT |
 		VK_SHADER_STAGE_RAYGEN_BIT_KHR |
 		VK_SHADER_STAGE_FRAGMENT_BIT |
-		VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR,
+		VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR |
+		VK_SHADER_STAGE_MISS_BIT_KHR,
 		NULL, createFlags);
 
 	m_descSet = engine->updatingGlobalDescriptorAllocator.allocate(engine->_device, m_descSetLayout);
@@ -1279,7 +1281,8 @@ void RaytracingHandler::createRtPipeline(VulkanEngine* engine) {
 	// hit points of the camera rays, hence a recursion level of 2. This number should be kept as low
 	// as possible for performance reasons. Even recursive ray tracing should be flattened into a loop
 	// in the ray generation to avoid deep recursion.
-	rayPipelineInfo.maxPipelineRayRecursionDepth = 2;  // Ray depth
+	rayPipelineInfo.maxPipelineRayRecursionDepth = std::min(25u, m_rtProperties.maxRayRecursionDepth);  // Ray depth
+	std::cout << "max depth: " << rayPipelineInfo.maxPipelineRayRecursionDepth << std::endl;
 
 	rayPipelineInfo.layout = m_rtPipelineLayout;
 
@@ -1417,6 +1420,12 @@ void RaytracingHandler::raytrace(VkCommandBuffer cmd, VulkanEngine* engine) {
 		0,
 		VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
 		materialConstants.size());
+	writer.write_cube_map(
+		4, 
+		engine->_cubeMap, 
+		VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 
+		VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+
 	writer.update_set(engine->_device, uniformsDescriptor);
 
 	// Bind the ray tracing descriptor sets

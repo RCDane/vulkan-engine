@@ -4,10 +4,9 @@
 #extension GL_GOOGLE_include_directive : enable
 #extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
 
-#include "../common/raycommon.glsl"
-#include "../common/wavefront.glsl"
-
+#include "../common/host_device.h"
 layout(location = 0) rayPayloadInEXT hitPayload prd;
+layout(set = 1, binding=4) uniform samplerCube cubeMap;
 
 layout(push_constant) uniform _PushConstantRay
 {
@@ -16,5 +15,5 @@ layout(push_constant) uniform _PushConstantRay
 
 void main()
 {
-  prd.hitValue = pcRay.clearColor.xyz;
+  prd.hitValue = texture(cubeMap, normalize(gl_WorldRayDirectionEXT)).xyz;
 }

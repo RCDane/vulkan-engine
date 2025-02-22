@@ -42,7 +42,11 @@ struct AllocatedImage {
     VkFormat imageFormat;
     std::string name;
 };
-
+struct CubeMap {
+    AllocatedImage image;
+	VkSampler sampler;
+    std::string name;
+};
 
 struct AllocatedBuffer {
     VkBuffer buffer;
@@ -66,6 +70,9 @@ struct AccelKHR
 		vmaDestroyBuffer(*buffer.buffer.allocator, buffer.buffer.buffer, buffer.buffer.allocation);
 	}
 };
+
+
+
 
 struct alignas(16) Vertex {
     glm::vec3 position;    // 12 bytes
@@ -101,7 +108,7 @@ struct MaterialConstants {
     int padding;
     glm::vec4 padding2;
 };
-static_assert(sizeof(MaterialConstants) == 64, "MaterialConstants struct size should be 64 bytes.");
+static_assert(sizeof(MaterialConstants) == 64, "MaterialConstants struct size should be 48 bytes.");
 
 // push constants for our mesh object draws
 struct GPUDrawPushConstants {

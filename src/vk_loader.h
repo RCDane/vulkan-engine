@@ -6,7 +6,7 @@
 #include "vk_descriptors.h"
 #include <unordered_map>
 #include <filesystem>
-
+#include <camera.h>
 struct GLTFMaterial {
 	MaterialInstance data;
 };
@@ -48,7 +48,7 @@ struct LoadedGLTF : public IRenderable {
     std::vector<std::shared_ptr<Node>> topNodes;
 
     std::vector<VkSampler> samplers;
-
+    std::shared_ptr<Camera> camera = NULL;
     DescriptorAllocatorGrowable descriptorPool;
 
     AllocatedBuffer materialDataBuffer;
@@ -61,6 +61,8 @@ struct LoadedGLTF : public IRenderable {
 
     virtual void Draw(const glm::mat4& topMatrix, DrawContext& ctx);
 
+    // For gamejam only
+
 private:
 
     void clearAll();
@@ -68,3 +70,5 @@ private:
 
 std::optional<std::shared_ptr<LoadedGLTF>> loadGltf(VulkanEngine* engine, std::string_view filePath);
 
+
+CubeMap load_cube_map(VulkanEngine* engine, std::string_view filePath);

@@ -13,6 +13,7 @@ layout (location = 3) out vec3 outVPos;
 layout (location = 4) out vec4 lightFragPos;
 layout (location = 5) out mat3 outTBN;
 
+layout(set = 1, binding = 0, scalar) uniform _GLTFMaterialData {GLTFMaterialData materialData;};
 
 
 layout(buffer_reference, std430) readonly buffer VertexBuffer{ 

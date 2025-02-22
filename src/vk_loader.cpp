@@ -12,6 +12,7 @@
 #include "fastgltf/util.hpp"
 #include <iostream>
 
+#include "vk_initializers.h"
 #include "vk_engine.h"
 #include "vk_types.h"
 #include "vk_buffers.h"
@@ -20,6 +21,7 @@
 #include <fastgltf/glm_element_traits.hpp>
 #include <fastgltf/parser.hpp>
 #include <fastgltf/tools.hpp>
+#include <fastgltf/types.hpp>
 #include <vulkan/vulkan_core.h>
 #include <stdexcept>
 
@@ -106,6 +108,8 @@ std::optional<AllocatedImage> load_image(VulkanEngine* engine, fastgltf::Asset& 
 
 
 
+
+
 VkFilter extract_filter(fastgltf::Filter filter)
 {
     switch (filter) {
@@ -140,6 +144,35 @@ VkSamplerMipmapMode extract_mipmap_mode(fastgltf::Filter filter)
 
 
 
+std::optional<Camera> loadCamera(fastgltf::Camera& camera) {
+    if (std::holds_alternative<fastgltf::Camera::Perspective>(camera.camera)) {
+        Camera newCamera;
+        auto gltfCam = std::get< fastgltf::Camera::Perspective>(camera.camera);
+        newCamera.isPerspective = true;
+        newCamera.zFar = gltfCam.zfar.has_value() ? gltfCam.zfar.value() : 0.0f;
+        newCamera.zNear = gltfCam.znear;
+        newCamera.fov = gltfCam.yfov;
+        newCamera.aspectRatio = gltfCam.aspectRatio.has_value() ? gltfCam.aspectRatio.value() : 1.0f;
+        return newCamera;
+    }
+    else if (std::holds_alternative<fastgltf::Camera::Orthographic>(camera.camera)) {
+        Camera newCamera;
+        auto gltfCam = std::get< fastgltf::Camera::Orthographic>(camera.camera);
+
+
+
+        newCamera.isOrtographic = true;
+        newCamera.xMag = gltfCam.xmag;
+        newCamera.yMag = gltfCam.ymag;
+        newCamera.zFar = gltfCam.zfar;
+        newCamera.zNear = gltfCam.znear;
+
+        return newCamera;
+    }
+}
+
+
+
 
 
 std::unordered_map<size_t, int> textureMap;
@@ -156,6 +189,7 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGltf(VulkanEngine* engine, std::s
     std::shared_ptr<LoadedGLTF> scene = std::make_shared<LoadedGLTF>();
     scene->creator = engine;
     LoadedGLTF& file = *scene.get();
+
 
     fastgltf::Parser parser {};
 
@@ -226,6 +260,22 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGltf(VulkanEngine* engine, std::s
     std::vector<std::shared_ptr<Node>> nodes;
     std::vector<AllocatedImage> images;
     std::vector<std::shared_ptr<GLTFMaterial>> materials;
+    
+    
+    bool cameraLoaded = false;
+    std::optional<Camera> camera; 
+    std::shared_ptr<Camera> loadedCamera;
+
+    if (gltf.cameras.size() > 0) {
+        auto camera = loadCamera(gltf.cameras[0]);
+        if (camera.has_value())
+        {
+            loadedCamera = std::make_shared<Camera>(camera.value());
+            cameraLoaded = true;
+        }
+    }
+    
+    
 
     // load all textures
     for (fastgltf::Image& image : gltf.images) {
@@ -575,8 +625,18 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGltf(VulkanEngine* engine, std::s
                            newNode->localTransform = tm * rm * sm;
                        } },
             node.transform);
-    }
 
+        if (node.cameraIndex.has_value()) {
+            loadedCamera->position = newNode->localTransform[3];
+            glm::quat rotation = glm::quat_cast(newNode->localTransform);
+            glm::vec3 eulerAngles = glm::eulerAngles(rotation);
+            loadedCamera->pitch = eulerAngles.x;
+            loadedCamera->yaw = -eulerAngles.y;
+        }
+    }
+    if (cameraLoaded) {
+        scene->camera = loadedCamera;
+    }
     // run loop again to setup transform hierarchy
     for (int i = 0; i < gltf.nodes.size(); i++) {
         fastgltf::Node& node = gltf.nodes[i];
@@ -631,3 +691,154 @@ void LoadedGLTF::clearAll()
     }
 }
 
+
+CubeMap load_cube_map(VulkanEngine* engine, std::string_view filePath)
+{
+    const std::string suffixes[] = { "right", "left", "top", "bottom", "front", "back" };
+    CubeMap cube_map = {};
+
+    // We expect all images in cube map to be same resolution
+    int width, height, nrChannels;
+
+    std::filesystem::path path = fmt::format("{}/{}.jpg", filePath, suffixes[0]);
+    auto stringPath = path.string();
+
+    unsigned char* data = stbi_load(stringPath.c_str(), &width, &height, &nrChannels, 4);
+    VkDeviceSize imageSize = width * height * 4;
+	VkDeviceSize cubeImageSize = width * height * 4 * 6;
+	AllocatedBuffer buffer = create_buffer(&engine->_device, &engine->_allocator, cubeImageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_ONLY);
+
+    // Map memory using vmaMapMemory
+    void* mappedData = nullptr;
+    VkResult result = vmaMapMemory(engine->_allocator, buffer.allocation, &mappedData);
+    if (result != VK_SUCCESS) {
+        throw std::runtime_error("Failed to map memory for global uniform buffer!");
+    }
+
+    // Copy uniform data into the mapped memory
+    std::memcpy(static_cast<char*>(mappedData), data, imageSize);
+
+    stbi_image_free(data);
+
+
+    // Unmap the memory after copying the data
+    
+    
+
+    std::vector<VkBufferImageCopy> bufferCopyRegions;
+    uint32_t offset = 0;
+
+    for (int i = 1; i < 6; i++) {
+        path = fmt::format("{}/{}.jpg", filePath, suffixes[i]);
+        stringPath = path.string();
+        if (std::filesystem::exists(stringPath)) {
+            unsigned char* data = stbi_load(stringPath.c_str(), &width, &height, &nrChannels, 4);
+            if (data) {
+				
+                std::memcpy(static_cast<char*>(mappedData) + imageSize * i, data, imageSize);
+
+                stbi_image_free(data);
+            }
+        }
+    }
+
+
+	for (int i = 0; i < 6; i++) {
+		VkBufferImageCopy copyRegion = {};
+		copyRegion.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		copyRegion.imageSubresource.mipLevel = 0;
+		copyRegion.imageSubresource.baseArrayLayer = i;
+		copyRegion.imageSubresource.layerCount = 1;
+		copyRegion.imageExtent.width = width;
+		copyRegion.imageExtent.height = height;
+		copyRegion.imageExtent.depth = 1;
+		copyRegion.bufferOffset = imageSize * i;
+		bufferCopyRegions.push_back(copyRegion);
+	}
+
+
+
+
+
+
+
+    vmaUnmapMemory(engine->_allocator, buffer.allocation);
+
+
+    VkExtent3D imagesize;
+	imagesize.width = width;
+	imagesize.height = height;
+	imagesize.depth = 1;
+
+
+    VkImageUsageFlags drawImageUsages{};
+    drawImageUsages |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+    drawImageUsages |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+    drawImageUsages |= VK_IMAGE_USAGE_STORAGE_BIT;
+    drawImageUsages |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+    drawImageUsages |= VK_IMAGE_USAGE_SAMPLED_BIT;
+
+
+    VkImageCreateInfo image_info = vkinit::image_create_info(VK_FORMAT_R8G8B8A8_UNORM, drawImageUsages, imagesize);
+	image_info.arrayLayers = 6;
+	image_info.format = VK_FORMAT_R8G8B8A8_UNORM;
+    image_info.mipLevels = 1;
+	image_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+	image_info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	image_info.flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
+    
+
+    VK_CHECK(vkCreateImage(engine->_device, &image_info, nullptr, &cube_map.image.image));
+
+    // always allocate images on dedicated GPU memory
+    VmaAllocationCreateInfo allocinfo = {};
+    allocinfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
+    allocinfo.requiredFlags = VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+    // allocate and create the image
+    VK_CHECK(vmaCreateImage(engine->_allocator, &image_info, &allocinfo, &cube_map.image.image, &cube_map.image.allocation, nullptr));
+
+    VkImageViewCreateInfo view_info = vkinit::imageview_create_info(VK_FORMAT_R8G8B8A8_UNORM, cube_map.image.image, VK_IMAGE_ASPECT_COLOR_BIT);
+    view_info.viewType = VK_IMAGE_VIEW_TYPE_CUBE;
+    view_info.image = cube_map.image.image;
+    view_info.subresourceRange.layerCount = 6;
+
+    VK_CHECK(vkCreateImageView(engine->_device, &view_info, nullptr, &cube_map.image.imageView));
+
+
+    engine->immediate_submit([&](VkCommandBuffer cmd) {
+        vkutil::transition_image(cmd, cube_map.image.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+
+        vkCmdCopyBufferToImage(
+            cmd,
+            buffer.buffer,
+            cube_map.image.image,
+            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            static_cast<uint32_t>(bufferCopyRegions.size()),
+            bufferCopyRegions.data());
+            
+		vkutil::transition_image(cmd, cube_map.image.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+		});
+
+    VkSamplerCreateInfo sampler_info = {.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO };
+    sampler_info.pNext = VK_NULL_HANDLE;
+    sampler_info.magFilter = VK_FILTER_LINEAR;
+    sampler_info.minFilter = VK_FILTER_LINEAR;
+    sampler_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+    sampler_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    sampler_info.addressModeV = sampler_info.addressModeU;
+    sampler_info.addressModeW = sampler_info.addressModeU;
+    sampler_info.mipLodBias = 0.0f;
+    sampler_info.compareOp = VK_COMPARE_OP_NEVER;
+    sampler_info.maxAnisotropy = 1.0f;
+
+    cube_map.sampler = {};
+
+	VK_CHECK(vkCreateSampler(engine->_device, &sampler_info, nullptr, &cube_map.sampler));
+
+
+
+
+
+    return cube_map;
+}
