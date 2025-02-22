@@ -161,6 +161,8 @@ void main()
 
 	vec3  specular    = vec3(0);
 	float attenuation = 1;
+	isShadowed   = true;
+
 	// Tracing shadow ray only if the light is visible from the surface
 	if(dot(worldNrm, L) > 0)
 	{
@@ -169,7 +171,6 @@ void main()
 		vec3  origin = gl_WorldRayOriginEXT + gl_WorldRayDirectionEXT * gl_HitTEXT;
 		vec3  rayDir = L;
 		uint  flags  = gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsOpaqueEXT | gl_RayFlagsSkipClosestHitShaderEXT;
-		isShadowed   = true;
 		traceRayEXT(topLevelAS,  // acceleration structure
 					flags,       // rayFlags
 					0xFF,        // cullMask
@@ -180,7 +181,7 @@ void main()
 					tMin,        // ray min range
 					rayDir,      // ray direction
 					tMax,        // ray max range
-					1            // payload (location = 1)
+					1            // payload is isShadowed
 		);
 
 		if(isShadowed)
@@ -203,7 +204,7 @@ void main()
 	// Perfect specular reflection
 	vec3 R = reflect(-V, worldNrm);
 	vec3 specularReflection = vec3(0);
-	if (prd.depth < 2){
+	if (prd.depth < 1){
 		float tMin   = 0.001;
 		float tMax   = 1000000000.0;
 		vec3  origin = gl_WorldRayOriginEXT + gl_WorldRayDirectionEXT * gl_HitTEXT;
@@ -221,7 +222,7 @@ void main()
 					tMin,        // ray min range
 					rayDir,      // ray direction
 					tMax,        // ray max range
-					0            // payload (location = 1)
+					0            // payload is prd
 		);
 		// We should now have the color of the reflected light. The intensity of this light is based on the fresnel equation
 		vec3 F0 = mix(vec3(0.04), baseColor, metallic);
@@ -230,7 +231,7 @@ void main()
 		float NDF = DistributionGGX(worldNrm, H, k);
 		float G   = GeometrySmith(worldNrm, V, L, k);
 		vec3 F = Schlick(normalize(worldNrm), normalize(V), 1.0, 2.0) * F0;
-		specularReflection = NDF * G  * F;
+		vec3 radiance = diffuse;
 		vec3 kS = F;
 
 		vec3 kD = vec3(1.0) - kS;
@@ -239,6 +240,7 @@ void main()
 
 		float NdotV = max(dot(worldNrm, V), 0.0001);
 		float NdotR = max(dot(worldNrm, R), 0.0001);
+
 		vec3 spec = F * G * NDF / max(4 * NdotV * NdotR, 0.001);
 		specularReflection = spec;
 		diffuse = kD  * lightColor * baseColor;	
@@ -252,7 +254,7 @@ void main()
 		specular *= 0.0;
 	}
 
-	vec3 result = ambient + diffuse + specular + specularReflection;
+	vec3 result = ambient + diffuse + specularReflection;
 
 	prd.hitValue = result;
 }

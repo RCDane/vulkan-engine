@@ -39,7 +39,7 @@
 #include <filesystem>
 #include <iostream>
 
-constexpr bool bUseValidationLayers = true;
+constexpr bool bUseValidationLayers = false;
 
 
 VulkanEngine* loadedEngine = nullptr;
