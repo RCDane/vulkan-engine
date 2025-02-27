@@ -77,6 +77,8 @@ std::optional<AllocatedImage> load_image(VulkanEngine* engine, fastgltf::Asset& 
                                                // are already loaded into a vector.
                                [](auto& arg) {},
                                [&](fastgltf::sources::Vector& vector) {
+
+                                    
                                    unsigned char* data = stbi_load_from_memory(vector.bytes.data() + bufferView.byteOffset,
                                        static_cast<int>(bufferView.byteLength),
                                        &width, &height, &nrChannels, 4);
@@ -308,6 +310,8 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGltf(VulkanEngine* engine, std::s
         engine->textureSamplers.emplace_back(engine->_defaultSamplerLinear);
         engine->textureImages.emplace_back(engine->_defaultNormalMap.imageView);
         engine->textureSamplers.emplace_back(engine->_defaultSamplerLinear);
+        engine->textureImages.emplace_back(engine->_blackImage.imageView);
+        engine->textureSamplers.emplace_back(engine->_defaultSamplerLinear);
 		textureMapInitialized = true;
 
     }
@@ -334,6 +338,7 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGltf(VulkanEngine* engine, std::s
         constants.colorIdx = 0;
         constants.metalIdx = 1;
         constants.normalIdx = 2;
+        constants.emissiveIdx = 3;
         
         // write material parameters to buffer
 
@@ -350,6 +355,8 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGltf(VulkanEngine* engine, std::s
         materialResources.metalRoughSampler = engine->_defaultSamplerLinear;
         materialResources.normalImage = engine->_defaultNormalMap;
         materialResources.normalSampler = engine->_defaultSamplerLinear;
+        materialResources.emissiveImage = engine->_blackImage;
+        materialResources.emissiveSampler = engine->_defaultSamplerLinear;
         // set the uniform buffer for the material data
         materialResources.dataBuffer = file.materialDataBuffer.buffer;
         materialResources.dataBufferOffset = data_index * sizeof(MaterialConstants);
@@ -442,6 +449,33 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGltf(VulkanEngine* engine, std::s
             }
             constants.normalIdx = idx;
         }
+
+        if (mat.emissiveTexture.has_value()) {
+            size_t img = gltf.textures[mat.emissiveTexture.value().textureIndex].imageIndex.value();
+            size_t sampler = gltf.textures[mat.emissiveTexture.value().textureIndex].samplerIndex.value();
+            materialResources.emissiveImage = images[img];
+            materialResources.emissiveSampler = file.samplers[sampler];
+            uint32_t idx = 0;
+
+            size_t emissiveTextureIndex = mat.emissiveTexture.value().textureIndex;
+
+            size_t hash = hash_fn(name + std::to_string(emissiveTextureIndex));
+
+            if (!textureMap.contains(hash)) {
+                idx = engine->textureImages.size();
+                engine->textureImages.emplace_back(materialResources.emissiveImage.imageView);
+                engine->textureSamplers.emplace_back(materialResources.emissiveSampler);
+                textureMap.emplace(hash, idx);
+            }
+            else {
+                idx = textureMap[hash];
+                materialResources.emissiveImage.imageView = engine->textureImages[idx];
+                materialResources.emissiveSampler = engine->textureSamplers[idx];
+            }
+            constants.emissiveIdx = idx;
+        }
+
+
 
         sceneMaterialConstants[data_index] = constants;
         
@@ -692,6 +726,7 @@ void LoadedGLTF::clearAll()
 }
 
 
+
 CubeMap load_cube_map(VulkanEngine* engine, std::string_view filePath)
 {
     const std::string suffixes[] = { "right", "left", "top", "bottom", "front", "back" };
@@ -733,8 +768,9 @@ CubeMap load_cube_map(VulkanEngine* engine, std::string_view filePath)
         stringPath = path.string();
         if (std::filesystem::exists(stringPath)) {
             unsigned char* data = stbi_load(stringPath.c_str(), &width, &height, &nrChannels, 4);
+     
             if (data) {
-				
+       
                 std::memcpy(static_cast<char*>(mappedData) + imageSize * i, data, imageSize);
 
                 stbi_image_free(data);

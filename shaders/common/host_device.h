@@ -13,6 +13,7 @@ using vec4  = glm::vec4;
 using mat4  = glm::mat4;
 using uint  = unsigned int;
 using u64 = uint64_t;
+using dvec3 = glm::dvec3;
 #endif
 
 // clang-format off
@@ -76,7 +77,7 @@ struct GLTFMaterialData{
 	int colorIdx;
 	int normalIdx;
 	int metalIdx;
-	int padding;
+	int emissiveIdx;
 	vec4 padding2;
 };
 
