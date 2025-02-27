@@ -204,6 +204,7 @@ void main()
 	// Perfect specular reflection
 	vec3 R = reflect(-V, worldNrm);
 	vec3 specularReflection = vec3(0);
+	
 	if (prd.depth < 1){
 		float tMin   = 0.001;
 		float tMax   = 1000000000.0;
@@ -230,8 +231,8 @@ void main()
 
 		float NDF = DistributionGGX(worldNrm, H, k);
 		float G   = GeometrySmith(worldNrm, V, L, k);
-		vec3 F = Schlick(normalize(worldNrm), normalize(V), 1.0, 2.0) * F0;
-		vec3 radiance = diffuse;
+		vec3 F = Schlick(normalize(worldNrm), normalize(V), 1.0, 1.3) * F0;
+		vec3 radiance = lightColor;
 		vec3 kS = F;
 
 		vec3 kD = vec3(1.0) - kS;
@@ -240,11 +241,15 @@ void main()
 
 		float NdotV = max(dot(worldNrm, V), 0.0001);
 		float NdotR = max(dot(worldNrm, R), 0.0001);
+		float NdotL = max(dot(worldNrm, L), 0.0000);
 
 		vec3 spec = F * G * NDF / max(4 * NdotV * NdotR, 0.001);
 		specularReflection = spec;
 		diffuse = kD  * lightColor * baseColor;	
 		prd.depth--;
+
+		prd.hitValue = ambient+(kD * baseColor / PI + spec) * radiance * NdotL;
+		return;
 	}
 
   	// Apply shadow

@@ -105,7 +105,7 @@ struct MaterialConstants {
     int colorIdx;
     int normalIdx;
     int metalIdx;
-    int padding;
+    int emissiveIdx;
     glm::vec4 padding2;
 };
 static_assert(sizeof(MaterialConstants) == 64, "MaterialConstants struct size should be 48 bytes.");

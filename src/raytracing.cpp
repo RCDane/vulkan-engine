@@ -1214,7 +1214,7 @@ void RaytracingHandler::createRtPipeline(VulkanEngine* engine) {
 
 	// Hit Group - Closest Hit
 	VkShaderModule closestHit;
-	if (!vkutil::load_shader_module("../shaders/spv/raytrace.rchit.spv", engine->_device, &closestHit)) {
+	if (!vkutil::load_shader_module("../shaders/spv/raytracepbr.rchit.spv", engine->_device, &closestHit)) {
 		fmt::print("Error when building the closest hit shader module\n");
 	}
 	else {

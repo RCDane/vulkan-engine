@@ -130,7 +130,8 @@ void VulkanEngine::init()
 	assert(sponzaFile.has_value());
 	loadedScenes["sponza"] = *sponzaFile;
 
-	if (loadedScenes["sponza"]->camera != NULL) {
+
+	if (loadedScenes.contains("sponza") && loadedScenes["sponza"]->camera != NULL) {
 		mainCamera = loadedScenes["sponza"]->camera;
 	}
 	else {
@@ -140,6 +141,11 @@ void VulkanEngine::init()
 
 		mainCamera->pitch = 0;
 		mainCamera->yaw = 0;
+		mainCamera->aspectRatio = 1;
+		mainCamera->fov = 70;
+		mainCamera->zNear = 0.001f;
+		mainCamera->zFar = 1000.0f;
+		mainCamera->isPerspective = true;
 	}
 
 
