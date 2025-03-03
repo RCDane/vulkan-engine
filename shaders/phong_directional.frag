@@ -8,6 +8,7 @@
 
 #include "input_structures.glsl"
 #include "common/host_device.h"
+#include "common/PBR_functions.glsl"
 layout (location = 0) in vec3 inNormal;
 layout (location = 1) in vec3 inColor;
 layout (location = 2) in vec2 inUV;
@@ -153,6 +154,10 @@ void main()
        N = normalize(TBN * textureNormal);
     }
     
+    vec3 emission = vec3(0);
+    if (materialData.emissiveIdx != 3){
+        emission = SRGBtoLINEAR(texture(textureSamplers[materialData.emissiveIdx], inUV).xyz);
+    }
 
     
     // Light direction (from fragment to light)
@@ -169,7 +174,7 @@ void main()
 
 
     // Material properties
-    vec3 baseColor = inColor * texture(textureSamplers[materialData.colorIdx], inUV).rgb;
+    vec3 baseColor = inColor * SRGBtoLINEAR(texture(textureSamplers[materialData.colorIdx], inUV).rgb);
 
 
 
@@ -183,41 +188,36 @@ void main()
         // The GLTF spec defines that metalness is stored in the B channel
         // while the roughness is stored in the G channel of the MetallicRougnessTexture
         vec2 metalRough = texture(textureSamplers[materialData.metalIdx], inUV).gb;
-        roughness = metalRough.x;
-        metallic = metalRough.y;
+        roughness *= metalRough.x;
+        metallic *= metalRough.y;
     }   
 
-    // Shininess exponent for Blinn-Phong
-    float shininess = max((1.0 - roughness) * 128.0, 1.0);
+    roughness = clamp(roughness, 0.0,1.0);
+    metallic = clamp(metallic, 0.0,1.0);
+
+
+    // Shininess exponent for Blinn-Phong 
 
     // Light properties
     vec3 lightColor = directionalLight.color.rgb * directionalLight.intensity;
 
-    // Ambient component
-    vec3 ambient = sceneData.ambientColor.rgb * baseColor;
+    vec3 F0 = mix(vec3(0.04), baseColor, metallic);
+    
+    // vec3 R = reflect(-V,N);
 
-    // Diffuse component
-    float diff = max(dot(N, L), 0.0);
-    vec3 diffuse = diff * lightColor * baseColor;
+    // vec3 env = SRGBtoLINEAR(texture(cubeMap, normalize(R)).rgb);
 
-    // Specular component
-    float specAngle = max(dot(N, H), 0.0);
-    float spec = pow(specAngle, shininess);
-
-    // Specular color (adjusted by metallic factor)
-    vec3 specularColor = mix(vec3(0.04), baseColor, metallic);
-
-    vec3 specular = spec * lightColor * specularColor;
+	vec3 directContribution = CalculatePBR(N,V,L,baseColor, lightColor, directionalLight.intensity , F0, metallic, roughness);
 
     // Shadow factor
     float shadow = ShadowCalculation(lightFragPos, N);
 
-    // Apply shadow
-    diffuse *= shadow;
-    specular *= shadow;
-
+    // // Apply shadow
+    // diffuse *= shadow;
+    // specular *= shadow;
+    directContribution *= shadow;
     // Combine components
-    vec3 result = ambient + diffuse + specular;
+    vec3 result = LINEARtoSRGB(directContribution + emission);
 
 
     // Output final color with alpha from material data

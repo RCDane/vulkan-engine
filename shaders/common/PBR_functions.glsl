@@ -1,4 +1,4 @@
-const float PI = 3.1415926535897932384626433832795;
+const float PI = 3.1415926535;
 
 
 
@@ -7,18 +7,19 @@ const float PI = 3.1415926535897932384626433832795;
 // Link: https://learnopengl.com/PBR/Theory
 float DistributionGGX(vec3 N, vec3 H, float roughness)
 {
-    float a = roughness*roughness;
-    float a2 = a*a;
-    float NdotH = clamp(dot(N, H), 0.0, 1.0);
+    float a      = roughness*roughness;
+    float a2     = a*a;
+    float NdotH  = max(dot(N, H), 0.0);
     float NdotH2 = NdotH*NdotH;
-
-    float nom   = a2;
-    float denom = (NdotH2 * (a2 - 1.0) + 1.0);
-    denom = PI * denom * denom + 1e-10;
-    float NDF = nom / denom;
-    NDF = clamp(NDF, 0.0, 1.0); // Clamping the NDF value
-    return NDF;
+	
+    float num   = a2;
+    float denom = (NdotH2 * (a2 - 1.0) + 1.0) + 0.000001;
+    denom = PI * denom * denom;
+	
+    return num / denom;
 }
+
+
 
 
 // Link: https://learnopengl.com/PBR/Theory
@@ -76,7 +77,7 @@ vec3 CalculatePBR(vec3 N, vec3 V, vec3 L,vec3 albedo, vec3 lightColor, float lig
     kD *= 1.0 - metallness;	  
         
     vec3 numerator    =  NDF* G * F;
-    float denominator = 4.0 * max(dot(N, V), 0.0001) * max(dot(N, L), 0.0001) + 0.0001;
+    float denominator = 4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 0.0001;
     vec3 specular     = numerator / denominator;  
             
     // add to outgoing radiance Lo

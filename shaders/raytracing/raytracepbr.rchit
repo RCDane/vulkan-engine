@@ -237,7 +237,7 @@ void main()
 		);
 		
 		// prd.attenuation *= 0.0001; 
-	    reflectanceContribution = CalculatePBR(worldNrm, V, R, baseColor, prd.hitValue, rayAttenuation, F0,metallic, roughness);
+	    // reflectanceContribution = CalculatePBR(worldNrm, V, R, baseColor, prd.hitValue, rayAttenuation, F0,metallic, roughness);
 		reflectanceContribution *= F0;
 	}  
 
