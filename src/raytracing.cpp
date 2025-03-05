@@ -1178,7 +1178,7 @@ void RaytracingHandler::createRtPipeline(VulkanEngine* engine) {
 
 	// Raygen
 	VkShaderModule main;
-	if (!vkutil::load_shader_module("../shaders/spv/raytrace.rgen.spv", engine->_device, &main)) {
+	if (!vkutil::load_shader_module("../shaders/spv/raytraceAcc.rgen.spv", engine->_device, &main)) {
 		fmt::print("Error when building the raygen shader module\n");
 	}
 	else {
@@ -1214,7 +1214,7 @@ void RaytracingHandler::createRtPipeline(VulkanEngine* engine) {
 
 	// Hit Group - Closest Hit
 	VkShaderModule closestHit;
-	if (!vkutil::load_shader_module("../shaders/spv/raytracepbr.rchit.spv", engine->_device, &closestHit)) {
+	if (!vkutil::load_shader_module("../shaders/spv/raytracepbrAcc.rchit.spv", engine->_device, &closestHit)) {
 		fmt::print("Error when building the closest hit shader module\n");
 	}
 	else {
@@ -1387,6 +1387,19 @@ void RaytracingHandler::raytrace(VkCommandBuffer cmd, VulkanEngine* engine) {
 		throw std::runtime_error("Failed to map memory for global uniform buffer!");
 	}
 
+	bool clearScreen = false;
+	if (engine->cameraMoved) {
+		clearScreen = true;
+		currentRayCount = 0;
+	}
+
+
+	m_uniformMappedPtr->raytracingSettings.offlineMode = offlineMode ? 1 : 0;
+	m_uniformMappedPtr->raytracingSettings.rayBudget = rayBudget;
+	m_uniformMappedPtr->raytracingSettings.seed = rand();
+	m_uniformMappedPtr->clearScreen = clearScreen ? 1 : 0;
+	m_uniformMappedPtr->raytracingSettings.currentRayCount = currentRayCount;
+	currentRayCount += rayBudget;
 	// Copy uniform data into the mapped memory
 	std::memcpy(mappedData, m_uniformMappedPtr, sizeof(GlobalUniforms));
 
@@ -1467,4 +1480,5 @@ void RaytracingHandler::raytrace(VkCommandBuffer cmd, VulkanEngine* engine) {
 		engine->_drawExtent.height,
 		1
 	);
+	
 }

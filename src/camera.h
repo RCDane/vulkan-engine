@@ -21,7 +21,7 @@ public:
     float xMag;
     float yMag;
 
-
+    bool cameraMovedThisFrame;
     bool rightClick = false;
     float pitch {0.f};
     float yaw {0.f};

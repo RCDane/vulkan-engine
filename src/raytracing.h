@@ -127,6 +127,9 @@ public:
 	VkPipeline                                        m_rtPipeline;
 	PushConstantRay m_pcRay{};
 	void cleanup(VkDevice device);
+	int currentRayCount = 0;
+	bool offlineMode = false;
+	int rayBudget = 1;
 };
 
 

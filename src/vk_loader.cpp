@@ -77,8 +77,6 @@ std::optional<AllocatedImage> load_image(VulkanEngine* engine, fastgltf::Asset& 
                                                // are already loaded into a vector.
                                [](auto& arg) {},
                                [&](fastgltf::sources::Vector& vector) {
-
-                                    
                                    unsigned char* data = stbi_load_from_memory(vector.bytes.data() + bufferView.byteOffset,
                                        static_cast<int>(bufferView.byteLength),
                                        &width, &height, &nrChannels, 4);

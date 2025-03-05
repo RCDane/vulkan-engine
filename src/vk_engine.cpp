@@ -39,7 +39,7 @@
 #include <filesystem>
 #include <iostream>
 
-constexpr bool bUseValidationLayers = false;
+constexpr bool bUseValidationLayers = true;
 
 
 VulkanEngine* loadedEngine = nullptr;
@@ -115,15 +115,15 @@ void VulkanEngine::init()
 
 
 
-	std::string helmetPath = { "../assets/DamagedHelmet/glTF-Binary/DamagedHelmet.glb"};
-	std::optional<std::shared_ptr<LoadedGLTF>> helmetFile = loadGltf(this, helmetPath);
+	//std::string helmetPath = { "../assets/SciFiHelmet/SciFiHelmet.glb"};
+	//std::optional<std::shared_ptr<LoadedGLTF>> helmetFile = loadGltf(this, helmetPath);
 
-	assert(helmetFile.has_value());
-	
+	//assert(helmetFile.has_value());
+	//
 
-	loadedScenes["helmet"] = *helmetFile;
-	loadedScenes["helmet"]->rootTransform = glm::scale(glm::vec3(10.0f)) * loadedScenes["helmet"]->rootTransform;
-	loadedScenes["helmet"]->rootTransform = glm::translate(glm::vec3(0.0f, 20.0f, 0.0f)) * loadedScenes["helmet"]->rootTransform;
+	//loadedScenes["helmet"] = *helmetFile;
+	//loadedScenes["helmet"]->rootTransform = glm::scale(glm::vec3(10.0f)) * loadedScenes["helmet"]->rootTransform;
+	//loadedScenes["helmet"]->rootTransform = glm::translate(glm::vec3(0.0f, 20.0f, 0.0f)) * loadedScenes["helmet"]->rootTransform;
 
 	std::string sponzaPath = { "../assets/sponza.glb" };
 	auto sponzaFile = loadGltf(this, sponzaPath);
@@ -161,12 +161,12 @@ void VulkanEngine::init()
 
 
 
-	std::string dragonPath = { "../assets/dragon.glb" };
-	auto dragonFile = loadGltf(this, dragonPath);
-	assert(dragonFile.has_value());
-	loadedScenes["dragon"] = *dragonFile;
-	loadedScenes["dragon"]->rootTransform = glm::scale(glm::vec3(30.0f)) * loadedScenes["dragon"]->rootTransform;
-	loadedScenes["dragon"]->rootTransform = glm::translate(glm::vec3(20.0f, 10.0f, 20.0f)) * loadedScenes["dragon"]->rootTransform;
+	//std::string dragonPath = { "../assets/dragon.glb" };
+	//auto dragonFile = loadGltf(this, dragonPath);
+	//assert(dragonFile.has_value());
+	//loadedScenes["dragon"] = *dragonFile;
+	//loadedScenes["dragon"]->rootTransform = glm::scale(glm::vec3(30.0f)) * loadedScenes["dragon"]->rootTransform;
+	//loadedScenes["dragon"]->rootTransform = glm::translate(glm::vec3(20.0f, 10.0f, 20.0f)) * loadedScenes["dragon"]->rootTransform;
 
 
 
@@ -393,8 +393,6 @@ void VulkanEngine::draw()
 	vkutil::transition_image(cmd, _drawImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
 
 
-	draw_environment(cmd);
-
 	if (useRaytracing) {
 
 		_raytracingHandler.raytrace(cmd, this);
@@ -402,6 +400,8 @@ void VulkanEngine::draw()
 
 	}
 	else {
+		draw_environment(cmd);
+
 		VkImageSubresourceRange subResourceRange = vkinit::image_subresource_range(VK_IMAGE_ASPECT_DEPTH_BIT);
 	
 		vkutil::transition_shadow_map(cmd, _shadowImage->image.image, VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, subResourceRange);
@@ -731,7 +731,15 @@ void VulkanEngine::run()
             // close the window when user alt-f4s or clicks the X button
             if (e.type == SDL_QUIT)
                 bQuit = true;
+
+			glm::mat4 currentView = mainCamera->getViewMatrix();
+			glm::mat4 currentProjection = mainCamera->getProjectionMatrix(useRaytracing);
 		    mainCamera->processSDLEvent(e);
+			if (currentView != mainCamera->getViewMatrix() ||
+				currentProjection != mainCamera->getProjectionMatrix(useRaytracing) ||
+					glm::length(mainCamera->velocity) > 0.1f) {
+				cameraMoved = true;
+			}
 
 
             if (e.type == SDL_WINDOWEVENT) {
@@ -770,6 +778,11 @@ void VulkanEngine::run()
 
 
 
+		ImGui::Begin("Raytracing Settings");
+		ImGui::Checkbox("Offline mode",&_raytracingHandler.offlineMode);
+		ImGui::InputInt("Ray budget", &_raytracingHandler.rayBudget);
+		ImGui::End();
+
 		ImGui::Begin("Scene Data");
 		ImGui::Text("Directional Light");
 		GPUSceneData& tmpData = sceneData;
@@ -798,6 +811,7 @@ void VulkanEngine::run()
 
 		//make imgui calculate internal draw structures
 		ImGui::Render();
+		
         draw();
 
 		//get clock again, compare with start clock
@@ -806,6 +820,7 @@ void VulkanEngine::run()
 		//convert to microseconds (integer), and then come back to miliseconds
 		auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
 		stats.frametime = elapsed.count() / 1000.f;    
+		cameraMoved = false;
 	}
 }
 
@@ -857,11 +872,12 @@ void VulkanEngine::init_vulkan()
 	features12.bufferDeviceAddress = true;
 	features12.hostQueryReset = true;
 	features12.timelineSemaphore = true;
-
+	
 	
 	VkPhysicalDeviceVulkan11Features features11{ .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES };
 	features11.storageBuffer16BitAccess = true;
 	features11.uniformAndStorageBuffer16BitAccess = true;
+	
 	
 	VkPhysicalDeviceRayTracingPipelineFeaturesKHR rtPipelineFeatures{
 		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR,
@@ -881,6 +897,7 @@ void VulkanEngine::init_vulkan()
 	VkPhysicalDeviceFeatures deviceFeatures{};
 
 	deviceFeatures.shaderInt64 = true;
+	deviceFeatures.shaderFloat64 = true;
 
 	VkPhysicalDeviceRayQueryFeaturesKHR rayQueryFeatures{ .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR };
 	rayQueryFeatures.rayQuery = true;
@@ -1694,7 +1711,7 @@ void VulkanEngine::init_default_data(){
 	glm::vec4 sunDirection = glm::vec4(0.f, -1.0f, 0.0f, 1.f);
 
 	sceneData.ambientColor = glm::vec4(.2f);
-	sceneData.sunlightColor = glm::vec4(1.f);
+	sceneData.sunlightColor = glm::vec4(200.f);
 	sceneData.sunlightDirection = sunDirection;
 
 	pointLight.color = glm::vec4(1.f);

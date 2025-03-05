@@ -110,12 +110,23 @@ struct GPUSceneData {
     glm::vec4 sunlightColor;
 	glm::vec4 cameraPosition;
 };
+
+struct RaytracingSettings {
+	int offlineMode;
+	int rayBudget;
+	int currentRayCount;
+	int seed;
+};
+
 struct GlobalUniforms
 {
 	glm::mat4 viewProj;     // Camera view * projection
 	glm::mat4 viewInverse;  // Camera inverse view matrix
 	glm::mat4 projInverse;  // Camera inverse projection matrix
 	glm::ivec2 resolution;  // Framebuffer resolution
+	int clearScreen;
+	int padding;
+	RaytracingSettings raytracingSettings;
 };
 
 struct GLTFMetallic_Roughness {
@@ -299,7 +310,7 @@ public:
 	EngineStats stats;
 	PointLight pointLight;
 	
-
+	bool cameraMoved = false;
 	// Raytracing
 	RaytracingHandler _raytracingHandler;
 

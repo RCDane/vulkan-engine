@@ -37,6 +37,7 @@ void Camera::processSDLEvent(SDL_Event& e)
         yaw += (float)e.motion.xrel / 200.f;
         pitch -= (float)e.motion.yrel / 200.f;
     }
+    
 }
 
 glm::mat4 Camera::getViewMatrix()

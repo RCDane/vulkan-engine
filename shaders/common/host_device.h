@@ -51,6 +51,14 @@ struct ObjDesc
 	int padding;
 };
 
+
+struct RaytracingSettings {
+	int offlineMode;
+	int rayBudget;
+	int currentRayCount;
+	int seed;
+};
+
 // Uniform buffer set at each frame
 struct GlobalUniforms
 {
@@ -58,7 +66,13 @@ struct GlobalUniforms
 	mat4 viewInverse;  // Camera inverse view matrix
 	mat4 projInverse;  // Camera inverse projection matrix
 	ivec2 viewPort;
+	int clearScreen;
+	int padding;
+	RaytracingSettings raytracingSettings;
 };
+
+
+
 struct hitPayload
 {
   vec3 hitValue;
@@ -69,6 +83,8 @@ struct hitPayload
   vec3 rayDir;
   float currentIoR;
   int hitMax;
+  uint seed;
+  int rayBudget;
 };
 
 struct GLTFMaterialData{   

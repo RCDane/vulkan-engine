@@ -170,12 +170,6 @@ void main()
 
 
 
-
-	// Combine components    
-
-
-
-	vec3  specular    = vec3(0);
 	float attenuation = 1;
 	isShadowed   = true; 
 
@@ -236,8 +230,6 @@ void main()
 					0            // payload is prd
 		);
 		
-		// prd.attenuation *= 0.0001; 
-	    // reflectanceContribution = CalculatePBR(worldNrm, V, R, baseColor, prd.hitValue, rayAttenuation, F0,metallic, roughness);
 		reflectanceContribution *= F0;
 	}  
 
