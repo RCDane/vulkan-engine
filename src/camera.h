@@ -26,7 +26,7 @@ public:
     float pitch {0.f};
     float yaw {0.f};
 
-    glm::mat4 getViewMatrix();
+    glm::mat4 getViewMatrix(glm::vec3 jitter = glm::vec3(0));
     glm::mat4 getRotationMatrix();
     glm::mat4 getProjectionMatrix(bool raytracing);
 

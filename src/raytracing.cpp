@@ -627,7 +627,7 @@ void BlasBuilder::getScratchAddresses(VkDeviceSize hintMaxBudget,
 			VkDeviceAddress subAddr = alignedBase + offset;
 			scratchAddresses.push_back(subAddr);
 
-			// Advance offset by the BLAS’s required scratch size (rounded up)
+			// Advance offset by the BLASï¿½s required scratch size (rounded up)
 			VkDeviceSize alignedSize = nvh::align_up(b.sizeInfo.buildScratchSize, minAlignment);
 			offset += alignedSize;
 		}
@@ -646,7 +646,7 @@ void BlasBuilder::getScratchAddresses(VkDeviceSize hintMaxBudget,
 			scratchAddresses.push_back(subAddr);
 			offset += maxScratch;
 			// Here you might also want to do offset = nvh::align_up(offset, minAlignment)
-			// but since maxScratch should already be a multiple of minAlignment, that’s typically OK
+			// but since maxScratch should already be a multiple of minAlignment, thatï¿½s typically OK
 		}
 	}
 }

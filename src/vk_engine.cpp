@@ -24,7 +24,7 @@
 #include "vk_descriptors.h"
 #define STB_IMAGE_IMPLEMENTATION
 #include <vk_loader.h>
-
+#include "glm/gtc/random.hpp"
 //bootstrap library
 #include "VkBootstrap.h"
 
@@ -201,6 +201,7 @@ void VulkanEngine::init()
 
 	_raytracingHandler.createRtDescriptorSet(this);
 	_raytracingHandler.createRtPipeline(this);
+
 	_raytracingHandler.createRtShaderBindingTable(this);
 	// everything went fine
     _isInitialized = true;
@@ -774,38 +775,23 @@ void VulkanEngine::run()
 		ImGui::Begin("Main");
 		ImGui::Checkbox("Raytracing", &useRaytracing);
 		ImGui::Checkbox("Use PCF", &usePCF);
-		ImGui::End();
-
-
-
-		ImGui::Begin("Raytracing Settings");
-		ImGui::Checkbox("Offline mode",&_raytracingHandler.offlineMode);
+		ImGui::Checkbox("Offline mode", &_raytracingHandler.offlineMode);
 		ImGui::InputInt("Ray budget", &_raytracingHandler.rayBudget);
-		ImGui::End();
 
-		ImGui::Begin("Scene Data");
+
+
 		ImGui::Text("Directional Light");
 		GPUSceneData& tmpData = sceneData;
 		ImGui::InputFloat4("Intensity", (float*)&   	tmpData.sunlightColor);
 		ImGui::InputFloat4("Direction", (float*)&    	tmpData.sunlightDirection);
 		ImGui::InputFloat4("Ambient Color", (float*)&	tmpData.ambientColor);
-		PointLight& tmpPointLight = pointLight;
-		ImGui::Text("Point light:");
-		ImGui::InputFloat3("Position", (float*)&  tmpPointLight.position);
-		ImGui::SliderFloat("Intensity", &tmpPointLight.intensity, 0.0f, 100.f);
-		ImGui::InputFloat4("color", (float*)&  tmpPointLight.color);
-		ImGui::End();
 		
-
-
-		ImGui::Begin("Stats");
-
+		
+		ImGui::Text("Stats:");
         ImGui::Text("frametime %f ms", stats.frametime);
         ImGui::Text("draw time %f ms", stats.mesh_draw_time);
         ImGui::Text("update time %f ms", stats.scene_update_time);
-        ImGui::Text("triangles %i", stats.triangle_count);
-        ImGui::Text("draws %i", stats.drawcall_count);
-        ImGui::End();
+		ImGui::End();
 
 
 
@@ -2011,24 +1997,7 @@ void VulkanEngine::update_scene()
 	topMat = glm::scale(topMat, glm::vec3(1.0f));
 
 
-	// Is used for experiments with multiple instances of the same mesh
-	//int xAmount = 2;
-	//int yAmount = 2;
-	//int xSpacing = 20;
-	//int ySpacing = 30;
 
-
-	//for (auto& n : loadedScenes) {
-	//	auto [name, node] = n;
-
-	//	glm::mat4 root = topMat * node->rootTransform;
-	//	for (int i = 0; i < xAmount; i++) {
-	//		for (int j = 0; j < yAmount; j++) {
-	//			glm::mat4 displacement = glm::translate(glm::mat4{ 1.f }, glm::vec3(i * xSpacing, 0, j * ySpacing));
-	//			node->Draw(displacement * root, mainDrawContext);
-	//		}
-	//	}
-	//}
 
 	for (auto& n : loadedScenes) {
 		auto [name, node] = n;
@@ -2039,27 +2008,12 @@ void VulkanEngine::update_scene()
 	}
 
 	mainCamera->update();
+	glm::vec3 jitter = glm::ballRand(0.005);
 
-	glm::mat4 view = mainCamera->getViewMatrix();
+	glm::mat4 view = mainCamera->getViewMatrix(jitter);
 	glm::mat4 rasterizationProjection = mainCamera->getProjectionMatrix(false);
 	glm::mat4 rayTracingProjection = mainCamera->getProjectionMatrix(true);
 
-	// Corrected camera projection with near < far
-	//glm::mat4 projection = glm::perspective(
-	//	glm::radians(70.f),
-	//	(float)_windowExtent.width / (float)_windowExtent.height,
-	//	10000.f,    // Far plane,
-	//	0.1f      // Near plane
-	//);
-
-
-	//glm::mat4 rayProjection = glm::perspective(
-	//	glm::radians(70.f),
-	//	(float)_windowExtent.width / (float)_windowExtent.height,
-	//	0.1f,      // Near plane
-	//	10000.f    // Far plane,
-	//);
-	//rayProjection[1][1] *= -1;
 
 	
 
@@ -2067,6 +2021,9 @@ void VulkanEngine::update_scene()
 	// Invert the Y direction on projection matrix to match OpenGL and glTF conventions
 	sceneData.view = view;
 	sceneData.viewproj = sceneData.proj * sceneData.view;
+
+	
+
 	sceneData.cameraPosition = glm::vec4(mainCamera->position, 1.0f);
 
 	// Directly write to the mapped uniform buffer

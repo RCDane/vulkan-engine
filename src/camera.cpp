@@ -40,9 +40,9 @@ void Camera::processSDLEvent(SDL_Event& e)
     
 }
 
-glm::mat4 Camera::getViewMatrix()
+glm::mat4 Camera::getViewMatrix(glm::vec3 jitter)
 {
-    glm::mat4 cameraTranslation = glm::translate(glm::mat4(1.f), position);
+    glm::mat4 cameraTranslation = glm::translate(glm::mat4(1.f), position + jitter);
     glm::mat4 cameraRotation = getRotationMatrix();
     return glm::inverse(cameraTranslation * cameraRotation);
 }

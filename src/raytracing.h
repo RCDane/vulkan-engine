@@ -78,7 +78,11 @@ struct PushConstantRay
 	int   lightType;
 	glm::vec4 ambientColor;
 };
-
+enum RaytracingMode
+{
+	Offline,
+	Realtime
+};
 class RaytracingHandler {
 	
 private:
