@@ -207,8 +207,16 @@ public:
 	VkDescriptorSet _drawImageDescriptors;
 	VkDescriptorSetLayout _drawImageDescriptorLayout;
 
+	VkDescriptorSet _gBufferDescriptors;
+	VkDescriptorSetLayout _gBufferDescriptorLayout;
+
+
 	VkPipeline _environmentBackgroundPipeline;
 	VkPipelineLayout _environmentBackgroundLayout;
+
+	VkPipeline _deferredPipeline;
+	VkPipelineLayout _deferredPipelineLayout;
+	VkDescriptorSetLayout _deferredDscSetLayout;
 
 	// immediate submit structures
     VkFence _immFence;
@@ -228,6 +236,14 @@ public:
 
 	AllocatedImage _drawImage;
 	AllocatedImage _depthImage;
+	AllocatedImage _gBuffer_normal;
+	AllocatedImage _gBuffer_albedo;
+	AllocatedImage _gBuffer_metallicRougnes;
+	AllocatedImage _gBuffer_Emissive;
+
+
+
+
 	AllocatedImage _whiteImage;
 	AllocatedImage _blackImage;
 	AllocatedImage _greyImage;
@@ -262,7 +278,7 @@ public:
 	VkDescriptorSetLayout _gpuSceneDataDescriptorLayout; // Vertex data
 	VkDescriptorSetLayout _lightingDescriptorLayout;
 	VkDescriptorSetLayout _textureArrayLayout;
-
+	VkDescriptorSetLayout _gltfMaterialLayout;
 	VkDescriptorSet _textureArrayDescriptor;
 	DirectionalShadow directionalShadow;
 	bool resize_requested; 
@@ -293,7 +309,6 @@ public:
 	//draw loop
 	void draw();
 
-
 	//run main loop
 	void run();
 
@@ -304,9 +319,12 @@ public:
 	AllocatedImage create_image(VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped = false);
 	AllocatedImage create_cube_map_image(VkExtent3D size, VkFormat format, VkImageUsageFlags usage);
 
-	AllocatedImage create_image(void* data, VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped = false);
+	AllocatedImage create_image(void* data, VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped = false, std::string name = "Texture");
 	void destroy_image(const AllocatedImage& img);
 	
+
+	void create_render_buffer(AllocatedImage& image, VkImageUsageFlags usageFlags, VkImageAspectFlags aspectFlags);
+
 	EngineStats stats;
 	PointLight pointLight;
 	
@@ -332,7 +350,9 @@ private:
 	void draw_geometry(VkCommandBuffer cmd);
 
 	void draw_shadows(VkCommandBuffer cmd);
-	
+
+	void draw_deferred(VkCommandBuffer cmd);
+
 	void draw_environment(VkCommandBuffer cmd);
 
 	void draw_imgui(VkCommandBuffer cmd, VkImageView targetImageView);
@@ -345,7 +365,7 @@ private:
 
 	void init_triangle_pipeline();
 	void init_mesh_pipeline();
-
+	void init_deferred_pipeline();
 
 	void init_default_data();
 

@@ -14,10 +14,3 @@ layout(set = 0, binding = 0) uniform  SceneData{
 
 
 
-
-
-layout(set = 2, binding = 0) uniform PointLight {
-	vec3 position;
-	float intensity;
-	vec4 color;
-} pointLight;

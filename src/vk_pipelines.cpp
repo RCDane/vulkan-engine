@@ -88,11 +88,20 @@ VkPipeline PipelineBuilder::build_pipeline(VkDevice device)
     colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
     colorBlending.pNext = nullptr;
 
+    if (reuse_blending) {
+        std::vector<VkPipelineColorBlendAttachmentState> blendAttachments(
+            _renderInfo.colorAttachmentCount, _colorBlendAttachment);
+
+        colorBlending.attachmentCount = static_cast<uint32_t>(blendAttachments.size());
+        colorBlending.pAttachments = blendAttachments.data();
+    }
+    else {
+
+        colorBlending.attachmentCount = 1;
+        colorBlending.pAttachments = &_colorBlendAttachment;
+    }
     colorBlending.logicOpEnable = VK_FALSE;
     colorBlending.logicOp = VK_LOGIC_OP_COPY;
-    colorBlending.attachmentCount = 1;
-    colorBlending.pAttachments = &_colorBlendAttachment;
-
     VkPipelineVertexInputStateCreateInfo _vertexInputInfo = { .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO };
 
 
@@ -176,6 +185,9 @@ void PipelineBuilder::set_multisampling_none()
     _multisampling.alphaToOneEnable = VK_FALSE;
 }
 
+
+
+
 void PipelineBuilder::disable_blending()
 {
     // default write mask
@@ -183,6 +195,15 @@ void PipelineBuilder::disable_blending()
     // no blending
     _colorBlendAttachment.blendEnable = VK_FALSE;
 }
+
+
+void PipelineBuilder::set_color_attachment_format(std::vector<VkFormat> formats)
+{
+    _colorAttachmentFormats = formats;  // Save the vector in a member variable
+    _renderInfo.colorAttachmentCount = _colorAttachmentFormats.size();
+    _renderInfo.pColorAttachmentFormats = _colorAttachmentFormats.data();
+}
+
 
 void PipelineBuilder::set_color_attachment_format(VkFormat format)
 {
@@ -246,4 +267,9 @@ void PipelineBuilder::enable_blending_alphablend()
     _colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
     _colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
     _colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD;
+}
+
+
+void PipelineBuilder::reuse_blending_modes() {
+    reuse_blending = true;
 }
