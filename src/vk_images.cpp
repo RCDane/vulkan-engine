@@ -192,37 +192,39 @@ void vkutil::transition_main_color_image(VkCommandBuffer cmd, VkImage image, VkI
         .subresourceRange = vkinit::image_subresource_range(VK_IMAGE_ASPECT_COLOR_BIT)
     };
 
-    // Choose appropriate stage and access masks.
-    // Example 1: Transitioning from a render target (COLOR_ATTACHMENT_OPTIMAL)
-    // to a transfer source (TRANSFER_SRC_OPTIMAL) for blitting.
+    // Transition from COLOR_ATTACHMENT_OPTIMAL to TRANSFER_SRC_OPTIMAL.
     if (oldLayout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL && newLayout == VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL) {
         imageBarrier.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
         imageBarrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-        // Although transfers would normally use the TRANSFER_BIT, inside dynamic rendering
-        // we must restrict ourselves to framebuffer-space stages.
-        imageBarrier.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-        imageBarrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+        imageBarrier.dstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
+        imageBarrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
     }
-    // Example 2: Transitioning back from transfer to being a render target.
+    // Transition from GENERAL to TRANSFER_SRC_OPTIMAL.
+    else if (oldLayout == VK_IMAGE_LAYOUT_GENERAL && newLayout == VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL) {
+        // Wait for any pending transfer read operations (e.g. from a prior blit) to finish.
+        imageBarrier.srcStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
+        imageBarrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+        imageBarrier.dstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
+        imageBarrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+    }
+    // Transition back from TRANSFER_SRC_OPTIMAL to COLOR_ATTACHMENT_OPTIMAL.
     else if (oldLayout == VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL && newLayout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL) {
         imageBarrier.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
         imageBarrier.srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
         imageBarrier.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
         imageBarrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
     }
-    // Example 3: An initial transition from UNDEFINED to a general layout
-    // so that the image is prepared for use as a render target.
+    // Initial transition from UNDEFINED to GENERAL.
     else if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED && newLayout == VK_IMAGE_LAYOUT_GENERAL) {
         imageBarrier.srcStageMask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
         imageBarrier.srcAccessMask = 0;
         imageBarrier.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
         imageBarrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
     }
-    // Fallback: use framebuffer stages for both src and dst.
     else {
+        // Fallback; you may adjust as needed.
         imageBarrier.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
         imageBarrier.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-        // Optionally adjust access masks as needed.
     }
 
     VkDependencyInfo depInfo{

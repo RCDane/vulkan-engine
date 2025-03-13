@@ -404,7 +404,7 @@ void VulkanEngine::draw()
 	// we will overwrite it all so we dont care about what was the older layout
 	vkutil::transition_main_color_image(cmd, _drawImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
 	vkutil::transition_image(cmd, _depthImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
-
+	printf("Start new deferred");
 
 	//AddCmdMarker(cmd, "Start Deferred");
 
@@ -424,7 +424,7 @@ void VulkanEngine::draw()
 		//AddCmdMarker(cmd, "Start Raytracing");
 
 		_raytracingHandler.raytrace(cmd, this);
-		vkutil::transition_image(cmd, _drawImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+		vkutil::transition_main_color_image(cmd, _drawImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
 		//RemoveMarker(cmd);
 
 	}
