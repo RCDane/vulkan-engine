@@ -95,7 +95,6 @@ mat3 calculate_TBN(vec3 normal, vec2 uv){
 void main()
 {
     // Normalize input normal
-
     vec3 N = normalize(inNormal);
     if (materialData.normalIdx != 2){
        mat3 TBN = calculate_TBN(inNormal, inUV);
@@ -115,7 +114,7 @@ void main()
     
     //
     // Material properties
-    vec3 baseColor = inColor * SRGBtoLINEAR(texture(textureSamplers[materialData.colorIdx], inUV).rgb);
+    vec3 baseColor = texture(textureSamplers[materialData.colorIdx], inUV).rgb;
     outAlbedo = vec4(baseColor, 1.0);
 
 

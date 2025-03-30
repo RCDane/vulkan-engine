@@ -22,7 +22,6 @@ layout(set = 1, binding = eObjDescs, scalar) buffer ObjDesc_ { ObjDesc i[]; } ob
 layout(set = 1, binding = eTextures) uniform sampler2D textureSamplers[];
 
 
-
 layout(set = 1, binding = 3, scalar) buffer MaterialData_ {GLTFMaterialData data[];} materialData;
 layout(set = 1, binding=4) uniform samplerCube cubeMap;
 

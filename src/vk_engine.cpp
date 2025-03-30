@@ -78,6 +78,17 @@ void VulkanEngine::init()
 
     init_sync_structures();
 
+	// Need to find correct placement for this
+	immediate_submit([&](VkCommandBuffer cmd) {
+		vkutil::transition_image(cmd, _gBuffer_albedo.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
+		vkutil::transition_image(cmd, _gBuffer_normal.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
+		vkutil::transition_image(cmd, _gBuffer_metallicRougnes.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
+		vkutil::transition_image(cmd, _gBuffer_Emissive.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
+		vkutil::transition_depth(cmd, _depthImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL);
+
+		});
+
+
 	init_descriptors();	
 	init_background_pipelines();
 
@@ -125,10 +136,10 @@ void VulkanEngine::init()
 	//loadedScenes["helmet"]->rootTransform = glm::scale(glm::vec3(10.0f)) * loadedScenes["helmet"]->rootTransform;
 	//loadedScenes["helmet"]->rootTransform = glm::translate(glm::vec3(0.0f, 20.0f, 0.0f)) * loadedScenes["helmet"]->rootTransform;
 
-	//std::string sponzaPath = { "../assets/sponza.glb" };
-	//auto sponzaFile = loadGltf(this, sponzaPath);
-	//assert(sponzaFile.has_value());
-	//loadedScenes["sponza"] = *sponzaFile;
+	std::string sponzaPath = { "../assets/sponza.glb" };
+	auto sponzaFile = loadGltf(this, sponzaPath);
+	assert(sponzaFile.has_value());
+	loadedScenes["sponza"] = *sponzaFile;
 
 
 	if (loadedScenes.contains("sponza") && loadedScenes["sponza"]->camera != NULL) {
@@ -161,11 +172,11 @@ void VulkanEngine::init()
 
 
 
-	std::string dragonPath = { "../assets/dragon.glb" };
-	auto dragonFile = loadGltf(this, dragonPath);
-	assert(dragonFile.has_value());
-	loadedScenes["dragon"] = *dragonFile;
-	loadedScenes["dragon"]->rootTransform = glm::scale(glm::vec3(30.0f)) * loadedScenes["dragon"]->rootTransform;
+	//std::string dragonPath = { "../assets/dragon.glb" };
+	//auto dragonFile = loadGltf(this, dragonPath);
+	//assert(dragonFile.has_value());
+	//loadedScenes["dragon"] = *dragonFile;
+	//loadedScenes["dragon"]->rootTransform = glm::scale(glm::vec3(30.0f)) * loadedScenes["dragon"]->rootTransform;
 	//loadedScenes["dragon"]->rootTransform = glm::translate(glm::vec3(20.0f, 10.0f, 20.0f)) * loadedScenes["dragon"]->rootTransform;
 
 
@@ -379,8 +390,9 @@ void VulkanEngine::draw()
 
 	auto start = std::chrono::system_clock::now();
 
-   	VK_CHECK(vkBeginCommandBuffer(cmd, &cmdBeginInfo));
 
+   	VK_CHECK(vkBeginCommandBuffer(cmd, &cmdBeginInfo));
+	std::cout << "Starting command buffer: " << std::addressof(cmd) << std::endl;
 	// Get current frame index
 	uint32_t frameIndex = _frameNumber % FRAME_OVERLAP;
 	auto& currentFrame = _frames[frameIndex];
@@ -398,33 +410,43 @@ void VulkanEngine::draw()
 
 
 	// Write start timestamp
-	vkCmdWriteTimestamp(cmd, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, _timestampQueryPool, currentFrame._queryStart);
+	//vkCmdWriteTimestamp(cmd, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, _timestampQueryPool, currentFrame._queryStart);
 
 	// transition our main draw image into general layout so we can write into it
 	// we will overwrite it all so we dont care about what was the older layout
-	vkutil::transition_main_color_image(cmd, _drawImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
-	vkutil::transition_image(cmd, _depthImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
-	printf("Start new deferred");
+	printf("transition main_color_image\n");
+	vkutil::transition_image(cmd, _drawImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+	printf("transition depth\n");
+
+	vkutil::transition_depth(cmd, _depthImage.image, VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
+	printf("Start new deferred\n");
 
 	//AddCmdMarker(cmd, "Start Deferred");
-
-	vkutil::transition_gbuffer_image(cmd, _gBuffer_albedo.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-	vkutil::transition_gbuffer_image(cmd, _gBuffer_normal.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-	vkutil::transition_gbuffer_image(cmd, _gBuffer_metallicRougnes.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-	vkutil::transition_gbuffer_image(cmd, _gBuffer_Emissive.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+	
+	vkutil::transition_gbuffer_image(cmd, _gBuffer_albedo.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+	vkutil::transition_gbuffer_image(cmd, _gBuffer_normal.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+	vkutil::transition_gbuffer_image(cmd, _gBuffer_metallicRougnes.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+	vkutil::transition_gbuffer_image(cmd, _gBuffer_Emissive.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+	printf("first transitions\n");
 
 	draw_deferred(cmd);
+	printf("start second transitions\n");
 
-	vkutil::transition_gbuffer_image(cmd, _gBuffer_albedo.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-	vkutil::transition_gbuffer_image(cmd, _gBuffer_normal.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-	vkutil::transition_gbuffer_image(cmd, _gBuffer_metallicRougnes.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-	vkutil::transition_gbuffer_image(cmd, _gBuffer_Emissive.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-	
+	vkutil::transition_depth(cmd, _depthImage.image, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL);
+
+	vkutil::transition_gbuffer_image(cmd, _gBuffer_albedo.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL);
+	vkutil::transition_gbuffer_image(cmd, _gBuffer_normal.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL);
+	vkutil::transition_gbuffer_image(cmd, _gBuffer_metallicRougnes.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL);
+	vkutil::transition_gbuffer_image(cmd, _gBuffer_Emissive.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL);
+	printf("second transitions\n");
+
+	//printf("end new deferred\n");
+
 	if (useRaytracing) {
 		//AddCmdMarker(cmd, "Start Raytracing");
 
 		_raytracingHandler.raytrace(cmd, this);
-		vkutil::transition_main_color_image(cmd, _drawImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+		vkutil::transition_image(cmd, _drawImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
 		//RemoveMarker(cmd);
 
 	}
@@ -440,11 +462,11 @@ void VulkanEngine::draw()
 		vkutil::transition_shadow_map(cmd, _shadowImage->image.image, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL, subResourceRange);
 
 
-		vkutil::transition_main_color_image(cmd, _drawImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+		vkutil::transition_image(cmd, _drawImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 		vkutil::transition_image(cmd, _depthImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
 
 		draw_geometry(cmd);
-		vkutil::transition_main_color_image(cmd, _drawImage.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+		vkutil::transition_image(cmd, _drawImage.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
 
 	}
 
@@ -462,7 +484,7 @@ void VulkanEngine::draw()
 	// set swapchain image layout to Present so we can draw it
 	vkutil::transition_image(cmd, _swapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 	
-	vkCmdWriteTimestamp(cmd, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, _timestampQueryPool, currentFrame._queryEnd);
+	//vkCmdWriteTimestamp(cmd, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, _timestampQueryPool, currentFrame._queryEnd);
 
 
 
@@ -492,8 +514,8 @@ void VulkanEngine::draw()
 
 	uint32_t lastframeIndex = _frameNumber % FRAME_OVERLAP;
 
-	if (_frameNumber > 0)
-		retrieve_timestamp_results(lastframeIndex);
+	//if (_frameNumber > 0)
+	//	retrieve_timestamp_results(lastframeIndex);
 
 
     //prepare present
@@ -803,10 +825,11 @@ void VulkanEngine::draw_deferred(VkCommandBuffer cmd)
 
 
 	VkRenderingInfo renderInfo = vkinit::rendering_info(_windowExtent, colorAttachments, &depthAttachment);
+	printf("test\n");
 
 	vkCmdBeginRendering(cmd, &renderInfo);
+	printf("begin rendering\n");
 
-	// vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _trianglePipeline);
 
 
 	//set dynamic viewport and scissor
@@ -941,8 +964,8 @@ void VulkanEngine::draw_deferred(VkCommandBuffer cmd)
 
 	vkCmdEndRendering(cmd);
 	// we delete the draw commands now that we processed them
-	mainDrawContext.OpaqueSurfaces.clear();
-	mainDrawContext.TransparentSurfaces.clear();
+	//mainDrawContext.OpaqueSurfaces.clear();
+	//mainDrawContext.TransparentSurfaces.clear();
 
 
 }
@@ -1330,7 +1353,7 @@ void VulkanEngine::init_swapchain()
 	_gBuffer_metallicRougnes.imageExtent = drawImageExtent;
 
 	create_render_buffer(_gBuffer_metallicRougnes, materialImageUsages, VK_IMAGE_ASPECT_COLOR_BIT);
-	_gBuffer_normal.name = "G-buffer-MetalRougness";
+	_gBuffer_metallicRougnes.name = "G-buffer-MetalRougness";
 
 
 	// emissive buffer
@@ -1345,7 +1368,10 @@ void VulkanEngine::init_swapchain()
 	_gBuffer_Emissive.imageExtent = drawImageExtent;
 
 	create_render_buffer(_gBuffer_Emissive, emissiveImageUsages, VK_IMAGE_ASPECT_COLOR_BIT);
-	_gBuffer_normal.name = "G-buffer-Emissive";
+	_gBuffer_Emissive.name = "G-buffer-Emissive";
+
+
+
 
 }
 
@@ -1464,16 +1490,14 @@ void VulkanEngine::init_descriptors(){
 		VkDescriptorBindingFlags flags = VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT;
 
 		DescriptorLayoutBuilder builder;
-		builder.add_binding(0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, flags); // original color
-		builder.add_binding(1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, flags); // depth
-		builder.add_binding(2, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, flags); // normal
-		builder.add_binding(3, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, flags); // albedo
-		builder.add_binding(4, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, flags); // metallic rougness
-		builder.add_binding(5, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, flags); // emissive
+		builder.add_binding(0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, flags); // albedo
+		builder.add_binding(1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, flags); // normal
+		builder.add_binding(2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, flags); // metallic rougness
+		builder.add_binding(3, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, flags); // emissive
 
 
 		_deferredDscSetLayout = builder.build(_device,
-			VK_SHADER_STAGE_COMPUTE_BIT,
+			VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_RAYGEN_BIT_KHR,
 			NULL,
 			VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT);
 	}

@@ -1261,7 +1261,7 @@ void RaytracingHandler::createRtPipeline(VulkanEngine* engine) {
 	pipelineLayoutCreateInfo.pPushConstantRanges = &pushConstant;
 
 	// Descriptor sets: one specific to ray tracing, and one shared with the rasterization pipeline
-	std::vector<VkDescriptorSetLayout> rtDescSetLayouts = { m_rtDescSetLayout, m_descSetLayout };
+	std::vector<VkDescriptorSetLayout> rtDescSetLayouts = { m_rtDescSetLayout, m_descSetLayout, engine->_deferredDscSetLayout };
 	pipelineLayoutCreateInfo.setLayoutCount = static_cast<uint32_t>(rtDescSetLayouts.size());
 	pipelineLayoutCreateInfo.pSetLayouts = rtDescSetLayouts.data();
 	
@@ -1440,9 +1440,11 @@ void RaytracingHandler::raytrace(VkCommandBuffer cmd, VulkanEngine* engine) {
 		VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 
 	writer.update_set(engine->_device, uniformsDescriptor);
-
+	DescriptorWriter writer2;
+	writer2.write_image(0, engine->_gBuffer_albedo.imageView, engine->_defaultSamplerNearest, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+	writer2.update_set(engine->_device, engine->_gBufferDescriptors);
 	// Bind the ray tracing descriptor sets
-	std::vector<VkDescriptorSet> descSets{ m_rtDescSet, uniformsDescriptor };
+	std::vector<VkDescriptorSet> descSets{ m_rtDescSet, uniformsDescriptor, engine->_gBufferDescriptors };
 	vkCmdBindDescriptorSets(
 		cmd,
 		VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR,

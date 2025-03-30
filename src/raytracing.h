@@ -103,6 +103,8 @@ private:
 	VkDescriptorSetLayout m_rtDescSetLayout;
 	VkDescriptorSet m_rtDescSet;
 	VkDescriptorSetLayout m_descSetLayout;
+
+
 	AllocatedBuffer m_rtSBTBuffer;
 	VkStridedDeviceAddressRegionKHR m_rgenRegion{};
 	VkStridedDeviceAddressRegionKHR m_missRegion{};

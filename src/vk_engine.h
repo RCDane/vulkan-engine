@@ -257,6 +257,10 @@ public:
 	std::unique_ptr<ShadowPipeline> _shadowPipeline;
 	VkDescriptorSetLayout _shadowDescriptorLayout;
 
+	VkDescriptorSet _GbufferSet;
+	VkDescriptorSetLayout _GbufferSetLayout;
+
+
 	DirectionalLighting _directionalLighting;
 	PushConstantRay _raytracePushConstant;
 	VkDescriptorSet _imgui_shadow_descriptor;
