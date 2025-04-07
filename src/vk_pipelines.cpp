@@ -87,10 +87,10 @@ VkPipeline PipelineBuilder::build_pipeline(VkDevice device)
     VkPipelineColorBlendStateCreateInfo colorBlending = {};
     colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
     colorBlending.pNext = nullptr;
-
-    if (reuse_blending) {
-        std::vector<VkPipelineColorBlendAttachmentState> blendAttachments(
-            _renderInfo.colorAttachmentCount, _colorBlendAttachment);
+    std::vector<VkPipelineColorBlendAttachmentState> blendAttachments(
+        _renderInfo.colorAttachmentCount, _colorBlendAttachment);
+    if (_renderInfo.colorAttachmentCount > 1) {
+       
 
         colorBlending.attachmentCount = static_cast<uint32_t>(blendAttachments.size());
         colorBlending.pAttachments = blendAttachments.data();
@@ -124,7 +124,7 @@ VkPipeline PipelineBuilder::build_pipeline(VkDevice device)
     VkPipelineDynamicStateCreateInfo dynamicInfo = { .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO };
     dynamicInfo.pDynamicStates = &state[0];
     dynamicInfo.dynamicStateCount = 2;
-
+    
     pipelineInfo.pDynamicState = &dynamicInfo;
 
         // its easy to error out on create graphics pipeline, so we handle it a bit

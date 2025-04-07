@@ -140,6 +140,24 @@ VkRenderingAttachmentInfo vkinit::attachment_info(
 
     return colorAttachment;
 }
+VkRenderingAttachmentInfo vkinit::attachment_info(
+    VkImageView view, VkClearValue* clear, VkImageLayout layout /*= VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL*/, VkAttachmentLoadOp load_op)
+{
+    VkRenderingAttachmentInfo colorAttachment{};
+    colorAttachment.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+    colorAttachment.pNext = nullptr;
+
+    colorAttachment.imageView = view;
+    colorAttachment.imageLayout = layout;
+    colorAttachment.loadOp = load_op;
+    
+    colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    if (clear) {
+        colorAttachment.clearValue = *clear;
+    }
+
+    return colorAttachment;
+}
 //< color_info
 //> depth_info
 VkRenderingAttachmentInfo vkinit::depth_attachment_info(
@@ -161,7 +179,7 @@ VkRenderingAttachmentInfo vkinit::depth_attachment_info(
 
 
 //> render_info multiple color attachments
-VkRenderingInfo vkinit::rendering_info(VkExtent2D renderExtent, std::vector<VkRenderingAttachmentInfo> &colorAttachments,
+VkRenderingInfo vkinit::rendering_info(VkExtent2D renderExtent, std::vector<VkRenderingAttachmentInfo> *colorAttachments,
     VkRenderingAttachmentInfo* depthAttachment)
 {
     VkRenderingInfo renderInfo{};
@@ -171,8 +189,8 @@ VkRenderingInfo vkinit::rendering_info(VkExtent2D renderExtent, std::vector<VkRe
     renderInfo.renderArea = VkRect2D{ VkOffset2D { 0, 0 }, renderExtent };
     renderInfo.layerCount = 1;
     
-    renderInfo.colorAttachmentCount = colorAttachments.size();
-    renderInfo.pColorAttachments = colorAttachments.data();
+    renderInfo.colorAttachmentCount = colorAttachments->size();
+    renderInfo.pColorAttachments = colorAttachments->data();
     renderInfo.pDepthAttachment = depthAttachment;
     renderInfo.pStencilAttachment = nullptr;
 

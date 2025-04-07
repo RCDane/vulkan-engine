@@ -231,7 +231,7 @@ public:
 
 	GPUMeshBuffers rectangle;
 
-
+	std::vector<VkRenderingAttachmentInfo> mColorAttachments;
 	std::vector<std::shared_ptr<MeshAsset>> testMeshes;
 
 	AllocatedImage _drawImage;

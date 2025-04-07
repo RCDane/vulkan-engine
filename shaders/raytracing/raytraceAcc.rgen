@@ -12,9 +12,12 @@
 layout(location = 0) rayPayloadEXT hitPayload prd;
 
 layout(set = 0, binding = eTlas) uniform accelerationStructureEXT topLevelAS;
-layout(set = 0, binding = eOutImage, rgba32f) uniform image2D image;
+layout(set = 0, binding = eOutImage, rgba16f) uniform image2D image;
 layout(set = 1, binding = eGlobals) uniform _GlobalUniforms { GlobalUniforms uni; };
-layout(set = 2, binding = 0, rgba32f) uniform image2D albedo; 
+layout(set = 2, binding = 0, rgba16f) uniform image2D albedo; 
+layout(set = 2, binding = 1, rgba16f) uniform image2D normal; 
+layout(set = 2, binding = 2, rgba16f) uniform image2D material; 
+layout(set = 2, binding = 3, rgba16f) uniform image2D emission; 
 
 layout(push_constant) uniform _PushConstantRay { PushConstantRay pcRay; };
 // clang-format on
@@ -40,13 +43,15 @@ void main()
   const vec2 inUV        = pixelCenter / vec2(gl_LaunchSizeEXT.xy);
   vec2       d           = inUV * 2.0 - 1.0;
   vec4 currentColor = SRGBtoLINEAR(imageLoad(image, ivec2(gl_LaunchIDEXT.xy)));
-  vec4 currentAlbedo = SRGBtoLINEAR(imageLoad(albedo, ivec2(gl_LaunchIDEXT.xy)));
+  vec4 currentAlbedo = SRGBtoLINEAR(imageLoad(material, ivec2(gl_LaunchIDEXT.xy)));
 
   if (uni.clearScreen == 1){
     currentColor = vec4(0);
   }
   imageStore(image, ivec2(gl_LaunchIDEXT.xy), currentAlbedo);
   return;
+
+
 
   dvec3 finalColor = dvec3(0);
   vec4 origin    = uni.viewInverse * vec4(0, 0, 0, 1);

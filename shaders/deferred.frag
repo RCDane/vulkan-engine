@@ -30,7 +30,7 @@ layout(buffer_reference, std430) readonly buffer VertexBuffer{
 };
 
 layout(set = 2, binding=0) uniform sampler2D[] textureSamplers;
-layout(set = 2, binding=1) uniform samplerCube cubeMap;
+// layout(set = 2, binding=1) uniform samplerCube cubeMap;
 
 //push constants block
 layout( push_constant,scalar ) uniform constants
@@ -42,7 +42,7 @@ layout( push_constant,scalar ) uniform constants
 } PushConstants;
  #define EPSILON 0.00001
 
-// Taken from:http://www.thetenthplanet.de/archives/1180
+// // Taken from:http://www.thetenthplanet.de/archives/1180
 mat3 inverse3x3( mat3 M ) { 
     // The original was written in HLSL, but this is GLSL, 
     // therefore 
@@ -96,15 +96,20 @@ void main()
 {
     // Normalize input normal
     vec3 N = normalize(inNormal);
+    outNormal = vec4(N,1.0);
+
     if (materialData.normalIdx != 2){
        mat3 TBN = calculate_TBN(inNormal, inUV);
        vec3 textureNormal = texture(textureSamplers[materialData.normalIdx], inUV).xyz;
         
        textureNormal = textureNormal * 255./127. - 128./127.;
        N = normalize(TBN * textureNormal);
+       outNormal = vec4(N, 1.0);
     }
-    outNormal = vec4(N, 1.0);
 
+    // Material properties
+    vec3 baseColor = texture(textureSamplers[materialData.colorIdx], inUV).rgb;
+    outAlbedo = vec4(baseColor,1.0);
 
     vec3 emission = vec3(0);
     if (materialData.emissiveIdx != 3){
@@ -112,13 +117,10 @@ void main()
     }
     outEmissive = vec4(emission, 1.0);
     
-    //
-    // Material properties
-    vec3 baseColor = texture(textureSamplers[materialData.colorIdx], inUV).rgb;
-    outAlbedo = vec4(baseColor, 1.0);
 
 
-    // Roughness and metallic factors
+
+    // // Roughness and metallic factors
     float roughness = materialData.metal_rough_factors.y;
     float metallic = materialData.metal_rough_factors.x;
 

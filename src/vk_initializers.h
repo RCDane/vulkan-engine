@@ -23,14 +23,14 @@ VkSubmitInfo2 submit_info(VkCommandBufferSubmitInfo* cmd, VkSemaphoreSubmitInfo*
 VkPresentInfoKHR present_info();
 
 VkRenderingAttachmentInfo attachment_info(VkImageView view, VkClearValue* clear, VkImageLayout layout /*= VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL*/);
-
+VkRenderingAttachmentInfo attachment_info(VkImageView view, VkClearValue* clear, VkImageLayout layout /*= VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL*/, VkAttachmentLoadOp load_op);
 VkRenderingAttachmentInfo depth_attachment_info(VkImageView view,
     VkImageLayout layout /*= VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL*/);
 
 VkRenderingInfo rendering_info(VkExtent2D renderExtent, VkRenderingAttachmentInfo* colorAttachment,
     VkRenderingAttachmentInfo* depthAttachment);
 
-VkRenderingInfo rendering_info(VkExtent2D renderExtent, std::vector<VkRenderingAttachmentInfo>& colorAttachments,
+VkRenderingInfo rendering_info(VkExtent2D renderExtent, std::vector<VkRenderingAttachmentInfo>* colorAttachments,
     VkRenderingAttachmentInfo* depthAttachment);
 
 VkImageSubresourceRange image_subresource_range(VkImageAspectFlags aspectMask);
