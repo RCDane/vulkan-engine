@@ -1178,7 +1178,7 @@ void RaytracingHandler::createRtPipeline(VulkanEngine* engine) {
 
 	// Raygen
 	VkShaderModule main;
-	if (!vkutil::load_shader_module("../shaders/spv/raytraceAcc.rgen.spv", engine->_device, &main)) {
+	if (!vkutil::load_shader_module("../shaders/spv/raytraceAccIter.rgen.spv", engine->_device, &main)) {
 		fmt::print("Error when building the raygen shader module\n");
 	}
 	else {
@@ -1214,7 +1214,7 @@ void RaytracingHandler::createRtPipeline(VulkanEngine* engine) {
 
 	// Hit Group - Closest Hit
 	VkShaderModule closestHit;
-	if (!vkutil::load_shader_module("../shaders/spv/raytracepbrAcc.rchit.spv", engine->_device, &closestHit)) {
+	if (!vkutil::load_shader_module("../shaders/spv/raytracepbrAccIter.rchit.spv", engine->_device, &closestHit)) {
 		fmt::print("Error when building the closest hit shader module\n");
 	}
 	else {
@@ -1445,6 +1445,7 @@ void RaytracingHandler::raytrace(VkCommandBuffer cmd, VulkanEngine* engine) {
 	writer2.write_image(1, engine->_gBuffer_normal.imageView, engine->_defaultSamplerNearest, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 	writer2.write_image(2, engine->_gBuffer_metallicRougnes.imageView, engine->_defaultSamplerNearest, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 	writer2.write_image(3, engine->_gBuffer_Emissive.imageView, engine->_defaultSamplerNearest, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+	writer2.write_image(4, engine->_depthImage.imageView, engine->_defaultSamplerNearest, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 
 	writer2.update_set(engine->_device, engine->_gBufferDescriptors);
 	// Bind the ray tracing descriptor sets

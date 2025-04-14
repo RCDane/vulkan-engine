@@ -84,7 +84,7 @@ void VulkanEngine::init()
 		vkutil::transition_image_relaxed(cmd, _gBuffer_normal.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
 		vkutil::transition_image_relaxed(cmd, _gBuffer_metallicRougnes.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
 		vkutil::transition_image_relaxed(cmd, _gBuffer_Emissive.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
-		vkutil::transition_image_relaxed(cmd, _depthImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL, VK_IMAGE_ASPECT_DEPTH_BIT);
+		vkutil::transition_image_relaxed(cmd, _depthImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_DEPTH_BIT);
 		vkutil::transition_image_relaxed(cmd, _drawImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_ASPECT_COLOR_BIT);
 
 		});
@@ -145,6 +145,8 @@ void VulkanEngine::init()
 
 	if (loadedScenes.contains("sponza") && loadedScenes["sponza"]->camera != NULL) {
 		mainCamera = loadedScenes["sponza"]->camera;
+		mainCamera->zFar = 1000.0f;
+		mainCamera->zNear = 0.001;
 	}
 	else {
 		mainCamera = std::make_shared<Camera>();
@@ -156,7 +158,7 @@ void VulkanEngine::init()
 		mainCamera->aspectRatio = 1;
 		mainCamera->fov = 70;
 		mainCamera->zNear = 0.001f;
-		mainCamera->zFar = 1000.0f;
+		mainCamera->zFar = 100.0f;
 		mainCamera->isPerspective = true;
 	}
 
@@ -377,8 +379,6 @@ void VulkanEngine::draw()
 {
 	update_scene();
 
-	printf("Sleep");
-	std::this_thread::sleep_for(9ms);
 	// wait until the gpu has finished rendering the last frame. Timeout of 1
 	// second
 	VK_CHECK(vkWaitForFences(_device, 1, &get_current_frame()._renderFence, true, 1000000000));
@@ -442,7 +442,7 @@ void VulkanEngine::draw()
 	// we will overwrite it all so we dont care about what was the older layout
 	printf("transition depth\n");
 
-	vkutil::transition_image(cmd, _depthImage.image, VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL , VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, VK_IMAGE_ASPECT_DEPTH_BIT);
+	vkutil::transition_image(cmd, _depthImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, VK_IMAGE_ASPECT_DEPTH_BIT);
 
 	printf("Start new deferred\n");
 
@@ -465,7 +465,7 @@ void VulkanEngine::draw()
 
 	draw_deferred(cmd);
 	printf("start second transitions\n");
-	vkutil::transition_image(cmd, _depthImage.image, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL, VK_IMAGE_ASPECT_DEPTH_BIT);
+	//vkutil::transition_image(cmd, _depthImage.image, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL, VK_IMAGE_ASPECT_DEPTH_BIT);
 
 
 
@@ -486,6 +486,7 @@ void VulkanEngine::draw()
 
 	if (useRaytracing) {
 		//AddCmdMarker(cmd, "Start Raytracing");
+		vkutil::transition_image(cmd, _depthImage.image, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_DEPTH_BIT);
 
 		_raytracingHandler.raytrace(cmd, this);
 		vkutil::transition_image_relaxed(cmd, _drawImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_ASPECT_COLOR_BIT);
@@ -558,8 +559,8 @@ void VulkanEngine::draw()
 
 	uint32_t lastframeIndex = _frameNumber % FRAME_OVERLAP;
 
-	//if (_frameNumber > 0)
-	//	retrieve_timestamp_results(lastframeIndex);
+	if (_frameNumber > 0)
+		retrieve_timestamp_results(lastframeIndex);
 
 
     //prepare present
@@ -1360,7 +1361,7 @@ void VulkanEngine::init_swapchain()
 	VkImageUsageFlags depthImageUsages{};
 	depthImageUsages |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
 	depthImageUsages |= VK_IMAGE_USAGE_SAMPLED_BIT;
-
+	depthImageUsages |= VK_IMAGE_USAGE_STORAGE_BIT;
 	_depthImage.imageFormat = VK_FORMAT_D32_SFLOAT;
 	_depthImage.imageExtent = drawImageExtent;
 
@@ -1426,7 +1427,7 @@ void VulkanEngine::init_swapchain()
 	emissiveImageUsages |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 	emissiveImageUsages |= VK_IMAGE_USAGE_SAMPLED_BIT;
 
-	_gBuffer_Emissive.imageFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
+	_gBuffer_Emissive.imageFormat = VK_FORMAT_R32G32B32A32_SFLOAT;
 	_gBuffer_Emissive.imageExtent = drawImageExtent;
 
 	create_render_buffer(_gBuffer_Emissive, emissiveImageUsages, VK_IMAGE_ASPECT_COLOR_BIT);
@@ -1558,6 +1559,7 @@ void VulkanEngine::init_descriptors(){
 		builder.add_binding(1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, flags); // normal
 		builder.add_binding(2, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, flags); // metallic rougness
 		builder.add_binding(3, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, flags); // emissive
+		builder.add_binding(4, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, flags); // emissive
 
 
 		_deferredDscSetLayout = builder.build(_device,
@@ -2490,9 +2492,9 @@ void VulkanEngine::update_scene()
 	}
 
 	mainCamera->update();
-	glm::vec3 jitter = glm::ballRand(0.005);
+	//glm::vec3 jitter = glm::ballRand(0.0);
 
-	glm::mat4 view = mainCamera->getViewMatrix(jitter);
+	glm::mat4 view = mainCamera->getViewMatrix(glm::vec3(0.0));
 	glm::mat4 rasterizationProjection = mainCamera->getProjectionMatrix(false);
 	glm::mat4 rayTracingProjection = mainCamera->getProjectionMatrix(true);
 

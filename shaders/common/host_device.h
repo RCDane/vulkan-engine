@@ -81,6 +81,7 @@ struct hitPayload
   int  done;
   vec3 rayOrigin;
   vec3 rayDir;
+  vec3 normal;
   float currentIoR;
   int hitMax;
   uint seed;

@@ -115,7 +115,8 @@ void main()
     if (materialData.emissiveIdx != 3){
         emission = SRGBtoLINEAR(texture(textureSamplers[materialData.emissiveIdx], inUV).xyz);
     }
-    outEmissive = vec4(emission, 1.0);
+    // outEmissive = vec4(emission, 1.0);
+    outEmissive = vec4(vPos, 1.0);
     
 
 

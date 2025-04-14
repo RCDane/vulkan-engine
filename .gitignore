@@ -40,3 +40,16 @@ build
 .cache
 /renderdoc captures
 *.spv
+assets/SciFiHelmet/glTF/SciFiHelmet.bin
+assets/SciFiHelmet/glTF/SciFiHelmet.gltf
+assets/SciFiHelmet/glTF/SciFiHelmet_AmbientOcclusion.png
+assets/SciFiHelmet/glTF/SciFiHelmet_BaseColor.png
+assets/SciFiHelmet/glTF/SciFiHelmet_MetallicRoughness.png
+assets/SciFiHelmet/glTF/SciFiHelmet_Normal.png
+assets/SciFiHelmet/LICENSE.md
+assets/SciFiHelmet/metadata.json
+assets/SciFiHelmet/README.md
+assets/SciFiHelmet/scifiHelmet.blend
+assets/SciFiHelmet/SciFiHelmet.glb
+assets/SciFiHelmet/screenshot/screenshot-x150.jpg
+assets/SciFiHelmet/screenshot/screenshot.jpg
