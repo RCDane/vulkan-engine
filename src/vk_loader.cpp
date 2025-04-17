@@ -714,6 +714,17 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGltf(VulkanEngine* engine, std::s
     return scene;
 }
 
+
+std::optional<Camera> LoadedGLTF::GetCameras() {
+	if (camera) {
+		return *camera;
+	}
+	else {
+		throw std::runtime_error("No camera found in GLTF");
+	}
+}
+
+
 void LoadedGLTF::Draw(const glm::mat4& topMatrix, DrawContext& ctx){
     for (auto& n : topNodes){
         n->Draw(topMatrix, ctx);

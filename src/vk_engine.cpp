@@ -142,22 +142,47 @@ void VulkanEngine::init()
 	assert(sponzaFile.has_value());
 	loadedScenes["sponza"] = *sponzaFile;
 
-	if (loadedScenes.contains("sponza") && loadedScenes["sponza"]->camera != NULL) {
-		lightSources.insert(lightSources.end(),
-			loadedScenes["sponza"]->lightSources.begin(),
-			loadedScenes["sponza"]->lightSources.end());
+	//if (loadedScenes.contains("sponza") && loadedScenes["sponza"]->camera != NULL) {
+	//	lightSources.insert(lightSources.end(),
+	//		loadedScenes["sponza"]->lightSources.begin(),
+	//		loadedScenes["sponza"]->lightSources.end());
+	//}
+
+	//if (loadedScenes.contains("sponza") && loadedScenes["sponza"]->camera != NULL) {
+	//	mainCamera = loadedScenes["sponza"]->camera;
+	//	mainCamera->zFar = 1000.0f;
+	//	mainCamera->zNear = 0.001;
+	//}
+	//else {
+	//	mainCamera = std::make_shared<Camera>();
+	//	mainCamera->velocity = glm::vec3(0.f);
+	//	mainCamera->position = glm::vec3(0.f, 0.f, 0.f);
+
+	//	mainCamera->pitch = 0;
+	//	mainCamera->yaw = 0;
+	//	mainCamera->aspectRatio = 1;
+	//	mainCamera->fov = 70;
+	//	mainCamera->zNear = 0.001f;
+	//	mainCamera->zFar = 100.0f;
+	//	mainCamera->isPerspective = true;
+	//}
+
+
+	for (auto const& [key, scene] : loadedScenes) {
+		if (scene->camera) {
+			mainCamera = scene->camera;
+		}
+		if (scene->lightSources.size() > 0) {
+			lightSources.insert(lightSources.end(),
+				scene->lightSources.begin(),
+				scene->lightSources.end());
+		}
 	}
 
-	if (loadedScenes.contains("sponza") && loadedScenes["sponza"]->camera != NULL) {
-		mainCamera = loadedScenes["sponza"]->camera;
-		mainCamera->zFar = 1000.0f;
-		mainCamera->zNear = 0.001;
-	}
-	else {
+	if (mainCamera == NULL) {
 		mainCamera = std::make_shared<Camera>();
 		mainCamera->velocity = glm::vec3(0.f);
 		mainCamera->position = glm::vec3(0.f, 0.f, 0.f);
-
 		mainCamera->pitch = 0;
 		mainCamera->yaw = 0;
 		mainCamera->aspectRatio = 1;

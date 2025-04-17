@@ -60,6 +60,8 @@ struct LoadedGLTF : public IRenderable {
 
     ~LoadedGLTF() { clearAll(); };
 
+    std::optional<Camera> GetCameras();
+
     virtual void Draw(const glm::mat4& topMatrix, DrawContext& ctx);
 
     // For gamejam only
