@@ -151,6 +151,7 @@ void main()
 
   float roughness = material.r;
   float metalness = material.g;
+  prd.seed = tea(gl_LaunchIDEXT.y * gl_LaunchSizeEXT.x + gl_LaunchIDEXT.x, int(uni.raytracingSettings.seed));;
 
 
 
@@ -179,6 +180,8 @@ void main()
   prd.rayOrigin = worldPos;
   prd.rayDir = -direction.xyz;
   prd.normal = N;
+  vec3 F0 = mix(vec3(0.04), albedoColor.xyz, metalness);
+
   vec3 outColor = vec3(0);
   for (;;){
 		vec3  origin = prd.rayOrigin;
@@ -190,9 +193,11 @@ void main()
 		float tMax   = 10000000.0;
 		vec3  rayDir = rayDirection;
 		uint  flags  = gl_RayFlagsNoneEXT;
+    prd.done = 0;
 		prd.depth += 1;
-		prd.rayOrigin;
 		prd.rayDir = rayDir;
+    prd.rayOrigin = origin + rayDir * tMin;
+    prd.hitValue = vec3(0);
 		traceRayEXT(topLevelAS,  // acceleration structure
 						flags,       // rayFlags
 						0xFF,        // cullMask
@@ -201,27 +206,27 @@ void main()
 						0,           // missIndex
 						origin,      // ray origin
 						tMin,        // ray min range
-						rayDir,      // ray direction
+						rayDirection,      // ray direction
 						tMax,        // ray max range
 						0            // payload is payload
 		);
 		vec3 lCol = prd.hitValue;
-			
-		outColor += lCol;
-    if(prd.depth > 2)
+		
+		outColor += CalculatePBR(N,V,rayDir,albedoColor.xyz,lCol, lightIntensity, F0, metalness, roughness);
+    if(prd.depth >= 2 || prd.done == 1)
       break;
   }
 
 
-      isShadowed   = true; 
+  isShadowed   = true; 
 
 
     if(dot(N, L) > 0)
     {
 
-      float tMin   = 0.1;
+      float tMin   = 0.0001;
       float tMax   = lightDistance;
-      vec3  rayOrigin = worldPos + L * 0.001;
+      vec3  rayOrigin = worldPos;
       vec3  rayDir = L;
       uint  flags  = gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsOpaqueEXT | gl_RayFlagsSkipClosestHitShaderEXT;
       traceRayEXT(topLevelAS,  // acceleration structure
@@ -236,64 +241,25 @@ void main()
             tMax,        // ray max range
             1            // payload is isShadowed
       );
+      vec3 H = normalize(L + V);
+      vec3 lightColor = pcRay.lightColor * lightIntensity;
+      vec3 color = vec3(0);
+      if (!isShadowed){
+        outColor += CalculatePBR(N,V,L,albedoColor.xyz,lightColor, lightIntensity, F0, metalness, roughness);
+      }
     }
 
-    vec3 H = normalize(L + V);
-    vec3 lightColor = pcRay.lightColor * lightIntensity;
-    vec3 color = vec3(0);
-    vec3 F0 = mix(vec3(0.04), albedoColor.xyz, metalness);
-    if (!isShadowed){
-      // outColor += CalculatePBR(N,V,L,albedoColor.xyz,lightColor, lightIntensity, F0, metalness, roughness);
-    }
 
+
+  vec3 currentRayCount =  vec3(uni.raytracingSettings.currentRayCount);
+  vec3 rayBudget =  vec3(uni.raytracingSettings.rayBudget);
+  vec3 accumelatedColor = 
+    ((currentColor.rgb * currentRayCount) 
+    + (outColor * rayBudget))
+    / (currentRayCount + rayBudget);
+
+  vec3 gammaCorrectedColor = LINEARtoSRGB(accumelatedColor);
   
 
-
-  // imageStore(image, ivec2(gl_LaunchIDEXT.xy), vec4(emission.xyz, 1.0));
-  vec3 gammaCorrectedColor = LINEARtoSRGB(outColor);
-  
-  imageStore(image, ivec2(gl_LaunchIDEXT.xy), vec4(gammaCorrectedColor.xyz, 1.0));
-
-  // dvec3 finalColor = dvec3(0);
-  // vec4 origin    = uni.viewInverse * vec4(0, 0, 0, 1);
-  // vec4 target    = uni.projInverse * vec4(d.x, d.y, 1, 1);
-  // vec4 direction = uni.viewInverse * vec4(normalize(target.xyz), 0);
-  // uint  rayFlags = gl_RayFlagsOpaqueEXT;
-  // float tMin     = 0.001;
-  // float tMax     = 10000.0;
-  // prd.depth       = 0;
-  // prd.hitValue    = vec3(0);
-  // prd.attenuation = vec3(1.f, 1.f, 1.f);
-  // prd.done        = 1;
-  // prd.rayOrigin   = origin.xyz;
-  // prd.rayDir      = direction.xyz;
-  // prd.currentIoR  = 1.0;
-  // prd.rayBudget = uni.raytracingSettings.rayBudget;
-  // prd.seed = tea(gl_LaunchIDEXT.y * gl_LaunchSizeEXT.x + gl_LaunchIDEXT.x, int(uni.raytracingSettings.seed));;
-
-  
-  // traceRayEXT(topLevelAS,     // acceleration structure
-  //             rayFlags,       // rayFlags
-  //             0xFF,           // cullMask
-  //             0,              // sbtRecordOffset
-  //             0,              // sbtRecordStride
-  //             0,              // missIndex
-  //             origin.xyz,     // ray origin
-  //             tMin,           // ray min range
-  //             direction.xyz,  // ray direction
-  //             tMax,           // ray max range
-  //             0               // payload (location = 0)
-  // );
-
-  // vec3 currentRayCount =  vec3(uni.raytracingSettings.currentRayCount);
-  // vec3 rayBudget =  vec3(uni.raytracingSettings.rayBudget);
-  // vec3 accumelatedColor = 
-  //   ((currentColor.rgb * currentRayCount) 
-  //   + (prd.hitValue.rgb * rayBudget))
-  //   / (currentRayCount + rayBudget);
-
-  // vec3 gammaCorrectedColor = LINEARtoSRGB(accumelatedColor);
-  
-
-  // imageStore(image, ivec2(gl_LaunchIDEXT.xy), vec4(prd.hitValue.rgb, 1.0));
+  imageStore(image, ivec2(gl_LaunchIDEXT.xy), vec4(gammaCorrectedColor, 1.0));
 }

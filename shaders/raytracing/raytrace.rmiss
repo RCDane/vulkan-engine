@@ -16,5 +16,6 @@ layout(push_constant) uniform _PushConstantRay
 void main()
 {
   prd.hitValue = pow(texture(cubeMap, normalize(gl_WorldRayDirectionEXT)).rgb, vec3(2.2));
+  prd.done = 1;
   // prd.attenuation = vec3(1.0); // TODO: How should I handle attenuation here?
 }

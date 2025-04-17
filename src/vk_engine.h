@@ -332,6 +332,9 @@ public:
 	EngineStats stats;
 	PointLight pointLight;
 	
+	std::vector<std::shared_ptr<LightSource>> lightSources;
+
+
 	bool cameraMoved = false;
 	// Raytracing
 	RaytracingHandler _raytracingHandler;

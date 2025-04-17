@@ -71,7 +71,18 @@ struct AccelKHR
 	}
 };
 
+enum LightType {
+    Point,
+    Directional
+};
 
+struct LightSource {
+    LightType type;
+    float intensity;
+    glm::vec3 position;
+    glm::vec3 direction;
+    glm::vec3 color;
+};
 
 
 struct alignas(16) Vertex {

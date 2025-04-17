@@ -142,6 +142,11 @@ void VulkanEngine::init()
 	assert(sponzaFile.has_value());
 	loadedScenes["sponza"] = *sponzaFile;
 
+	if (loadedScenes.contains("sponza") && loadedScenes["sponza"]->camera != NULL) {
+		lightSources.insert(lightSources.end(),
+			loadedScenes["sponza"]->lightSources.begin(),
+			loadedScenes["sponza"]->lightSources.end());
+	}
 
 	if (loadedScenes.contains("sponza") && loadedScenes["sponza"]->camera != NULL) {
 		mainCamera = loadedScenes["sponza"]->camera;
@@ -183,7 +188,26 @@ void VulkanEngine::init()
 	//loadedScenes["dragon"]->rootTransform = glm::translate(glm::vec3(0, 0, 0)) * loadedScenes["dragon"]->rootTransform;
 
 
+		//some default lighting parameters
+	glm::vec4 sunDirection = glm::vec4(0.f, -1.0f, 0.0f, 1.f);
 
+	sceneData.ambientColor = glm::vec4(0);
+	sceneData.sunlightColor = glm::vec4(lightSources[0]->color, 0);
+	sceneData.sunlightDirection = glm::vec4(lightSources[0]->direction, 0);
+
+	pointLight.color = glm::vec4(1.f);
+	pointLight.position = glm::vec3(0.f, 20.f, 0.f);
+	pointLight.intensity = 2.f;
+
+	_directionalLighting.color = glm::vec4(lightSources[0]->color, 0);;
+	_directionalLighting.direction = lightSources[0]->direction;
+	_directionalLighting.intensity = 1.f;
+
+	_raytracePushConstant.clearColor = glm::vec4(0.1, 0.2, 0.4, 0.97);
+	_raytracePushConstant.lightColor = glm::vec4(1, 1, 1, 1);
+	_raytracePushConstant.lightPosition = sunDirection;
+	_raytracePushConstant.lightType = 1;
+	_raytracePushConstant.lightIntensity = 2.f;
 
 
 	DescriptorWriter writer;
@@ -2176,26 +2200,7 @@ void VulkanEngine::init_default_data(){
 	
 
 
-	//some default lighting parameters
-	glm::vec4 sunDirection = glm::vec4(0.f, -1.0f, 0.0f, 1.f);
 
-	sceneData.ambientColor = glm::vec4(.2f);
-	sceneData.sunlightColor = glm::vec4(200.f);
-	sceneData.sunlightDirection = sunDirection;
-
-	pointLight.color = glm::vec4(1.f);
- 	pointLight.position = glm::vec3(0.f, 20.f, 0.f);
-	pointLight.intensity = 2.f;
-
-	_directionalLighting.color = glm::vec4(1.f);
-	_directionalLighting.direction = sunDirection;
-	_directionalLighting.intensity = 1.f;
-
-	_raytracePushConstant.clearColor = glm::vec4(0.1, 0.2, 0.4, 0.97);
-	_raytracePushConstant.lightColor = glm::vec4(1, 1, 1, 1);
-	_raytracePushConstant.lightPosition = sunDirection;
-	_raytracePushConstant.lightType = 1;
-	_raytracePushConstant.lightIntensity = 2.f;
 
 
 

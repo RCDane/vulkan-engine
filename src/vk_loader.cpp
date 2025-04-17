@@ -170,8 +170,13 @@ std::optional<Camera> loadCamera(fastgltf::Camera& camera) {
         return newCamera;
     }
 }
-
-
+//
+//std::optional<LightSource> loadLight(fastgltf::Light light) {
+//    LightSource newLight;
+//    if (light.type == fastgltf::LightType::Directional) {
+//        newLight.color = light.color;
+//    }
+//}
 
 
 
@@ -191,20 +196,22 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGltf(VulkanEngine* engine, std::s
     LoadedGLTF& file = *scene.get();
 
 
-    fastgltf::Parser parser {};
+    fastgltf::Parser parser(fastgltf::Extensions::KHR_lights_punctual);
+    
+    constexpr auto gltfOptions =
+        fastgltf::Options::DontRequireValidAssetMember |
+        fastgltf::Options::AllowDouble |
+        fastgltf::Options::LoadGLBBuffers |
+        fastgltf::Options::LoadExternalBuffers;
 
-    constexpr auto gltfOptions = 
-            fastgltf::Options::DontRequireValidAssetMember | 
-            fastgltf::Options::AllowDouble | 
-            fastgltf::Options::LoadGLBBuffers | 
-            fastgltf::Options::LoadExternalBuffers;
+    
 
     fastgltf::GltfDataBuffer data;
     data.loadFromFile(filePath);
     
     fastgltf::Asset gltf;
     std::filesystem::path path = filePath;
-
+    
     auto type = fastgltf::determineGltfFileType(&data);
     if (type == fastgltf::GltfType::glTF){
         auto load = parser.loadGLTF(&data, path.parent_path(),gltfOptions);
@@ -275,7 +282,11 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGltf(VulkanEngine* engine, std::s
         }
     }
     
-    
+    if (gltf.lights.size() > 0) {
+        scene->lightSources = std::vector<std::shared_ptr<LightSource>>();
+    }
+
+
 
     // load all textures
     for (fastgltf::Image& image : gltf.images) {
@@ -664,6 +675,19 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGltf(VulkanEngine* engine, std::s
             glm::vec3 eulerAngles = glm::eulerAngles(rotation);
             loadedCamera->pitch = eulerAngles.x;
             loadedCamera->yaw = -eulerAngles.y;
+        }
+
+        if (node.lightIndex.has_value()) {
+            int lightIdx = node.lightIndex.value();
+            LightSource light;
+            light.color = glm::vec3(gltf.lights[lightIdx].color[0], gltf.lights[lightIdx].color[1], gltf.lights[lightIdx].color[2]);
+            light.intensity = gltf.lights[lightIdx].intensity;
+            glm::quat rotation = glm::quat_cast(newNode->localTransform);
+            glm::vec4 transformedDirection = newNode->localTransform * glm::vec4(0, 0, -1, 0);
+
+            light.direction = transformedDirection;
+            light.direction = glm::normalize(light.direction);
+            scene->lightSources.push_back(std::make_shared<LightSource>(light));
         }
     }
     if (cameraLoaded) {

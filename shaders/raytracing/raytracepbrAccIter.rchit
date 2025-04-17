@@ -255,7 +255,7 @@ void main()
 
     vec3 F0 = mix(vec3(0.04), baseColor.xyz, metallic);
 	isShadowed   = true; 
-    float tMin   = 0.1;
+    float tMin   = 0.001;
     float tMax   = lightDistance;
     vec3  rayOrigin = worldPos;
     vec3  rayDir = L;
@@ -282,5 +282,8 @@ void main()
 	// vec3 result = emission+  reflectanceContribution + directContribution;
 	// result = result / (result + vec3(1.0));
     // vec3 result = vec3(0.0, roughness, 0.0); 
+	prd.rayOrigin = worldPos;
+	prd.normal = worldNrm;
+	prd.attenuation = rayAttenuation * result;
 	prd.hitValue = result;
 }
