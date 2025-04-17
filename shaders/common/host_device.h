@@ -71,8 +71,6 @@ struct GlobalUniforms
 	RaytracingSettings raytracingSettings;
 };
 
-
-
 struct hitPayload
 {
   vec3 hitValue;

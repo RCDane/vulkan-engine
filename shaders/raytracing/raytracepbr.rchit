@@ -29,23 +29,6 @@ layout(set = 1, binding=4) uniform samplerCube cubeMap;
 
 layout(push_constant) uniform _PushConstantRay { PushConstantRay pcRay; };
 
-vec3 getColorFromInstanceIndex(int index) {
-	// Normalize the index to a range [0, 1]
-	float normalizedIndex = float(index % 256) / 255.0;
-
-	// Generate a color based on the normalized index
-	vec3 color = vec3(
-		sin(normalizedIndex * 3.14159 * 2.0),
-		cos(normalizedIndex * 3.14159 * 2.0),
-		sin(normalizedIndex * 3.14159)
-	);
-
-	// Ensure the color is in the range [0, 1]
-	color = clamp(color, 0.0, 1.0);
-
-	return color;
-}
-
 
 
 void main()
