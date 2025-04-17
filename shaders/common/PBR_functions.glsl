@@ -62,6 +62,37 @@ vec3 fresnelSchlick(float cosTheta, vec3 F0)
     return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
 }  
 
+struct PBR_result {
+    vec3 f;
+    vec3 color;
+};
+
+PBR_result CalculatePBRResult(vec3 N, vec3 V, vec3 L,vec3 albedo, vec3 lightColor, float lightIntensity, vec3 F0, float metallness,float roughness){
+    vec3 radiance = lightColor*lightIntensity;
+    vec3 H = normalize(V+L);
+
+
+    // cook-torrance brdf
+    float NDF = DistributionGGX(N, H, roughness);        
+    float G   = GeometrySmith(N, V, L, roughness);      
+    vec3 F    = fresnelSchlick(max(dot(H, V), 0.0), F0);       
+        
+    vec3 kS = F;
+    vec3 kD = vec3(1.0) - kS;
+    kD *= 1.0 - metallness;	  
+        
+    vec3 numerator    =  NDF* G * F;
+    float denominator = 4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 0.0001;
+    vec3 specular     = numerator / denominator;  
+            
+    // add to outgoing radiance Lo
+    float NdotL = max(dot(N, L), 0.0);                
+    PBR_result res;
+    res.color = (kD * albedo / PI + specular) * radiance * NdotL;
+    res.f = kD * albedo / PI;
+    return res; 
+}
+
 vec3 CalculatePBR(vec3 N, vec3 V, vec3 L,vec3 albedo, vec3 lightColor, float lightIntensity, vec3 F0, float metallness,float roughness){
     vec3 radiance = lightColor*lightIntensity;
     vec3 H = normalize(V+L);

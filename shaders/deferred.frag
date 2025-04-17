@@ -104,7 +104,14 @@ void main()
         
        textureNormal = textureNormal * 255./127. - 128./127.;
        N = normalize(TBN * textureNormal);
-       outNormal = vec4(N, 1.0);
+       vec3 cameraDir = sceneData.cameraPosition.xyz -  vPos;
+       if (dot(N, cameraDir) < 0){
+        outNormal = vec4(-N, 1.0);
+       }
+       else
+       {
+           outNormal = vec4(N, 1.0);        
+       }
     }
 
     // Material properties

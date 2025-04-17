@@ -39,7 +39,7 @@
 #include <filesystem>
 #include <iostream>
 
-constexpr bool bUseValidationLayers = false;
+constexpr bool bUseValidationLayers = true;
 
 
 VulkanEngine* loadedEngine = nullptr;
@@ -142,35 +142,12 @@ void VulkanEngine::init()
 	assert(sponzaFile.has_value());
 	loadedScenes["sponza"] = *sponzaFile;
 
-	//if (loadedScenes.contains("sponza") && loadedScenes["sponza"]->camera != NULL) {
-	//	lightSources.insert(lightSources.end(),
-	//		loadedScenes["sponza"]->lightSources.begin(),
-	//		loadedScenes["sponza"]->lightSources.end());
-	//}
-
-	//if (loadedScenes.contains("sponza") && loadedScenes["sponza"]->camera != NULL) {
-	//	mainCamera = loadedScenes["sponza"]->camera;
-	//	mainCamera->zFar = 1000.0f;
-	//	mainCamera->zNear = 0.001;
-	//}
-	//else {
-	//	mainCamera = std::make_shared<Camera>();
-	//	mainCamera->velocity = glm::vec3(0.f);
-	//	mainCamera->position = glm::vec3(0.f, 0.f, 0.f);
-
-	//	mainCamera->pitch = 0;
-	//	mainCamera->yaw = 0;
-	//	mainCamera->aspectRatio = 1;
-	//	mainCamera->fov = 70;
-	//	mainCamera->zNear = 0.001f;
-	//	mainCamera->zFar = 100.0f;
-	//	mainCamera->isPerspective = true;
-	//}
-
 
 	for (auto const& [key, scene] : loadedScenes) {
 		if (scene->camera) {
 			mainCamera = scene->camera;
+			mainCamera->zNear = 0.1f;
+			mainCamera->zFar = 1000.0f;
 		}
 		if (scene->lightSources.size() > 0) {
 			lightSources.insert(lightSources.end(),
@@ -205,12 +182,12 @@ void VulkanEngine::init()
 
 
 
-	//std::string dragonPath = { "../assets/dragon.glb" };
-	//auto dragonFile = loadGltf(this, dragonPath);
-	//assert(dragonFile.has_value());
-	//loadedScenes["dragon"] = *dragonFile;
-	//loadedScenes["dragon"]->rootTransform = glm::scale(glm::vec3(30.0f)) * loadedScenes["dragon"]->rootTransform;
-	//loadedScenes["dragon"]->rootTransform = glm::translate(glm::vec3(0, 0, 0)) * loadedScenes["dragon"]->rootTransform;
+	std::string dragonPath = { "../assets/dragon.glb" };
+	auto dragonFile = loadGltf(this, dragonPath);
+	assert(dragonFile.has_value());
+	loadedScenes["dragon"] = *dragonFile;
+	loadedScenes["dragon"]->rootTransform = glm::scale(glm::vec3(30.0f)) * loadedScenes["dragon"]->rootTransform;
+	loadedScenes["dragon"]->rootTransform = glm::translate(glm::vec3(0, 0, 0)) * loadedScenes["dragon"]->rootTransform;
 
 
 		//some default lighting parameters
@@ -650,7 +627,6 @@ void VulkanEngine::draw_geometry(VkCommandBuffer cmd)
 	opaque_draws.clear();
 	opaque_draws.reserve(mainDrawContext.OpaqueSurfaces.size());
 
-	glm::mat4 view = mainCamera->getViewMatrix();
 	
 
 	for (uint32_t i = 0; i < mainDrawContext.OpaqueSurfaces.size(); i++) {
@@ -874,7 +850,6 @@ void VulkanEngine::draw_deferred(VkCommandBuffer cmd)
 	opaque_draws.clear();
 	opaque_draws.reserve(mainDrawContext.OpaqueSurfaces.size());
 
-	glm::mat4 view = mainCamera->getViewMatrix();
 
 
 	for (uint32_t i = 0; i < mainDrawContext.OpaqueSurfaces.size(); i++) {

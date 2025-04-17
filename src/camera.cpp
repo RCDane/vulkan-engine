@@ -1,4 +1,4 @@
-#include <SDL_events.h>
+﻿#include <SDL_events.h>
 #include <SDL_mouse.h>
 #include <camera.h>
 #include <glm/gtx/transform.hpp>
@@ -56,18 +56,58 @@ glm::mat4 Camera::getRotationMatrix()
     return glm::toMat4(yawRotation) * glm::toMat4(pitchRotation);
 }
 
+glm::mat4 perspective_opengl_rh(
+    const float fovy, const float aspect, const float n, const float f)
+{
+    const float e = 1.0f / std::tan(fovy * 0.5f);
+    return { e / aspect, 0.0f,  0.0f,                    0.0f,
+            0.0f,       e,     0.0f,                    0.0f,
+            0.0f,       0.0f, (f + n) / (n - f),       -1.0f,
+            0.0f,       0.0f, (2.0f * f * n) / (n - f), 0.0f };
+}
+
+
+glm::mat4 perspective_vulkan_rh(
+    const float fovy, const float aspect, const float n, const float f)
+{
+
+    glm::mat4 opengl_perspective = perspective_opengl_rh(fovy, aspect, n, f);
+
+
+
+    constexpr glm::mat4 normalize_range{ 1.0f, 0.0f, 0.0f, 0.0f,
+                                      0.0f, 1.0f, 0.0f, 0.0f,
+                                      0.0f, 0.0f, 0.5f, 0.0f,
+                                      0.0f, 0.0f, 0.5f, 1.0f };
+
+    constexpr glm::mat4 reverse_z{ 1.0f, 0.0f,  0.0f, 0.0f,
+                              0.0f, 1.0f,  0.0f, 0.0f,
+                              0.0f, 0.0f, -1.0f, 0.0f,
+                              0.0f, 0.0f,  1.0f, 1.0f };
+
+    // 4) Flip Y for Vulkan’s top‑left origin:
+    constexpr glm::mat4 flip_y{
+        1.0f,  0.0f, 0.0f, 0.0f,
+        0.0f, -1.0f, 0.0f, 0.0f,
+        0.0f,  0.0f, 1.0f, 0.0f,
+        0.0f,  0.0f, 0.0f, 1.0f
+    };  // :contentReference[oaicite:3]{index=3}
+
+    return flip_y * reverse_z * normalize_range * opengl_perspective;
+}
+
+
+
 glm::mat4 Camera::getProjectionMatrix(bool raytracing) {
-    float Near = raytracing ? zNear : zFar;
-    float Far = raytracing ? zFar: zNear;
+
 
     
     if (isPerspective) {
-        glm::mat4 perspective = glm::perspective(fov, aspectRatio, Near, Far);
-        perspective[1, 1] *= -1.0f;
+        glm::mat4 perspective = perspective_vulkan_rh(fov, aspectRatio, zNear, zFar);
         return perspective;
     }
     else if (isOrtographic) {
-        glm::mat4 ortho = glm::orthoRH_ZO(-xMag, xMag, -yMag, yMag, Near, Far);
+        glm::mat4 ortho = glm::orthoRH_ZO(-xMag, xMag, -yMag, yMag, zFar, zNear);
         ortho[1, 1] *= -1.0f;
 
         return ortho;

@@ -41,6 +41,7 @@ vec3 computeMappedNormal(Vertex v0, Vertex v1, Vertex v2, vec3 barycentrics, GLT
                v1.normal * barycentrics.y +
                v2.normal * barycentrics.z;
     vec3 worldNrm = normalize(vec3(nrm * gl_WorldToObjectEXT));
+
     
     // Compute edges and UV deltas.
     vec3 edge1 = v1.position - v0.position;
@@ -90,13 +91,6 @@ void main()
 	// Computing the coordinates of the hit position
 	const vec3 pos      = v0.position * barycentrics.x + v1.position * barycentrics.y + v2.position * barycentrics.z;
 	const vec3 worldPos = vec3(gl_ObjectToWorldEXT * vec4(pos, 1.0));  // Transforming the position to world space
-
-    vec3 fromOrigin = prd.rayOrigin - worldPos;
-	float distanceFromOrigin = length(fromOrigin);
-	vec3 rayAttenuation = vec3(1.0);
-	if (prd.depth > 0){
-		rayAttenuation = prd.attenuation * (1.0 / distanceFromOrigin * distanceFromOrigin);
-	}
 
 
 	// Computing the normal at hit position
@@ -172,35 +166,58 @@ void main()
 	float shininess = max((1.0 - roughness) * 128.0, 1.0);
 
 	vec3 tmpColor = vec3(1.0);
-
+	
     vec3 F0 = mix(vec3(0.04), baseColor.xyz, metallic);
 	isShadowed   = true; 
-    float tMin   = 0.001;
-    float tMax   = lightDistance;
-    vec3  rayOrigin = worldPos;
-    vec3  rayDir = L;
-    uint  flags  = gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsOpaqueEXT | gl_RayFlagsSkipClosestHitShaderEXT;
-    traceRayEXT(topLevelAS,  // acceleration structure
-        flags,       // rayFlags
-        0xFF,        // cullMask
-        0,           // sbtRecordOffset
-        0,           // sbtRecordStride
-        1,           // missIndex
-        rayOrigin,      // ray origin
-        tMin,        // ray min range
-        rayDir,      // ray direction
-    	tMax,        // ray max range
-        1            // payload is isShadowed
-    );
-	
-	
-	vec3 result = vec3(0);
-	if (!isShadowed){
-	    result += CalculatePBR(worldNrm,V,L,baseColor, lightColor, lightIntensity, F0, metallic, roughness);
-	}
+	if (dot(worldNrm,L) > 0){
 
-	prd.rayOrigin = worldPos;
-	prd.normal = worldNrm;
-	prd.attenuation = rayAttenuation * result;
-	prd.hitValue = result;
+		float tMin   = 0.01;
+		float tMax   = lightDistance;
+		vec3  rayOrigin = worldPos;
+		vec3  rayDir = L;
+		uint  flags  = gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsOpaqueEXT | gl_RayFlagsSkipClosestHitShaderEXT;
+		traceRayEXT(topLevelAS,  // acceleration structure
+			flags,       // rayFlags
+			0xFF,        // cullMask
+			0,           // sbtRecordOffset
+			0,           // sbtRecordStride
+			1,           // missIndex
+			rayOrigin,      // ray origin
+			tMin,        // ray min range
+			rayDir,      // ray direction
+			tMax,        // ray max range
+			1            // payload is isShadowed
+		);
+	}
+	
+	
+	// 1) compute direct PBR_result
+	PBR_result res = CalculatePBRResult(worldNrm, V, L,
+										baseColor, lightColor,
+										lightIntensity, F0,
+										metallic, roughness);
+
+	// 2) pick unshadowed radiance
+	vec3 directRadiance = isShadowed ? vec3(0.0) : res.color;
+
+	// 3) clamp the light falloff
+	const float minD = 0.01;
+
+
+	// 4) build your throughput update **without dividing by pdf**
+	//    since you’re cosine‑hemisphere sampling:
+	const float invCosinePdf = PI;
+	vec3  bsdf = res.f * invCosinePdf;
+
+	float tHit = gl_HitTEXT;
+	const float maxAtt = 100.0;
+	float dist = max(tHit, minD);
+	float invSq = 1.0 / (dist * dist);
+	invSq = min(invSq, maxAtt);
+
+	// 5) update attenuation
+	prd.attenuation *= invSq * bsdf;
+
+	// 6) write your radiance into the payload
+	prd.hitValue = directRadiance;
 }
