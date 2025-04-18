@@ -171,12 +171,28 @@ std::optional<Camera> loadCamera(fastgltf::Camera& camera) {
     }
 }
 //
-//std::optional<LightSource> loadLight(fastgltf::Light light) {
-//    LightSource newLight;
-//    if (light.type == fastgltf::LightType::Directional) {
-//        newLight.color = light.color;
-//    }
-//}
+LightSource loadLight(fastgltf::Light light, Node *node) {
+    LightSource newLight;
+    if (light.type == fastgltf::LightType::Directional) {
+        newLight.color = glm::vec3(light.color[0], light.color[1], light.color[2]);
+        newLight.intensity = light.intensity;
+        glm::quat rotation = glm::quat_cast(node->localTransform);
+        glm::vec4 transformedDirection = node->localTransform * glm::vec4(0, 0, -1, 0);
+
+        newLight.direction = transformedDirection;
+        newLight.direction = glm::normalize(newLight.direction);
+		newLight.type = LightType::Directional;
+    }
+    else if (light.type == fastgltf::LightType::Point) {
+        LightSource light;
+        light.color = glm::vec3(light.color[0], light.color[1], light.color[2]);
+        light.intensity = light.intensity;
+        light.position = node->localTransform[3];
+		light.type = LightType::Point;
+    }
+    return newLight;
+
+}
 
 
 
@@ -679,15 +695,9 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGltf(VulkanEngine* engine, std::s
 
         if (node.lightIndex.has_value()) {
             int lightIdx = node.lightIndex.value();
-            LightSource light;
-            light.color = glm::vec3(gltf.lights[lightIdx].color[0], gltf.lights[lightIdx].color[1], gltf.lights[lightIdx].color[2]);
-            light.intensity = gltf.lights[lightIdx].intensity;
-            glm::quat rotation = glm::quat_cast(newNode->localTransform);
-            glm::vec4 transformedDirection = newNode->localTransform * glm::vec4(0, 0, -1, 0);
-
-            light.direction = transformedDirection;
-            light.direction = glm::normalize(light.direction);
-            scene->lightSources.push_back(std::make_shared<LightSource>(light));
+			auto light = gltf.lights[lightIdx];
+			auto lightSource = loadLight(light, static_cast<MeshNode*>(newNode.get()));
+            scene->lightSources.push_back(std::make_shared<LightSource>(lightSource));
         }
     }
     if (cameraLoaded) {
@@ -723,6 +733,8 @@ std::optional<Camera> LoadedGLTF::GetCameras() {
 		throw std::runtime_error("No camera found in GLTF");
 	}
 }
+
+
 
 
 void LoadedGLTF::Draw(const glm::mat4& topMatrix, DrawContext& ctx){
