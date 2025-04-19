@@ -51,12 +51,16 @@ struct ObjDesc
 	int padding;
 };
 
+struct ToneMappingSettings {
+	float gamma;
+}
 
 struct RaytracingSettings {
 	int offlineMode;
 	int rayBudget;
 	int currentRayCount;
 	int seed;
+	int lightCount;
 };
 
 // Uniform buffer set at each frame

@@ -19,6 +19,7 @@ layout(set = 0, binding = eTlas) uniform accelerationStructureEXT topLevelAS;
 layout(set = 0, binding = eOutImage, rgba16f) uniform image2D image;
 layout(set = 1, binding = 0) uniform _GlobalUniforms { GlobalUniforms uni; };
 layout(set = 1, binding = 5, scalar) buffer LightSources { LightSource lights[]; };
+layout(set = 0, binding = 5, rgba32f) uniform image2D colorHistory;
 layout(set = 2, binding = 0, rgba16f) uniform image2D albedo; 
 layout(set = 2, binding = 1, rgba16f) uniform image2D normal; 
 layout(set = 2, binding = 2, rgba16f) uniform image2D material;
@@ -78,8 +79,9 @@ void main()
 
   vec4 currentColor = SRGBtoLINEAR(imageLoad(image, ivec2(gl_LaunchIDEXT.xy)));
   double currentDepth = imageLoad(depth, ivec2(gl_LaunchIDEXT.xy)).r;
-
-
+  if (currentDepth == 0.0) {
+    return; // If there is no depth, then nothing has been rendered here.
+  }
   vec3 N =        imageLoad(normal, ivec2(gl_LaunchIDEXT.xy)).xyz;
   vec4 material = imageLoad(material, ivec2(gl_LaunchIDEXT.xy));
   vec4 albedoColor = imageLoad(albedo, ivec2(gl_LaunchIDEXT.xy));
@@ -103,6 +105,7 @@ void main()
   direction = -direction;
   vec3 V = normalize(origin.xyz- worldPos);
   uint i = randRange(prd.seed, 0, 3);
+  float lights_pdf = 1.0 / float(uni.raytracingSettings.lightCount);
   LightSource l = lights[i];
   vec3  L;
 	float lightIntensity =l.intensity;
@@ -168,7 +171,7 @@ void main()
 
 
 		indirectIllumination += prd.hitValue * prd.attenuation * invCosinePdf;
-    if(prd.depth > 1 || prd.done == 1)
+    if(prd.depth > 2 || prd.done == 1)
       break;
     rayOrigin = prd.rayOrigin + V*e;
     hitNormal = prd.normal;
@@ -217,7 +220,7 @@ void main()
 
       if (!isShadowed){
         PBR_result res =  CalculatePBRResult(N,V,L,albedoColor.xyz,l.color, lightIntensity, F0, metalness, roughness);
-        directIllumination += res.color*rayAttenuation;
+        directIllumination += res.color*rayAttenuation / lights_pdf;
       }
     }
 

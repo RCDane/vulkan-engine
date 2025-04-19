@@ -1419,6 +1419,19 @@ void VulkanEngine::init_swapchain()
 	NameImageView(_device, _drawImage.imageView, "Draw Image View");
 
 
+	VkImageUsageFlags drawImageUsages{};
+	drawImageUsages |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+	drawImageUsages |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+	drawImageUsages |= VK_IMAGE_USAGE_STORAGE_BIT;
+	drawImageUsages |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+
+	_colorHistory.imageFormat = VK_FORMAT_R32G32B32A32_SFLOAT;
+
+	create_render_buffer(_colorHistory, drawImageUsages, VK_IMAGE_ASPECT_COLOR_BIT);
+	NameImage(_device, _colorHistory.image, "Draw Image");
+	NameImageView(_device, _colorHistory.imageView, "Draw Image View");
+
+
 
 	// Create depth buffer
 	VkImageUsageFlags depthImageUsages{};

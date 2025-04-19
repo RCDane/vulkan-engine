@@ -1397,6 +1397,7 @@ void RaytracingHandler::raytrace(VkCommandBuffer cmd, VulkanEngine* engine) {
 	m_uniformMappedPtr->raytracingSettings.offlineMode = offlineMode ? 1 : 0;
 	m_uniformMappedPtr->raytracingSettings.rayBudget = rayBudget;
 	m_uniformMappedPtr->raytracingSettings.seed = rand();
+	m_uniformMappedPtr->raytracingSettings.lightCount = engine->lightSources.size();
 	m_uniformMappedPtr->clearScreen = clearScreen ? 1 : 0;
 	m_uniformMappedPtr->raytracingSettings.currentRayCount = currentRayCount;
 	currentRayCount += rayBudget;

@@ -116,6 +116,7 @@ struct RaytracingSettings {
 	int rayBudget;
 	int currentRayCount;
 	int seed;
+	int lightCount;
 };
 
 struct GlobalUniforms
@@ -235,6 +236,7 @@ public:
 	std::vector<std::shared_ptr<MeshAsset>> testMeshes;
 
 	AllocatedImage _drawImage;
+	AllocatedImage _colorHistory;
 	AllocatedImage _depthImage;
 	AllocatedImage _gBuffer_normal;
 	AllocatedImage _gBuffer_albedo;
