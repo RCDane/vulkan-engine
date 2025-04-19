@@ -1,5 +1,5 @@
 const float PI = 3.1415926535;
-
+const float InvPi = 0.318309886183;
 
 
 

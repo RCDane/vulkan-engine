@@ -129,6 +129,15 @@ struct PushConstantRay
 	vec4 ambientColor;
 };
 
+struct LightSource {
+	vec3 position;
+	float intensity;
+	vec3 color;
+	int type;
+	vec3 direction; 
+	int padding;
+};
+
 
 struct Vertex {
 	vec3 position;

@@ -184,11 +184,10 @@ LightSource loadLight(fastgltf::Light light, Node *node) {
 		newLight.type = LightType::Directional;
     }
     else if (light.type == fastgltf::LightType::Point) {
-        LightSource light;
-        light.color = glm::vec3(light.color[0], light.color[1], light.color[2]);
-        light.intensity = light.intensity;
-        light.position = node->localTransform[3];
-		light.type = LightType::Point;
+        newLight.color = glm::vec3(light.color[0], light.color[1], light.color[2]);
+        newLight.intensity = light.intensity;
+        newLight.position = node->localTransform[3];
+        newLight.type = LightType::Point;
     }
     return newLight;
 

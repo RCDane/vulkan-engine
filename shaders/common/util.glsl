@@ -48,6 +48,22 @@ float rnd(inout uint prev)
   return (float(lcg(prev)) / float(0x01000000));
 }
 
+uint pcg_hash (uint x)
+{
+    x = x * 747796405u + 2891336453u;          // LCG step
+    uint word = ((x >> ((x >> 28u) + 4u)) ^ x) * 277803737u;
+    return (word >> 22u) ^ word;
+}
+
+// sample an *inclusive* integer range [lo, hi]
+// mutates 'seed' so the next call is decorrelated
+int randRange (inout uint seed, int lo, int hi)
+{
+    seed = pcg_hash(seed);
+    uint span = uint(hi - lo + 1);            // assumes hi ≥ lo
+    return lo + int(seed % span);
+}
+
 
 //-------------------------------------------------------------------------------------------------
 // Sampling
@@ -66,7 +82,7 @@ vec3 samplingHemisphere(inout uint seed, in vec3 x, in vec3 y, in vec3 z)
   vec3 direction = vec3(cos(2 * M_PI * r2) * sq, sin(2 * M_PI * r2) * sq, sqrt(1. - r1));
   direction      = direction.x * x + direction.y * y + direction.z * z;
 
-  return direction;
+  return normalize(direction);
 }
 
 // Return the tangent and binormal from the incoming normal

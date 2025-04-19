@@ -21,6 +21,7 @@ layout(buffer_reference, scalar) buffer Indices {int i[]; }; // Triangle indices
 layout(set = 0, binding = eTlas) uniform accelerationStructureEXT topLevelAS;
 layout(set = 1, binding = eObjDescs, scalar) buffer ObjDesc_ { ObjDesc i[]; } objDesc;
 layout(set = 1, binding = eTextures) uniform sampler2D textureSamplers[];
+layout(set = 1, binding = 5, scalar) buffer LightSources { LightSource lights[]; };
 
 
 
@@ -98,21 +99,24 @@ void main()
 	vec3 worldNrm = normalize(vec3(nrm * gl_WorldToObjectEXT));  // Transforming the normal to world space
 	
 	
-  	vec3  L;
-	float lightIntensity = pcRay.lightIntensity;
-	float lightDistance  = 100000.0;
-	vec3 lightColor = pcRay.lightColor;
+	uint i = randRange(prd.seed, 0, 1);
+	LightSource l = lights[i];
+	vec3  L;
+	float lightIntensity =l.intensity;
+	float lightDistance =  10000000.0;
+  	vec3 rayAttenuation = vec3(1);
+
 	// Point light
-	if(pcRay.lightType == 0)
+	if(l.type == 0)
 	{
-		vec3 lDir      = pcRay.lightPosition - worldPos;
+		vec3 lDir      = l.position - worldPos;
 		lightDistance  = length(lDir);
-		lightIntensity = pcRay.lightIntensity / (lightDistance * lightDistance);
 		L              = normalize(lDir);
+    	rayAttenuation *= 1.0/(lightDistance*lightDistance);
 	} 
 	else  // Directional light
 	{
-		L = -normalize(pcRay.lightPosition);
+		L = -normalize(l.direction);
 	}
 
 	
@@ -193,7 +197,7 @@ void main()
 	
 	// 1) compute direct PBR_result
 	PBR_result res = CalculatePBRResult(worldNrm, V, L,
-										baseColor, lightColor,
+										baseColor, l.color,
 										lightIntensity, F0,
 										metallic, roughness);
 
@@ -206,8 +210,8 @@ void main()
 
 	// 4) build your throughput update **without dividing by pdf**
 	//    since you’re cosine‑hemisphere sampling:
-	const float invCosinePdf = PI;
-	vec3  bsdf = res.f * invCosinePdf;
+
+	vec3  bsdf = res.f;
 
 	float tHit = gl_HitTEXT;
 	const float maxAtt = 100.0;
@@ -216,7 +220,7 @@ void main()
 	invSq = min(invSq, maxAtt);
 
 	// 5) update attenuation
-	prd.attenuation *= invSq * bsdf;
+	prd.attenuation *= bsdf;
 
 	// 6) write your radiance into the payload
 	prd.hitValue = directRadiance;

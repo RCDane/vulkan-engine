@@ -404,7 +404,6 @@ using namespace std::chrono_literals;
 void VulkanEngine::draw()
 {
 	update_scene();
-
 	// wait until the gpu has finished rendering the last frame. Timeout of 1
 	// second
 	VK_CHECK(vkWaitForFences(_device, 1, &get_current_frame()._renderFence, true, 1000000000));
@@ -415,6 +414,7 @@ void VulkanEngine::draw()
     uint32_t swapchainImageIndex;
 
 
+	prepare_lighting_data();
 
 
 	// Handling resizing
@@ -613,6 +613,43 @@ void VulkanEngine::draw()
 	_frameNumber++;
 
 
+}
+
+
+void VulkanEngine::prepare_lighting_data() {
+	// Point light data
+	_lightingDataBuffer = create_buffer(&_device, 
+		&_allocator, 
+		sizeof(ShaderLightSource)*lightSources.size(), 
+		VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
+		VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+	//add it to the deletion queue of this frame so it gets deleted once its been used
+	std::vector<ShaderLightSource> shaderLightSources;
+	for (auto & light : lightSources) {
+		ShaderLightSource shaderLight;
+		shaderLight.color = light->color;
+		shaderLight.direction = light->direction;
+		shaderLight.intensity = light->intensity;
+		shaderLight.position = light->position;
+		shaderLight.type = light->type;
+		shaderLightSources.push_back(shaderLight);
+	}
+
+	// map light data to buffer
+	void* mappedData = nullptr;
+	VkResult result = vmaMapMemory(_allocator, _lightingDataBuffer.allocation, &mappedData);
+	if (result != VK_SUCCESS) {
+		throw std::runtime_error("Failed to map memory for lighting data buffer!");
+	}
+	std::memcpy(mappedData, shaderLightSources.data(), sizeof(ShaderLightSource) * shaderLightSources.size());
+	vmaUnmapMemory(_allocator, _lightingDataBuffer.allocation);
+	
+
+
+
+	get_current_frame()._deletionQueue.push_function([=, this]() {
+		destroy_buffer(_lightingDataBuffer);
+		});
 }
 
 void VulkanEngine::draw_geometry(VkCommandBuffer cmd)
@@ -1237,6 +1274,8 @@ void VulkanEngine::init_vulkan()
 		.set_minimum_version(1, 3)
 		.set_required_features(deviceFeatures)
 		.add_required_extension("VK_KHR_acceleration_structure")
+		.add_required_extension("VK_KHR_shader_relaxed_extended_instruction")
+
 		.add_required_extension("VK_KHR_push_descriptor")
 		.add_required_extension("VK_KHR_ray_query")
 		.add_required_extension_features(rayQueryFeatures)
@@ -1524,8 +1563,9 @@ void VulkanEngine::init_descriptors(){
 
 	globalDescriptorAllocator.init(_device,&_allocator, 10 , sizes);
 	updatingGlobalDescriptorAllocator.init(_device, &_allocator, 10, sizes,true);
+	VkDescriptorBindingFlags flags = VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT;
+
 	{
-		VkDescriptorBindingFlags flags = VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT;
 		
 		DescriptorLayoutBuilder builder;
 		builder.add_binding(0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, flags);
@@ -1560,7 +1600,6 @@ void VulkanEngine::init_descriptors(){
 
 	}
 	{
-		VkDescriptorBindingFlags flags = VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT;
 
 		// Descriptor layout for Texture array
 		DescriptorLayoutBuilder layoutBuilder;
@@ -2514,6 +2553,8 @@ void VulkanEngine::update_scene()
 	
 
 	sceneData.cameraPosition = glm::vec4(mainCamera->position, 1.0f);
+	
+	
 
 	// Directly write to the mapped uniform buffer
 	if (_raytracingHandler.m_uniformMappedPtr) {

@@ -1106,7 +1106,7 @@ void RaytracingHandler::createDescriptorSetLayout(VulkanEngine* engine) {
 	builder.add_binding(2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, flags, 1000);
 	builder.add_binding(3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,flags, 1000);
 	builder.add_binding(4, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, flags, 1);
-
+	builder.add_binding(5, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, flags, 1000);
 	VkDescriptorSetLayoutCreateFlags createFlags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
 	m_descSetLayout = builder.build(engine->_device,
 		VK_SHADER_STAGE_VERTEX_BIT |
@@ -1438,6 +1438,13 @@ void RaytracingHandler::raytrace(VkCommandBuffer cmd, VulkanEngine* engine) {
 		engine->_cubeMap, 
 		VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 
 		VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+	writer.write_buffer(
+		5,
+		engine->_lightingDataBuffer.buffer,
+		sizeof(ShaderLightSource) * engine->lightSources.size(),
+		0,
+		VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+		engine->lightSources.size());
 
 	writer.update_set(engine->_device, uniformsDescriptor);
 	DescriptorWriter writer2;

@@ -4,6 +4,7 @@
 #extension GL_EXT_ray_tracing : require
 #extension GL_GOOGLE_include_directive : enable
 #extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
+#extension GL_EXT_scalar_block_layout : require
 
 
 #include "../common/host_device.h"
@@ -16,10 +17,11 @@ layout(location = 1) rayPayloadEXT bool isShadowed;
 
 layout(set = 0, binding = eTlas) uniform accelerationStructureEXT topLevelAS;
 layout(set = 0, binding = eOutImage, rgba16f) uniform image2D image;
-layout(set = 1, binding = eGlobals) uniform _GlobalUniforms { GlobalUniforms uni; };
+layout(set = 1, binding = 0) uniform _GlobalUniforms { GlobalUniforms uni; };
+layout(set = 1, binding = 5, scalar) buffer LightSources { LightSource lights[]; };
 layout(set = 2, binding = 0, rgba16f) uniform image2D albedo; 
 layout(set = 2, binding = 1, rgba16f) uniform image2D normal; 
-layout(set = 2, binding = 2, rgba16f) uniform image2D material; 
+layout(set = 2, binding = 2, rgba16f) uniform image2D material;
 layout(set = 2, binding = 3, rgba32f) uniform image2D emission; 
 layout(set = 2, binding = 4, r32f) uniform image2D depth;
 
@@ -35,31 +37,33 @@ float LinearizeDepth(float depth) {
 }
 
 vec3 reconstructWorldPosition(
-    float rawDepth,        // non‑linear depth sample ∈ [0,1], near→1, far→0
+    double rawDepth,        // non‑linear depth sample ∈ [0,1], near→1, far→0
     vec2 fragCoord,        // pixel coords (e.g., gl_FragCoord.xy + 0.5)
     vec2 viewportSize,     // render target dims
     mat4 invProj,          // inverse projection matrix
     mat4 invView           // inverse view (camera) matrix
 ) {
     // 1) Compute NDC X/Y ∈ [−1,1]
-    vec2 ndc;
-    ndc.x = fragCoord.x / viewportSize.x * 2.0 - 1.0;
-    ndc.y = fragCoord.y / viewportSize.y * 2.0 - 1.0;
+    dvec2 ndc;
+    ndc.x = double(fragCoord.x) / double(viewportSize.x) * 2.0 - 1.0;
+    ndc.y = double(fragCoord.y) / double(viewportSize.y) * 2.0 - 1.0;
     // (You can flip Y here if your proj already flipped it) 
     // 2) Use rawDepth as NDC Z (Vulkan reversed‑Z, already in [0,1])
-    float ndcZ = rawDepth;
+    double ndcZ = rawDepth;
 
     // 3) Form clip‑space position (homogeneous)
-    vec4 clipPos = vec4(ndc, ndcZ, 1.0);
+    dvec4 clipPos = dvec4(ndc, ndcZ, 1.0);
 
     // 4) Unproject to view (eye) space
-    vec4 viewPos = invProj * clipPos;
+    dvec4 viewPos = invProj * clipPos;
     viewPos /= viewPos.w;
 
     // 5) Transform into world space
-    vec4 worldPosH = invView * viewPos;
-    return worldPosH.xyz;
+    dvec4 worldPosH = invView * viewPos;
+    return vec3(worldPosH.xyz);
 }
+
+
 
 
 void main()
@@ -73,12 +77,12 @@ void main()
   vec4 direction = uni.viewInverse * vec4(normalize(target.xyz), 0);
 
   vec4 currentColor = SRGBtoLINEAR(imageLoad(image, ivec2(gl_LaunchIDEXT.xy)));
-  float currentDepth = imageLoad(depth, ivec2(gl_LaunchIDEXT.xy)).r;
+  double currentDepth = imageLoad(depth, ivec2(gl_LaunchIDEXT.xy)).r;
 
 
   vec3 N =        imageLoad(normal, ivec2(gl_LaunchIDEXT.xy)).xyz;
   vec4 material = imageLoad(material, ivec2(gl_LaunchIDEXT.xy));
-  vec4 albedoColor = SRGBtoLINEAR(imageLoad(albedo, ivec2(gl_LaunchIDEXT.xy)));
+  vec4 albedoColor = imageLoad(albedo, ivec2(gl_LaunchIDEXT.xy));
   vec4 emission =        imageLoad(emission, ivec2(gl_LaunchIDEXT.xy));
 
   vec2 vpSize      = vec2(gl_LaunchSizeEXT.xy);  
@@ -90,7 +94,6 @@ void main()
     uni.viewInverse);
 
 
-
   float roughness = material.r;
   float metalness = material.g;
   prd.seed = tea(gl_LaunchIDEXT.y * gl_LaunchSizeEXT.x + gl_LaunchIDEXT.x, int(uni.raytracingSettings.seed));;
@@ -99,48 +102,53 @@ void main()
 
   direction = -direction;
   vec3 V = normalize(origin.xyz- worldPos);
+  uint i = randRange(prd.seed, 0, 3);
+  LightSource l = lights[i];
   vec3  L;
-	float lightIntensity = pcRay.lightIntensity;
-	float lightDistance  = 100000.0;
+	float lightIntensity =l.intensity;
+	float lightDistance =  10000000.0;
+  vec3 rayAttenuation = vec3(1);
+
 	// Point light
-	if(pcRay.lightType == 0)
+	if(l.type == 0)
 	{
-		vec3 lDir      = pcRay.lightPosition - worldPos;
+		vec3 lDir      = l.position - worldPos;
 		lightDistance  = length(lDir);
-		lightIntensity = pcRay.lightIntensity / (lightDistance * lightDistance);
 		L              = normalize(lDir);
+    rayAttenuation *= 1.0/(lightDistance*lightDistance);
 	} 
 	else  // Directional light
 	{
-		L = -normalize(pcRay.lightPosition);
+		L = -normalize(l.direction);
 	}
+
+
 
   int rayDepth = 0;
 	prd.depth = 0;
 	vec3 tangent, bitangent;
+  float e = 1e-3;
 
   prd.rayOrigin = worldPos;
   prd.rayDir = -direction.xyz;
   prd.normal = N;
   prd.attenuation = vec3(1.0);
   vec3 F0 = mix(vec3(0.04), albedoColor.xyz, metalness);
+	vec3 rayOrigin = prd.rayOrigin + V*e;
+	vec3 hitNormal = prd.normal;
+  createCoordinateSystem(hitNormal, tangent, bitangent);
 
+	vec3 rayDirection = samplingHemisphere(prd.seed, tangent, bitangent, hitNormal);
+  vec3 firstDirection = rayDirection;
   vec3 indirectIllumination = vec3(0);
   for (;;){
-		vec3  origin = prd.rayOrigin;
-		vec3 hitNormal = prd.normal;
-    createCoordinateSystem(hitNormal, tangent, bitangent);
 
-		vec3 rayDirection = samplingHemisphere(prd.seed, tangent, bitangent, hitNormal);
-		float tMin   = 0.1;
+		float tMin   = e;
 		float tMax   = 10000000.0;
 		vec3  rayDir = rayDirection;
 		uint  flags  = gl_RayFlagsNoneEXT;
-    prd.done = 0;
 		prd.depth += 1;
 		prd.rayDir = rayDir;
-    
-    prd.rayOrigin = origin;
     prd.hitValue = vec3(0);
 		traceRayEXT(topLevelAS,  // acceleration structure
 						flags,       // rayFlags
@@ -148,20 +156,43 @@ void main()
 						0,           // sbtRecordOffset
 						0,           // sbtRecordStride
 						0,           // missIndex
-						origin,      // ray origin
+						rayOrigin,      // ray origin
 						tMin,        // ray min range
 						rayDirection,      // ray direction
 						tMax,        // ray max range
 						0            // payload is payload
 		);
-		indirectIllumination += prd.attenuation * prd.hitValue;
-    if(prd.depth > 2 || prd.done == 1)
+
+  	const float invCosinePdf = dot(N, rayDirection)/PI;
+
+
+
+		indirectIllumination += prd.hitValue * prd.attenuation * invCosinePdf;
+    if(prd.depth > 1 || prd.done == 1)
       break;
+    rayOrigin = prd.rayOrigin + V*e;
+    hitNormal = prd.normal;
+    createCoordinateSystem(hitNormal, tangent, bitangent);
+
+    rayDirection = samplingHemisphere(prd.seed, tangent, bitangent, hitNormal);
+
   }
 
+  PBR_result res = CalculatePBRResult(
+        N, 
+        V, 
+        rayDirection,
+        albedoColor.xyz, 
+        indirectIllumination,
+        1.0, 
+        F0, 
+        metalness, 
+        roughness);
+  vec3 finalIndirect = res.color * res.f;
 
+
+  // Next event estimation for direct lighting
   isShadowed   = true; 
-
   vec3 directIllumination = vec3(0);
     if(dot(N, L) > 0)
     {
@@ -183,15 +214,14 @@ void main()
             tMax,        // ray max range
             1            // payload is isShadowed
       );
-      vec3 H = normalize(L + V);
-      vec3 lightColor = pcRay.lightColor * lightIntensity;
+
       if (!isShadowed){
-        PBR_result res =  CalculatePBRResult(N,V,L,albedoColor.xyz,lightColor, lightIntensity, F0, metalness, roughness);
-        directIllumination += res.color;
+        PBR_result res =  CalculatePBRResult(N,V,L,albedoColor.xyz,l.color, lightIntensity, F0, metalness, roughness);
+        directIllumination += res.color*rayAttenuation;
       }
     }
 
-  vec3 combined = indirectIllumination + directIllumination;
+  vec3 combined = directIllumination + finalIndirect;
 
   vec3 currentRayCount =  vec3(uni.raytracingSettings.currentRayCount);
   vec3 rayBudget =  vec3(uni.raytracingSettings.rayBudget);

@@ -72,8 +72,8 @@ struct AccelKHR
 };
 
 enum LightType {
-    Point,
-    Directional
+    Point = 0,
+    Directional = 1
 };
 
 struct LightSource {
@@ -84,6 +84,15 @@ struct LightSource {
     glm::vec3 color;
 };
 
+struct ShaderLightSource {
+    glm::vec3 position;
+    float intensity;
+    glm::vec3 color;
+    int type;
+    glm::vec3 direction;
+    int padding;
+};
+static_assert(sizeof(ShaderLightSource) == 48, "ShaderLightSource struct size should be 48 bytes.");
 
 struct alignas(16) Vertex {
     glm::vec3 position;    // 12 bytes

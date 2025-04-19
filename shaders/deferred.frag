@@ -99,24 +99,22 @@ void main()
     outNormal = vec4(N,1.0);
 
     if (materialData.normalIdx != 2){
-       mat3 TBN = calculate_TBN(inNormal, inUV);
-       vec3 textureNormal = texture(textureSamplers[materialData.normalIdx], inUV).xyz;
-        
-       textureNormal = textureNormal * 255./127. - 128./127.;
-       N = normalize(TBN * textureNormal);
-       vec3 cameraDir = sceneData.cameraPosition.xyz -  vPos;
-       if (dot(N, cameraDir) < 0){
-        outNormal = vec4(-N, 1.0);
-       }
-       else
-       {
-           outNormal = vec4(N, 1.0);        
-       }
+        mat3 TBN = calculate_TBN(inNormal, inUV);
+        vec3 textureNormal = texture(textureSamplers[materialData.normalIdx], inUV).xyz;
+
+        textureNormal = textureNormal * 255./127. - 128./127.;
+        N = normalize(TBN * textureNormal);
+
+        outNormal = vec4(N, 1.0);        
     }
 
+    outAlbedo = vec4(inColor,1.0);
+    if (materialData.colorIdx != 0){
+        vec3 baseColor = SRGBtoLINEAR(texture(textureSamplers[materialData.colorIdx], inUV).rgb);
+        outAlbedo = vec4(baseColor,1.0);
+    }
     // Material properties
-    vec3 baseColor = texture(textureSamplers[materialData.colorIdx], inUV).rgb;
-    outAlbedo = vec4(baseColor,1.0);
+    
 
     vec3 emission = vec3(0);
     if (materialData.emissiveIdx != 3){

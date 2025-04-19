@@ -333,7 +333,7 @@ public:
 	PointLight pointLight;
 	
 	std::vector<std::shared_ptr<LightSource>> lightSources;
-
+	AllocatedBuffer _lightingDataBuffer;
 
 	bool cameraMoved = false;
 	// Raytracing
@@ -352,7 +352,7 @@ private:
 	// swapchain
 	void create_swapchain(uint32_t width, uint32_t height);
 	void destroy_swapchain();
-
+	void prepare_lighting_data();
 
 	void draw_geometry(VkCommandBuffer cmd);
 
