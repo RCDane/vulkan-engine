@@ -53,7 +53,7 @@ struct ObjDesc
 
 struct ToneMappingSettings {
 	float gamma;
-}
+};
 
 struct RaytracingSettings {
 	int offlineMode;

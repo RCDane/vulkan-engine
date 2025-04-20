@@ -99,7 +99,7 @@ void main()
 	vec3 worldNrm = normalize(vec3(nrm * gl_WorldToObjectEXT));  // Transforming the normal to world space
 	
 	
-	uint i = randRange(prd.seed, 0, 1);
+	uint i = randRange(prd.seed, 0, 3);
 	LightSource l = lights[i];
 	vec3  L;
 	float lightIntensity =l.intensity;

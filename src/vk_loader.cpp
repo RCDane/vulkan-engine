@@ -617,7 +617,7 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGltf(VulkanEngine* engine, std::s
                     });
             }
 
-            
+
 
             // Compute min/max bounds
             glm::vec3 minpos = vertices[initial_vtx].position;

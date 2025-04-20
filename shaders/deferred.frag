@@ -84,7 +84,7 @@ mat3 cotangent_frame( vec3 N, vec3 p, vec2 uv )
 mat3 calculate_TBN(vec3 normal, vec2 uv){
     mat3 TBN;
     if (PushConstants.hasTangent == 0){
-        TBN = cotangent_frame(normal, -vPos, uv);
+        TBN = cotangent_frame(normal, vPos, uv);
     }
     else{
         TBN = inTBN;
@@ -99,10 +99,10 @@ void main()
     outNormal = vec4(N,1.0);
 
     if (materialData.normalIdx != 2){
-        mat3 TBN = calculate_TBN(inNormal, inUV);
+        mat3 TBN = calculate_TBN(normalize(inNormal), inUV);
         vec3 textureNormal = texture(textureSamplers[materialData.normalIdx], inUV).xyz;
 
-        textureNormal = textureNormal * 255./127. - 128./127.;
+        textureNormal = normalize(textureNormal * 2.0 - 1.0);
         N = normalize(TBN * textureNormal);
 
         outNormal = vec4(N, 1.0);        

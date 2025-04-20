@@ -215,6 +215,12 @@ public:
 	VkPipeline _environmentBackgroundPipeline;
 	VkPipelineLayout _environmentBackgroundLayout;
 
+	VkPipeline _tonemappingPipeline;
+	VkPipelineLayout _tonemappingLayout;
+	VkDescriptorSetLayout _tonemappingDscSetLayout;
+	VkDescriptorSet _tonemappingImageDescriptors;
+
+	
 	VkPipeline _deferredPipeline;
 	VkPipelineLayout _deferredPipelineLayout;
 	VkDescriptorSetLayout _deferredDscSetLayout;
@@ -362,7 +368,9 @@ private:
 
 	void draw_deferred(VkCommandBuffer cmd);
 
-	void draw_environment(VkCommandBuffer cmd);
+	void compute_environment(VkCommandBuffer cmd);
+
+	void compute_tonemapping(VkCommandBuffer cmd);
 
 	void draw_imgui(VkCommandBuffer cmd, VkImageView targetImageView);
 
@@ -375,6 +383,8 @@ private:
 	void init_triangle_pipeline();
 	void init_mesh_pipeline();
 	void init_deferred_pipeline();
+	void init_tonemapping_pipeline();
+
 
 	void init_default_data();
 

@@ -19,12 +19,12 @@ layout(set = 0, binding = eTlas) uniform accelerationStructureEXT topLevelAS;
 layout(set = 0, binding = eOutImage, rgba16f) uniform image2D image;
 layout(set = 1, binding = 0) uniform _GlobalUniforms { GlobalUniforms uni; };
 layout(set = 1, binding = 5, scalar) buffer LightSources { LightSource lights[]; };
-layout(set = 0, binding = 5, rgba32f) uniform image2D colorHistory;
 layout(set = 2, binding = 0, rgba16f) uniform image2D albedo; 
 layout(set = 2, binding = 1, rgba16f) uniform image2D normal; 
 layout(set = 2, binding = 2, rgba16f) uniform image2D material;
 layout(set = 2, binding = 3, rgba32f) uniform image2D emission; 
 layout(set = 2, binding = 4, r32f) uniform image2D depth;
+layout(set = 2, binding = 5, rgba32f) uniform image2D colorHistory;
 
 layout(push_constant) uniform _PushConstantRay { PushConstantRay pcRay; };
 // clang-format on
@@ -77,7 +77,7 @@ void main()
   vec4 target    = uni.projInverse * vec4(d.x, d.y, 1, 1);
   vec4 direction = uni.viewInverse * vec4(normalize(target.xyz), 0);
 
-  vec4 currentColor = SRGBtoLINEAR(imageLoad(image, ivec2(gl_LaunchIDEXT.xy)));
+  vec4 currentColor = imageLoad(colorHistory, ivec2(gl_LaunchIDEXT.xy));
   double currentDepth = imageLoad(depth, ivec2(gl_LaunchIDEXT.xy)).r;
   if (currentDepth == 0.0) {
     return; // If there is no depth, then nothing has been rendered here.
@@ -171,7 +171,7 @@ void main()
 
 
 		indirectIllumination += prd.hitValue * prd.attenuation * invCosinePdf;
-    if(prd.depth > 2 || prd.done == 1)
+    if(prd.depth > 0 || prd.done == 1)
       break;
     rayOrigin = prd.rayOrigin + V*e;
     hitNormal = prd.normal;
@@ -235,14 +235,14 @@ void main()
                         + (combined - currentColor.rgb) * invNext;
 
   // gamma‑correct and store
-  vec3 gammaCorrectedColor = LINEARtoSRGB(accumulatedColor);
+
   vec3 dotp = vec3(dot(N, L));
 
   vec3 diff = emission.xyz - worldPos.xyz;
 
-  imageStore(image,
+  imageStore(colorHistory,
             ivec2(gl_LaunchIDEXT.xy),
-            vec4(gammaCorrectedColor, 1.0));
+            vec4(accumulatedColor, 1.0));
   // imageStore(image,
   //           ivec2(gl_LaunchIDEXT.xy),
   //           vec4(worldPos, 1.0));

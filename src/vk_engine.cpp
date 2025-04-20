@@ -229,7 +229,9 @@ void VulkanEngine::init()
 
 	writer.clear();
 
-
+	writer.write_image(0, _colorHistory.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+	writer.write_image(1, _drawImage.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+	writer.update_set(_device, _tonemappingImageDescriptors);
 
 	update_scene();
 
@@ -514,13 +516,17 @@ void VulkanEngine::draw()
 		//AddCmdMarker(cmd, "Start Raytracing");
 		vkutil::transition_image(cmd, _depthImage.image, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_DEPTH_BIT);
 
+		vkutil::transition_image(cmd, _colorHistory.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+
 		_raytracingHandler.raytrace(cmd, this);
-		vkutil::transition_image_relaxed(cmd, _drawImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_ASPECT_COLOR_BIT);
 		//RemoveMarker(cmd);
 
+
+		vkutil::transition_image(cmd, _colorHistory.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
+		vkutil::transition_image(cmd, _drawImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
 	}
 	else {
-		draw_environment(cmd);
+		compute_environment(cmd);
 
 	
 		vkutil::transition_shadow_map(cmd, _shadowImage->image.image, VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
@@ -534,11 +540,14 @@ void VulkanEngine::draw()
 		vkutil::transition_depth(cmd, _depthImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
 
 		draw_geometry(cmd);
-		vkutil::transition_main_color_image(cmd, _drawImage.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+		vkutil::transition_main_color_image(cmd, _drawImage.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL);
+
 
 	}
 
+	compute_tonemapping(cmd);
 
+	vkutil::transition_image_relaxed(cmd, _drawImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_ASPECT_COLOR_BIT);
 
 	printf("time to blit\n");
 
@@ -1419,17 +1428,14 @@ void VulkanEngine::init_swapchain()
 	NameImageView(_device, _drawImage.imageView, "Draw Image View");
 
 
-	VkImageUsageFlags drawImageUsages{};
-	drawImageUsages |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
-	drawImageUsages |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-	drawImageUsages |= VK_IMAGE_USAGE_STORAGE_BIT;
-	drawImageUsages |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+	VkImageUsageFlags colorHistoryUsages{};
+	colorHistoryUsages |= VK_IMAGE_USAGE_STORAGE_BIT;
 
 	_colorHistory.imageFormat = VK_FORMAT_R32G32B32A32_SFLOAT;
-
+	_colorHistory.imageExtent = drawImageExtent;
 	create_render_buffer(_colorHistory, drawImageUsages, VK_IMAGE_ASPECT_COLOR_BIT);
-	NameImage(_device, _colorHistory.image, "Draw Image");
-	NameImageView(_device, _colorHistory.imageView, "Draw Image View");
+	NameImage(_device, _colorHistory.image, "Color history");
+	NameImageView(_device, _colorHistory.imageView, "Color history View");
 
 
 
@@ -1636,6 +1642,7 @@ void VulkanEngine::init_descriptors(){
 		builder.add_binding(2, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, flags); // metallic rougness
 		builder.add_binding(3, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, flags); // emissive
 		builder.add_binding(4, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, flags); // emissive
+		builder.add_binding(5, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, flags); // color history
 
 
 		_deferredDscSetLayout = builder.build(_device,
@@ -1643,12 +1650,23 @@ void VulkanEngine::init_descriptors(){
 			NULL,
 			VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT);
 	}
+	{
+		// Descriptor for tonemapping
+		DescriptorLayoutBuilder builder;
+		builder.add_binding(0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE); // Color History
+		builder.add_binding(1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE); // Main Color
+
+		
+		_tonemappingDscSetLayout = builder.build(_device,
+			VK_SHADER_STAGE_COMPUTE_BIT,
+			NULL);
+	}
 
 
 	_gBufferDescriptors = updatingGlobalDescriptorAllocator.allocate(_device, _deferredDscSetLayout);
 	_drawImageDescriptors = updatingGlobalDescriptorAllocator.allocate(_device,_drawImageDescriptorLayout);	
 	_textureArrayDescriptor = updatingGlobalDescriptorAllocator.allocate(_device, _textureArrayLayout);
-
+	_tonemappingImageDescriptors = globalDescriptorAllocator.allocate(_device, _tonemappingDscSetLayout);
 
 
 	//make sure both the descriptor allocator and the new layout get cleaned up properly
@@ -1684,6 +1702,7 @@ void VulkanEngine::init_pipelines(){
 	metalRoughMaterial.build_pipelines(this);
 
 	init_deferred_pipeline();
+	init_tonemapping_pipeline();
 	_shadowPipeline = std::make_unique<ShadowPipeline>();
 	_shadowPipeline->build_pipelines(this);
 
@@ -2549,9 +2568,9 @@ void VulkanEngine::update_scene()
 	}
 
 	mainCamera->update();
-	//glm::vec3 jitter = glm::ballRand(0.0);
+	glm::vec3 jitter = glm::ballRand(0.001);
 
-	glm::mat4 view = mainCamera->getViewMatrix(glm::vec3(0.0));
+	glm::mat4 view = mainCamera->getViewMatrix(jitter);
 	glm::mat4 rasterizationProjection = mainCamera->getProjectionMatrix(false);
 	glm::mat4 rayTracingProjection = mainCamera->getProjectionMatrix(true);
 
@@ -2777,9 +2796,7 @@ void VulkanEngine::init_background_pipelines()
 		});
 }
 
-
-
-void  VulkanEngine::draw_environment(VkCommandBuffer cmd) {
+void  VulkanEngine::compute_environment(VkCommandBuffer cmd) {
 	//make a clear-color from frame number. This will flash with a 120 frame period.
 
 
@@ -2792,7 +2809,7 @@ void  VulkanEngine::draw_environment(VkCommandBuffer cmd) {
 	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _environmentBackgroundLayout, 0, 1, &_drawImageDescriptors, 0, nullptr);
 
 
-	
+
 
 
 	vkCmdPushConstants(cmd, _environmentBackgroundLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(GlobalUniforms), _raytracingHandler.m_uniformMappedPtr);
@@ -2801,6 +2818,87 @@ void  VulkanEngine::draw_environment(VkCommandBuffer cmd) {
 	// execute the compute pipeline dispatch. We are using 16x16 workgroup size so we need to divide by it
 	vkCmdDispatch(cmd, std::ceil(_drawExtent.width / 16.0), std::ceil(_drawExtent.height / 16.0), 1);
 }
+
+
+void VulkanEngine::init_tonemapping_pipeline()
+{
+
+	VkPipelineLayoutCreateInfo computeLayout{};
+	computeLayout.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+	computeLayout.pNext = nullptr;
+	computeLayout.pSetLayouts = &_tonemappingDscSetLayout;
+	computeLayout.setLayoutCount = 1;
+
+	VkPushConstantRange pushConstant{};
+	pushConstant.offset = 0;
+	pushConstant.size = sizeof(ToneMappingSettings);
+	pushConstant.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+
+	computeLayout.pPushConstantRanges = &pushConstant;
+	computeLayout.pushConstantRangeCount = 1;
+
+	VK_CHECK(vkCreatePipelineLayout(_device, &computeLayout, nullptr, &_tonemappingLayout));
+
+
+	VkShaderModule toneMappingShader;
+	if (!vkutil::load_shader_module("../shaders/spv/Tonemapping.comp.spv", _device, &toneMappingShader)) {
+		fmt::print("Error when building the compute shader \n");
+	}
+
+
+
+	VkPipelineShaderStageCreateInfo stageinfo{};
+	stageinfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	stageinfo.pNext = nullptr;
+	stageinfo.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+	stageinfo.module = toneMappingShader;
+	stageinfo.pName = "main";
+
+	VkComputePipelineCreateInfo computePipelineCreateInfo{};
+	computePipelineCreateInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+	computePipelineCreateInfo.pNext = nullptr;
+	computePipelineCreateInfo.layout = _tonemappingLayout;
+	computePipelineCreateInfo.stage = stageinfo;
+
+	VK_CHECK(vkCreateComputePipelines(_device, VK_NULL_HANDLE, 1, &computePipelineCreateInfo, nullptr, &_tonemappingPipeline));
+
+
+	//destroy structures properly
+	vkDestroyShaderModule(_device, toneMappingShader, nullptr);
+	_mainDeletionQueue.push_function([=]() {
+		vkDestroyPipelineLayout(_device, _tonemappingLayout, nullptr);
+		vkDestroyPipeline(_device, _tonemappingPipeline, nullptr);
+		});
+}
+
+
+void  VulkanEngine::compute_tonemapping(VkCommandBuffer cmd) {
+
+	
+
+
+	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _tonemappingPipeline);
+
+
+
+
+	// bind the descriptor set containing the draw image for the compute pipeline
+	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _tonemappingLayout, 0, 1, &_tonemappingImageDescriptors, 0, nullptr);
+
+
+	ToneMappingSettings settings;
+	settings.gamma = 2.2;
+
+
+
+
+	vkCmdPushConstants(cmd, _tonemappingLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(ToneMappingSettings), &settings);
+
+
+	// execute the compute pipeline dispatch. We are using 16x16 workgroup size so we need to divide by it
+	vkCmdDispatch(cmd, std::ceil(_drawExtent.width / 16.0), std::ceil(_drawExtent.height / 16.0), 1);
+}
+
 
 
 

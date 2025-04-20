@@ -155,6 +155,10 @@ struct MaterialInstance {
     MaterialPass passType;
 };
 
+struct ToneMappingSettings {
+    float gamma;
+};
+
 struct DrawContext;
 // base class for a renderable dynamic object
 class IRenderable {
