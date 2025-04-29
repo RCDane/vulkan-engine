@@ -37,13 +37,22 @@ set_property(TARGET engine PROPERTY CXX_STANDARD 20)
 target_compile_definitions(engine PUBLIC GLM_FORCE_DEPTH_ZERO_TO_ONE)
 target_include_directories(engine PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
 
-target_link_libraries(engine PUBLIC vma glm Vulkan::Vulkan fmt::fmt stb_image SDL2::SDL2 vkbootstrap imgui fastgltf::fastgltf)
+target_link_libraries(engine PUBLIC vma glm Vulkan::Vulkan fmt::fmt stb_image SDL2::SDL2 vkbootstrap imgui)
+target_link_libraries(engine
+  PUBLIC
+    fastgltf::fastgltf
+    simdjson::simdjson   # note the correct imported target name
+)
+
+target_include_directories(engine PUBLIC
+  $<BUILD_INTERFACE:${fastgltf_SOURCE_DIR}/include>
+)
 
 target_precompile_headers(engine PUBLIC <optional> <vector> <memory> <string> <vector> <unordered_map> <glm/mat4x4.hpp> <glm/vec4.hpp> <vulkan/vulkan.h>)
 
 # # Debugging the add_custom_command
 # if (WIN32)
-#     add_custom_command(TARGET engine POST_BUILD
+#     add_custom_command(TARGET dengine POST_BUILD
 #     COMMAND ${CMAKE_COMMAND} -E echo "Post-build step for engine"
 #     COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:engine>/${CMAKE_BUILD_TYPE}
 #     COMMAND ${CMAKE_COMMAND} -E echo "Directory created at $<TARGET_FILE_DIR:engine>/${CMAKE_BUILD_TYPE}"

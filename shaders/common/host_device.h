@@ -139,7 +139,9 @@ struct LightSource {
 	vec3 color;
 	int type;
 	vec3 direction; 
-	int padding;
+    float radius;
+    float sunAngle;
+	vec3 padding;
 };
 
 

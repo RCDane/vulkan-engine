@@ -641,6 +641,8 @@ void VulkanEngine::prepare_lighting_data() {
 		shaderLight.intensity = light->intensity;
 		shaderLight.position = light->position;
 		shaderLight.type = light->type;
+		shaderLight.radius = light->radius;
+		shaderLight.sunAngle = light->sunAngle;
 		shaderLightSources.push_back(shaderLight);
 	}
 

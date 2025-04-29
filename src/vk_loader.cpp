@@ -19,11 +19,49 @@
 #include <glm/gtx/quaternion.hpp>
 
 #include <fastgltf/glm_element_traits.hpp>
-#include <fastgltf/parser.hpp>
+#include <fastgltf/core.hpp>
 #include <fastgltf/tools.hpp>
+
 #include <fastgltf/types.hpp>
 #include <vulkan/vulkan_core.h>
 #include <stdexcept>
+#include "simdjson.h"
+
+
+
+template<typename T>
+constexpr const char* getTypeName();
+
+template<>
+constexpr const char* getTypeName<std::monostate>() { return "monostate"; }
+
+template<>
+constexpr const char* getTypeName<fastgltf::sources::BufferView>() { return "BufferView"; }
+
+template<>
+constexpr const char* getTypeName<fastgltf::sources::URI>() { return "URI"; }
+
+template<>
+constexpr const char* getTypeName<fastgltf::sources::Array>() { return "Array"; }
+
+template<>
+constexpr const char* getTypeName<fastgltf::sources::Vector>() { return "Vector"; }
+
+template<>
+constexpr const char* getTypeName<fastgltf::sources::CustomBuffer>() { return "CustomBuffer"; }
+
+template<>
+constexpr const char* getTypeName<fastgltf::sources::ByteView>() { return "ByteView"; }
+
+template<>
+constexpr const char* getTypeName<fastgltf::sources::Fallback>() { return "Fallback"; }
+
+void printDataSourceType(const fastgltf::DataSource& data) {
+    std::visit([](auto&& arg) {
+        using T = std::decay_t<decltype(arg)>;
+        std::cout << "DataSource holds: " << getTypeName<T>() << std::endl;
+        }, data);
+}
 
 
 std::optional<AllocatedImage> load_image(VulkanEngine* engine, fastgltf::Asset& asset, fastgltf::Image& image)
@@ -31,6 +69,8 @@ std::optional<AllocatedImage> load_image(VulkanEngine* engine, fastgltf::Asset& 
     AllocatedImage newImage {};
 
     int width, height, nrChannels;
+
+    
 
     std::visit(
         fastgltf::visitor {
@@ -54,8 +94,8 @@ std::optional<AllocatedImage> load_image(VulkanEngine* engine, fastgltf::Asset& 
                     stbi_image_free(data);
                 }
             },
-            [&](fastgltf::sources::Vector& vector) {
-                unsigned char* data = stbi_load_from_memory(vector.bytes.data(), static_cast<int>(vector.bytes.size()),
+            [&](fastgltf::sources::Vector vector) {
+                unsigned char* data = stbi_load_from_memory(reinterpret_cast<const stbi_uc*>(vector.bytes.data()), static_cast<int>(vector.bytes.size()),
                     &width, &height, &nrChannels, 4);
                 if (data) {
                     VkExtent3D imagesize;
@@ -68,7 +108,7 @@ std::optional<AllocatedImage> load_image(VulkanEngine* engine, fastgltf::Asset& 
                     stbi_image_free(data);
                 }
             },
-            [&](fastgltf::sources::BufferView& view) {
+            [&](fastgltf::sources::BufferView view) {
                 auto& bufferView = asset.bufferViews[view.bufferViewIndex];
                 auto& buffer = asset.buffers[bufferView.bufferIndex];
 
@@ -77,7 +117,23 @@ std::optional<AllocatedImage> load_image(VulkanEngine* engine, fastgltf::Asset& 
                                                // are already loaded into a vector.
                                [](auto& arg) {},
                                [&](fastgltf::sources::Vector& vector) {
-                                   unsigned char* data = stbi_load_from_memory(vector.bytes.data() + bufferView.byteOffset,
+                                   unsigned char* data = stbi_load_from_memory(reinterpret_cast<const stbi_uc*>(vector.bytes.data()) + bufferView.byteOffset,
+                                       static_cast<int>(bufferView.byteLength),
+                                       &width, &height, &nrChannels, 4);
+                                   if (data) {
+                                       VkExtent3D imagesize;
+                                       imagesize.width = width;
+                                       imagesize.height = height;
+                                       imagesize.depth = 1;
+
+                                       newImage = engine->create_image(data, imagesize, VK_FORMAT_R8G8B8A8_UNORM,
+                                           VK_IMAGE_USAGE_SAMPLED_BIT,true);
+
+                                       stbi_image_free(data);
+                                   }
+                               },
+                    [&](fastgltf::sources::Array& array) {
+                                   unsigned char* data = stbi_load_from_memory(reinterpret_cast<const stbi_uc*>(array.bytes.data()) + bufferView.byteOffset,
                                        static_cast<int>(bufferView.byteLength),
                                        &width, &height, &nrChannels, 4);
                                    if (data) {
@@ -203,6 +259,12 @@ uint32_t findMaxVertexIdx(std::span<uint32_t> indices) {
     return *std::max_element(indices.begin(), indices.end());
 }
 
+
+
+struct LightExtras {
+    double radius = 0.0;
+    double sunAngle = 0.0;
+};
 std::optional<std::shared_ptr<LoadedGLTF>> loadGltf(VulkanEngine* engine, std::string_view filePath){
     fmt::print("Loading GLTF: {}\n", filePath);
 
@@ -210,9 +272,52 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGltf(VulkanEngine* engine, std::s
     scene->creator = engine;
     LoadedGLTF& file = *scene.get();
 
+    std::vector<LightExtras> lightExtras;
+
+
+    auto extrasCallback = [](simdjson::dom::object* extras,
+        std::size_t            objectIndex,
+        fastgltf::Category     category,
+        void* userPointer)
+        {
+            // Only handle Node extras
+            if (category != fastgltf::Category::Nodes)
+                return;
+
+            // Resize our vector to hold this node index
+            auto* vec = static_cast<std::vector<LightExtras>*>(userPointer);
+            //vec->resize(std::max(vec->size(), objectIndex + 1));
+
+            simdjson::dom::element elem;
+
+            // Read "radius" if present
+            if ((*extras)["radius"].get(elem) == simdjson::SUCCESS) {
+                double r;
+                elem.get_double().get(r);
+                LightExtras extra;
+                extra.radius = r;
+                vec->push_back(extra);
+                //(*vec)[objectIndex].radius = r;
+            }
+
+            // Read "sunAngle" if present
+            if ((*extras)["sunAngle"].get(elem) == simdjson::SUCCESS) {
+                double a;
+                elem.get_double().get(a);
+                LightExtras extra;
+                extra.sunAngle = a;
+                vec->push_back(extra);
+            }
+        };
+
 
     fastgltf::Parser parser(fastgltf::Extensions::KHR_lights_punctual);
     
+    parser.setExtrasParseCallback(extrasCallback);
+    parser.setUserPointer(&lightExtras);
+    
+
+
     constexpr auto gltfOptions =
         fastgltf::Options::DontRequireValidAssetMember |
         fastgltf::Options::AllowDouble |
@@ -221,15 +326,25 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGltf(VulkanEngine* engine, std::s
 
     
 
-    fastgltf::GltfDataBuffer data;
-    data.loadFromFile(filePath);
+    auto gltfFileOption = fastgltf::GltfDataBuffer::FromPath(filePath);
+    auto gltfFile = gltfFileOption.get_if();
+
+
+	if (gltfFile == nullptr) {
+		std::cerr << "Failed to load glTF file: " << fastgltf::to_underlying(gltfFileOption.error()) << std::endl;
+		return {};
+	}
+    //auto gltfData = fastgltf::GltfDataBuffer::FromBytes(bytes.data(), bytes.size());
     
     fastgltf::Asset gltf;
     std::filesystem::path path = filePath;
+
+
+
     
-    auto type = fastgltf::determineGltfFileType(&data);
+    auto type = fastgltf::determineGltfFileType(*gltfFile);
     if (type == fastgltf::GltfType::glTF){
-        auto load = parser.loadGLTF(&data, path.parent_path(),gltfOptions);
+        auto load = parser.loadGltf(*gltfFile, path.parent_path(),gltfOptions);
         if (load){
             gltf = std::move(load.get());
         }
@@ -238,7 +353,7 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGltf(VulkanEngine* engine, std::s
             return {};
         }            
     } else if (type == fastgltf::GltfType::GLB){
-        auto load = parser.loadBinaryGLTF(&data, path.parent_path(), gltfOptions);
+        auto load = parser.loadGltfBinary(*gltfFile, path.parent_path(), gltfOptions);
         if (load) {
             gltf = std::move(load.get());
         } else {
@@ -297,9 +412,7 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGltf(VulkanEngine* engine, std::s
         }
     }
     
-    if (gltf.lights.size() > 0) {
-        scene->lightSources = std::vector<std::shared_ptr<LightSource>>();
-    }
+
 
 
 
@@ -567,7 +680,7 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGltf(VulkanEngine* engine, std::s
 
             // Load vertex positions
             {
-                fastgltf::Accessor& posAccessor = gltf.accessors[p.findAttribute("POSITION")->second];
+                fastgltf::Accessor& posAccessor = gltf.accessors[p.findAttribute("POSITION")->accessorIndex];
                 vertices.resize(vertices.size() + posAccessor.count);
                 fastgltf::iterateAccessorWithIndex<glm::vec3>(gltf, posAccessor,
                     [&](glm::vec3 v, size_t index) {
@@ -583,7 +696,7 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGltf(VulkanEngine* engine, std::s
             // Load vertex normals
             auto normals = p.findAttribute("NORMAL");
             if (normals != p.attributes.end()) {
-                fastgltf::iterateAccessorWithIndex<glm::vec3>(gltf, gltf.accessors[(*normals).second],
+                fastgltf::iterateAccessorWithIndex<glm::vec3>(gltf, gltf.accessors[(*normals).accessorIndex],
                     [&](glm::vec3 v, size_t index) {
                         vertices[initial_vtx + index].normal = v;
                     });
@@ -593,7 +706,7 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGltf(VulkanEngine* engine, std::s
             auto tangents = p.findAttribute("TANGENT");
             if (tangents != p.attributes.end()) {
                 newSurface.hasTangents = true;
-                fastgltf::iterateAccessorWithIndex<glm::vec4>(gltf, gltf.accessors[(*tangents).second],
+                fastgltf::iterateAccessorWithIndex<glm::vec4>(gltf, gltf.accessors[(*tangents).accessorIndex],
                     [&](glm::vec4 v, size_t index) {
                         vertices[initial_vtx + index].tangent = v;
                     });
@@ -602,7 +715,7 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGltf(VulkanEngine* engine, std::s
             // Load UVs
             auto uv = p.findAttribute("TEXCOORD_0");
             if (uv != p.attributes.end()) {
-                fastgltf::iterateAccessorWithIndex<glm::vec2>(gltf, gltf.accessors[(*uv).second],
+                fastgltf::iterateAccessorWithIndex<glm::vec2>(gltf, gltf.accessors[(*uv).accessorIndex],
                     [&](glm::vec2 v, size_t index) {
                         vertices[initial_vtx + index].uv = v;
                     });
@@ -611,7 +724,7 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGltf(VulkanEngine* engine, std::s
             // Load vertex colors
             auto colors = p.findAttribute("COLOR_0");
             if (colors != p.attributes.end()) {
-                fastgltf::iterateAccessorWithIndex<glm::vec4>(gltf, gltf.accessors[(*colors).second],
+                fastgltf::iterateAccessorWithIndex<glm::vec4>(gltf, gltf.accessors[(*colors).accessorIndex],
                     [&](glm::vec4 v, size_t index) {
                         vertices[initial_vtx + index].color = v;
                     });
@@ -632,7 +745,7 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGltf(VulkanEngine* engine, std::s
             newSurface.bounds.sphereRadius = glm::length(newSurface.bounds.extents);
 
             newSurface.maxVertex = *std::max_element(indices.begin(), indices.end());
-            fastgltf::Accessor& posAccessor = gltf.accessors[p.findAttribute("POSITION")->second];
+            fastgltf::Accessor& posAccessor = gltf.accessors[p.findAttribute("POSITION")->accessorIndex];
             newSurface.vertexCount = static_cast<uint32_t>(posAccessor.count);
 
 
@@ -666,10 +779,10 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGltf(VulkanEngine* engine, std::s
         file.nodes[node.name.c_str()];
 
         std::visit(fastgltf::visitor { 
-                        [&](fastgltf::Node::TransformMatrix matrix) {
+                        [&](fastgltf::math::fmat4x4 matrix) {
                                           memcpy(&newNode->localTransform, matrix.data(), sizeof(matrix));
                                       },
-                        [&](fastgltf::Node::TRS transform) {
+                        [&](fastgltf::TRS transform) {
                            glm::vec3 tl(transform.translation[0], transform.translation[1],
                                transform.translation[2]);
                            glm::quat rot(transform.rotation[3], transform.rotation[0], transform.rotation[1],
@@ -695,7 +808,15 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGltf(VulkanEngine* engine, std::s
         if (node.lightIndex.has_value()) {
             int lightIdx = node.lightIndex.value();
 			auto light = gltf.lights[lightIdx];
+            auto range = light.range;
+            auto innerAngle = light.innerConeAngle;
+            auto outerAngle = light.outerConeAngle;
+            
+
+
 			auto lightSource = loadLight(light, static_cast<MeshNode*>(newNode.get()));
+			lightSource.radius = lightExtras[lightIdx].radius;
+			lightSource.sunAngle = lightExtras[lightIdx].sunAngle;
             scene->lightSources.push_back(std::make_shared<LightSource>(lightSource));
         }
     }

@@ -82,6 +82,8 @@ struct LightSource {
     glm::vec3 position;
     glm::vec3 direction;
     glm::vec3 color;
+    float radius;
+    float sunAngle;
 };
 
 struct ShaderLightSource {
@@ -90,9 +92,11 @@ struct ShaderLightSource {
     glm::vec3 color;
     int type;
     glm::vec3 direction;
-    int padding;
+    float radius;
+    float sunAngle;
+	glm::vec3 padding1;
 };
-static_assert(sizeof(ShaderLightSource) == 48, "ShaderLightSource struct size should be 48 bytes.");
+static_assert(sizeof(ShaderLightSource) == 64, "ShaderLightSource struct size should be 64 bytes.");
 
 struct alignas(16) Vertex {
     glm::vec3 position;    // 12 bytes

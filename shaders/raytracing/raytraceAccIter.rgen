@@ -64,7 +64,73 @@ vec3 reconstructWorldPosition(
     return vec3(worldPosH.xyz);
 }
 
+struct LightSample {
+  vec3 color;
+  vec3 direction;
+  float intensity;
+  float distance;
+  vec3 attenuation;
+  float pdf;
+};
 
+
+// Sample sphere 
+vec3 sampleSphere(vec3 center, float radius, inout uint seed)
+{
+  vec3 position = vec3(0.0);
+  float u = rnd(seed);
+  float v = rnd(seed);
+  float theta = 2.0 * PI * u;
+  float phi = acos(1.0 - 2.0 * v);
+  position.x = radius * sin(phi) * cos(theta) + center.x;
+  position.y = radius * sin(phi) * sin(theta) + center.y;
+  position.z = radius * cos(phi) + center.z;
+  return position;  
+}
+
+const float INF_DISTANCE = 1e20;
+
+LightSample sampleLightsPdf(vec3 hitPoint, inout uint seed) {
+    // 1) Pick one light uniformly
+    uint i = randRange(seed, 0, uni.raytracingSettings.lightCount - 1);
+    LightSource Ls = lights[i];
+    float selectPdf = 1.0 / float(uni.raytracingSettings.lightCount);  // P(l)
+
+    LightSample ls;
+    ls.pdf = selectPdf;         // pdf of the light source
+    ls.color = Ls.color;           // base color of the light
+    ls.intensity = Ls.intensity;   // scalar intensity
+
+    if (Ls.type == 0) {
+
+        vec3 samplePos = sampleSphere(Ls.position, Ls.radius, seed);
+
+        vec3 toLight   = samplePos - hitPoint;
+        float dist     = length(toLight);
+        vec3 dir       = normalize(toLight);
+
+        float area     = 4.0 * PI * Ls.radius * Ls.radius;
+        float areaPdf  = 1.0 / area;
+
+        ls.pdf = ls.pdf * areaPdf;
+
+        ls.intensity = ls.intensity / (area*PI); // scale intensity by area pdf
+        ls.attenuation =  vec3(1)/(dist * dist);
+
+        ls.direction = dir;
+        ls.distance  = dist;
+    } else {
+        vec3 dir = -normalize(Ls.direction);
+
+        // ls.pdf         = selectPdf;      // no changes to the pdf needed
+        
+        ls.direction   = Ls.direction;
+        ls.distance    = INF_DISTANCE;   // treat as infinitely distant
+        ls.attenuation = vec3(1.0);
+    }
+
+    return ls;
+}
 
 
 void main()
@@ -104,26 +170,12 @@ void main()
 
   direction = -direction;
   vec3 V = normalize(origin.xyz- worldPos);
-  uint i = randRange(prd.seed, 0, 3);
-  float lights_pdf = 1.0 / float(uni.raytracingSettings.lightCount);
-  LightSource l = lights[i];
-  vec3  L;
-	float lightIntensity =l.intensity;
-	float lightDistance =  10000000.0;
-  vec3 rayAttenuation = vec3(1);
+  LightSample l_Sample = sampleLightsPdf(worldPos, prd.seed);
 
-	// Point light
-	if(l.type == 0)
-	{
-		vec3 lDir      = l.position - worldPos;
-		lightDistance  = length(lDir);
-		L              = normalize(lDir);
-    rayAttenuation *= 1.0/(lightDistance*lightDistance);
-	} 
-	else  // Directional light
-	{
-		L = -normalize(l.direction);
-	}
+
+
+
+
 
 
 
@@ -166,11 +218,21 @@ void main()
 						0            // payload is payload
 		);
 
-  	const float invCosinePdf = dot(N, rayDirection)/PI;
+  	float cosNL    = max(dot(N, rayDirection), 0.0);
+    float hemiPdf  = cosNL / PI;
+    float invPdf   = PI / max(cosNL, 1e-6);
 
 
+    PBR_result result = CalculatePBRResult(
+      N,V,
+      rayDirection, albedoColor.xyz, 
+      prd.hitValue, 1.0f, 
+      F0, metalness, 
+      roughness);
+    
 
-		indirectIllumination += prd.hitValue * prd.attenuation * invCosinePdf;
+
+		indirectIllumination += result.color * prd.attenuation;
     if(prd.depth > 0 || prd.done == 1)
       break;
     rayOrigin = prd.rayOrigin + V*e;
@@ -178,30 +240,22 @@ void main()
     createCoordinateSystem(hitNormal, tangent, bitangent);
 
     rayDirection = samplingHemisphere(prd.seed, tangent, bitangent, hitNormal);
-
   }
 
-  PBR_result res = CalculatePBRResult(
-        N, 
-        V, 
-        rayDirection,
-        albedoColor.xyz, 
-        indirectIllumination,
-        1.0, 
-        F0, 
-        metalness, 
-        roughness);
-  vec3 finalIndirect = res.color * res.f;
+
+  // vec3 finalIndirect = res.color;
 
 
   // Next event estimation for direct lighting
   isShadowed   = true; 
-  vec3 directIllumination = vec3(0);
-    if(dot(N, L) > 0)
-    {
+  vec3 directIllumination = vec3(0.0);
 
+  vec3 L = normalize(l_Sample.direction);
+
+    if(dot(N, l_Sample.direction) > 0)
+    {
       float tMin   = 0.01;
-      float tMax   = lightDistance;
+      float tMax   = l_Sample.distance;
       vec3  rayOrigin = worldPos;
       vec3  rayDir = L;
       uint  flags  = gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsOpaqueEXT | gl_RayFlagsSkipClosestHitShaderEXT;
@@ -219,12 +273,13 @@ void main()
       );
 
       if (!isShadowed){
-        PBR_result res =  CalculatePBRResult(N,V,L,albedoColor.xyz,l.color, lightIntensity, F0, metalness, roughness);
-        directIllumination += res.color*rayAttenuation / lights_pdf;
+        PBR_result res =  CalculatePBRResult(N,V,L,albedoColor.xyz,l_Sample.color, l_Sample.intensity, F0, metalness, roughness);
+        directIllumination += (res.color * l_Sample.attenuation) / l_Sample.pdf;
+
       }
     }
 
-  vec3 combined = directIllumination + finalIndirect;
+  vec3 combined = directIllumination + indirectIllumination;
 
   vec3 currentRayCount =  vec3(uni.raytracingSettings.currentRayCount);
   vec3 rayBudget =  vec3(uni.raytracingSettings.rayBudget);
@@ -236,14 +291,10 @@ void main()
 
   // gamma‑correct and store
 
-  vec3 dotp = vec3(dot(N, L));
-
-  vec3 diff = emission.xyz - worldPos.xyz;
+  vec3 dotp = vec3(dot(N, l_Sample.direction));
 
   imageStore(colorHistory,
             ivec2(gl_LaunchIDEXT.xy),
             vec4(accumulatedColor, 1.0));
-  // imageStore(image,
-  //           ivec2(gl_LaunchIDEXT.xy),
-  //           vec4(worldPos, 1.0));
+
 }

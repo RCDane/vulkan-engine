@@ -67,7 +67,16 @@ struct PBR_result {
     vec3 color;
 };
 
-PBR_result CalculatePBRResult(vec3 N, vec3 V, vec3 L,vec3 albedo, vec3 lightColor, float lightIntensity, vec3 F0, float metallness,float roughness){
+PBR_result CalculatePBRResult(
+    vec3 N, 
+    vec3 V, 
+    vec3 L,
+    vec3 albedo, 
+    vec3 lightColor, 
+    float lightIntensity, 
+    vec3 F0, 
+    float metallness,
+    float roughness){
     vec3 radiance = lightColor*lightIntensity;
     vec3 H = normalize(V+L);
 

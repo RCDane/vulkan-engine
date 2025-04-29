@@ -22,6 +22,7 @@ layout(set = 0, binding = eTlas) uniform accelerationStructureEXT topLevelAS;
 layout(set = 1, binding = eObjDescs, scalar) buffer ObjDesc_ { ObjDesc i[]; } objDesc;
 layout(set = 1, binding = eTextures) uniform sampler2D textureSamplers[];
 layout(set = 1, binding = 5, scalar) buffer LightSources { LightSource lights[]; };
+layout(set = 1, binding = 0) uniform _GlobalUniforms { GlobalUniforms uni; };
 
 
 
@@ -29,6 +30,104 @@ layout(set = 1, binding = 3, scalar) buffer MaterialData_ {GLTFMaterialData data
 layout(set = 1, binding=4) uniform samplerCube cubeMap;
 
 layout(push_constant) uniform _PushConstantRay { PushConstantRay pcRay; };
+
+struct LightSample {
+  vec3 color;
+  vec3 direction;
+  float intensity;
+  float distance;
+  vec3 attenuation;
+  float pdf;
+};
+
+
+// Sample sphere 
+vec3 sampleSphere(vec3 center, float radius, inout uint seed)
+{
+  vec3 position = vec3(0.0);
+  float u = rnd(seed);
+  float v = rnd(seed);
+  float theta = 2.0 * PI * u;
+  float phi = acos(1.0 - 2.0 * v);
+  position.x = radius * sin(phi) * cos(theta) + center.x;
+  position.y = radius * sin(phi) * sin(theta) + center.y;
+  position.z = radius * cos(phi) + center.z;
+  return position;  
+}
+
+const float INF_DISTANCE = 1e20;
+
+LightSample sampleLightsPdf(vec3 hitPoint, inout uint seed) {
+    // 1) Pick one light uniformly
+    uint i = randRange(seed, 0, uni.raytracingSettings.lightCount - 1);
+    LightSource Ls = lights[i];
+    float selectPdf = 1.0 / float(uni.raytracingSettings.lightCount);  // P(l)
+
+    LightSample ls;
+    ls.pdf = selectPdf;         // pdf of the light source
+    ls.color = Ls.color;           // base color of the light
+    ls.intensity = Ls.intensity;   // scalar intensity
+
+    if (Ls.type == 0) {
+
+        vec3 samplePos = sampleSphere(Ls.position, Ls.radius, seed);
+
+        vec3 toLight   = samplePos - hitPoint;
+        float dist     = length(toLight);
+        vec3 dir       = normalize(toLight);
+
+        float area     = 4.0 * PI * Ls.radius * Ls.radius;
+        float areaPdf  = 1.0 / area;
+
+        ls.pdf = ls.pdf * areaPdf;
+
+        ls.intensity = ls.intensity / (area*PI); // scale intensity by area pdf
+        ls.attenuation =  vec3(1)/(dist * dist);
+
+        ls.direction = dir;
+        ls.distance  = dist;
+    } else {
+        // directional (sun) light with finite sunAngle for soft shadows
+
+        // 1) base direction (w) is the normalized light direction
+        vec3 w = normalize(Ls.direction);
+
+        // 2) branchless ONB (Duff et al. 2017)
+        float s = (w.z >= 0.0 ? 1.0 : -1.0);
+        float a = -1.0 / (s + w.z);
+        float b = w.x * w.y * a;
+        vec3 u  = vec3(1.0 + s * w.x * w.x * a, s * b, -s * w.x);
+        vec3 v  = vec3(b, s + w.y * w.y * a, -w.y);
+
+        // 3) sample a direction within the cone of half-angle sunAngle
+        float cosMax = cos(Ls.sunAngle);
+        float u1 = rnd(seed);
+        float u2 = rnd(seed);
+        float z  = mix(cosMax, 1.0, u1);
+        float r  = sqrt(max(0.0, 1.0 - z*z));
+        float phi = 2.0 * PI * u2;
+        vec2 d    = vec2(cos(phi)*r, sin(phi)*r);
+
+        // 4) build sample vector in local ONB space
+        vec3 localDir = vec3(d.x, d.y, z);
+
+        // 5) rotate into world space
+        vec3 sampleDir = normalize(u * localDir.x + v * localDir.y + w * localDir.z);
+
+        // 6) set output
+        ls.direction   = sampleDir;
+        ls.distance    = INF_DISTANCE;
+        ls.attenuation = vec3(1.0);
+
+        // 7) account for cone PDF
+        float coneSolidAngle = 2.0 * PI * (1.0 - cosMax);
+        float conePdf        = 1.0 / coneSolidAngle;
+        ls.pdf = selectPdf * conePdf;
+    }
+
+    return ls;
+}
+
 
 vec3 computeMappedNormal(Vertex v0, Vertex v1, Vertex v2, vec3 barycentrics, GLTFMaterialData mat)
 {
@@ -100,24 +199,10 @@ void main()
 	
 	
 	uint i = randRange(prd.seed, 0, 3);
-	LightSource l = lights[i];
-	vec3  L;
-	float lightIntensity =l.intensity;
-	float lightDistance =  10000000.0;
-  	vec3 rayAttenuation = vec3(1);
+	LightSample l_Sample = sampleLightsPdf(worldPos, prd.seed);
 
-	// Point light
-	if(l.type == 0)
-	{
-		vec3 lDir      = l.position - worldPos;
-		lightDistance  = length(lDir);
-		L              = normalize(lDir);
-    	rayAttenuation *= 1.0/(lightDistance*lightDistance);
-	} 
-	else  // Directional light
-	{
-		L = -normalize(l.direction);
-	}
+	vec3 L = l_Sample.direction; // Light direction (from fragment to light)
+	
 
 	
 
@@ -167,7 +252,6 @@ void main()
 	}   
 
 	// Shininess exponent for Blinn-Phong
-	float shininess = max((1.0 - roughness) * 128.0, 1.0);
 
 	vec3 tmpColor = vec3(1.0);
 	
@@ -176,7 +260,7 @@ void main()
 	if (dot(worldNrm,L) > 0){
 
 		float tMin   = 0.01;
-		float tMax   = lightDistance;
+		float tMax   = l_Sample.distance;
 		vec3  rayOrigin = worldPos;
 		vec3  rayDir = L;
 		uint  flags  = gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsOpaqueEXT | gl_RayFlagsSkipClosestHitShaderEXT;
@@ -197,8 +281,8 @@ void main()
 	
 	// 1) compute direct PBR_result
 	PBR_result res = CalculatePBRResult(worldNrm, V, L,
-										baseColor, l.color,
-										lightIntensity, F0,
+										baseColor, l_Sample.color,
+										l_Sample.intensity, F0,
 										metallic, roughness);
 
 	// 2) pick unshadowed radiance
@@ -210,6 +294,9 @@ void main()
 
 	// 4) build your throughput update **without dividing by pdf**
 	//    since you’re cosine‑hemisphere sampling:
+	
+  	float cosNL    = max(dot(worldNrm, L), 0.0);
+
 
 	vec3  bsdf = res.f;
 
@@ -220,7 +307,7 @@ void main()
 	invSq = min(invSq, maxAtt);
 
 	// 5) update attenuation
-	prd.attenuation *= bsdf;
+	prd.attenuation *= bsdf * cosNL;
 
 	// 6) write your radiance into the payload
 	prd.hitValue = directRadiance;
