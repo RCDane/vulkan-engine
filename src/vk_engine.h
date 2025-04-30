@@ -300,7 +300,7 @@ public:
 
 	VkQueryPool _timestampQueryPool;          // Query pool for timestamps
 	const uint32_t QUERIES_PER_FRAME = 2;     // Start and
-
+	
 	bool _isInitialized{ false };
 	int _frameNumber {0};
 	bool stop_rendering{ false };

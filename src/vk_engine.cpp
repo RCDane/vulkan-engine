@@ -137,10 +137,15 @@ void VulkanEngine::init()
 	//loadedScenes["helmet"]->rootTransform = glm::scale(glm::vec3(10.0f)) * loadedScenes["helmet"]->rootTransform;
 	//loadedScenes["helmet"]->rootTransform = glm::translate(glm::vec3(0.0f, 20.0f, 0.0f)) * loadedScenes["helmet"]->rootTransform;
 
-	std::string sponzaPath = { "../assets/sponza.glb" };
-	auto sponzaFile = loadGltf(this, sponzaPath);
-	assert(sponzaFile.has_value());
-	loadedScenes["sponza"] = *sponzaFile;
+	//std::string sponzaPath = { "../assets/sponza.glb" };
+	//auto sponzaFile = loadGltf(this, sponzaPath);
+	//assert(sponzaFile.has_value());
+	//loadedScenes["sponza"] = *sponzaFile;
+
+	std::string sphereTestPath = { "../assets/sphere test.glb" };
+	auto sphereTestFile = loadGltf(this, sphereTestPath);
+	assert(sphereTestFile.has_value());
+	loadedScenes["sphereTest"] = *sphereTestFile;
 
 
 	for (auto const& [key, scene] : loadedScenes) {
@@ -182,12 +187,12 @@ void VulkanEngine::init()
 
 
 
-	std::string dragonPath = { "../assets/dragon.glb" };
-	auto dragonFile = loadGltf(this, dragonPath);
-	assert(dragonFile.has_value());
-	loadedScenes["dragon"] = *dragonFile;
-	loadedScenes["dragon"]->rootTransform = glm::scale(glm::vec3(30.0f)) * loadedScenes["dragon"]->rootTransform;
-	loadedScenes["dragon"]->rootTransform = glm::translate(glm::vec3(0, 0, 0)) * loadedScenes["dragon"]->rootTransform;
+	//std::string dragonPath = { "../assets/dragon.glb" };
+	//auto dragonFile = loadGltf(this, dragonPath);
+	//assert(dragonFile.has_value());
+	//loadedScenes["dragon"] = *dragonFile;
+	//loadedScenes["dragon"]->rootTransform = glm::scale(glm::vec3(30.0f)) * loadedScenes["dragon"]->rootTransform;
+	//loadedScenes["dragon"]->rootTransform = glm::translate(glm::vec3(0, 0, 0)) * loadedScenes["dragon"]->rootTransform;
 
 
 		//some default lighting parameters
