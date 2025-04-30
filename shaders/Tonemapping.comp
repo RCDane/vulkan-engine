@@ -36,7 +36,9 @@ vec3 PBRNeutralToneMapping( vec3 color ) {
 }
 
 
-
+vec3 gammaCorrect( vec3 color, float gamma ) {
+  return pow(color, vec3(1.0 / gamma));
+}
 
 void main() 
 {
@@ -48,7 +50,7 @@ void main()
 
     vec3 tonemappedColor = PBRNeutralToneMapping(currentColor);
 
-    vec3 gammaCorrectedColor = pow(tonemappedColor, vec3(1.0 / tone.gamma));
+    vec3 gammaCorrectedColor = gammaCorrect(tonemappedColor, tone.gamma);
 
     imageStore(outputImage, texelCoord, vec4(gammaCorrectedColor, 1.0));
 

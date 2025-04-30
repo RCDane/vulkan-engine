@@ -18,6 +18,7 @@ layout(location = 1) rayPayloadEXT bool isShadowed;
 layout(set = 0, binding = eTlas) uniform accelerationStructureEXT topLevelAS;
 layout(set = 0, binding = eOutImage, rgba16f) uniform image2D image;
 layout(set = 1, binding = 0) uniform _GlobalUniforms { GlobalUniforms uni; };
+
 layout(set = 1, binding = 5, scalar) buffer LightSources { LightSource lights[]; };
 layout(set = 2, binding = 0, rgba16f) uniform image2D albedo; 
 layout(set = 2, binding = 1, rgba16f) uniform image2D normal; 
@@ -25,6 +26,7 @@ layout(set = 2, binding = 2, rgba16f) uniform image2D material;
 layout(set = 2, binding = 3, rgba32f) uniform image2D emission; 
 layout(set = 2, binding = 4, r32f) uniform image2D depth;
 layout(set = 2, binding = 5, rgba32f) uniform image2D colorHistory;
+layout(set = 2, binding = 6, r32f) uniform image2D depthHistory;
 
 layout(push_constant) uniform _PushConstantRay { PushConstantRay pcRay; };
 // clang-format on
@@ -32,10 +34,7 @@ layout(push_constant) uniform _PushConstantRay { PushConstantRay pcRay; };
 float zNear = 0.1;
 float zFar = 1000.0;
 
-float LinearizeDepth(float depth) {
-    // depth ∈ [0,1], where 1.0 → zNear and 0.0 → zFar
-    return zNear * zFar / (zFar + depth * (zNear - zFar));
-}
+
 
 vec3 reconstructWorldPosition(
     double rawDepth,        // non‑linear depth sample ∈ [0,1], near→1, far→0
@@ -131,6 +130,27 @@ LightSample sampleLightsPdf(vec3 hitPoint, inout uint seed) {
 
     return ls;
 }
+float LinearizeDepth(float depth) {
+    // depth ∈ [0,1], where 1.0 → zNear and 0.0 → zFar
+    return zNear * zFar / (zFar + depth * (zNear - zFar));
+}
+
+bool CheckUv(vec2 uv, vec2 size){
+  if(uv.x < 0.0 || uv.x > size.x) return false;
+  if(uv.y < 0.0 || uv.y > size.y) return false;
+  return true;
+}
+
+float eps = 1e-4;
+
+bool CheckAgainstDepth(vec2 uv, vec2 size,float calculatedDepth, image2D oldDepth ){
+  bool uvInBounds = CheckUv(uv, size);
+  if(!uvInBounds) return false;
+  float depth = imageLoad(oldDepth, ivec2(uv)).r;
+  if (abs(depth - calculatedDepth) < eps)
+    return true;
+  return false;
+}
 
 
 void main()
@@ -160,6 +180,28 @@ void main()
     vpSize, 
     uni.projInverse, 
     uni.viewInverse);
+
+  // Linearize currentDepth
+
+  // Reproject and get screen space position
+  vec4 reprojectedPos = uni.oldViewProj * vec4(worldPos, 1.0);
+  vec3 reprojNDC = reprojectedPos.xyz / reprojectedPos.w;      // NDC xyz
+  vec2 reprojUV  = reprojNDC.xy * 0.5 + 0.5; 
+  vec2 reprojPixel = reprojUV.xy * vec2(gl_LaunchSizeEXT.xy);
+  bool reprojectionSuccessFull = false;
+  if (CheckUv(vec2(reprojPixel), vec2(gl_LaunchSizeEXT.xy))) {
+    float oldRawDepth = imageLoad(depthHistory, ivec2(reprojPixel.xy)).r;    // reversed‐Z
+    float reprojDepth  = reprojNDC.z;                           // also reversed‐Z
+    // optional: linearize both depths to view‐space
+    float linOld  = zNear * zFar / (zFar + oldRawDepth * (zNear - zFar));;
+    float linNew  = zNear * zFar / (zFar + reprojDepth * (zNear - zFar));;
+    reprojectionSuccessFull = abs(linOld - linNew) > eps;
+  }
+
+
+  // sample old depth and compare
+
+
 
 
   float roughness = material.r;

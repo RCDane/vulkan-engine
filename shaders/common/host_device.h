@@ -63,12 +63,17 @@ struct RaytracingSettings {
 	int lightCount;
 };
 
+struct FilteringSettings {
+	float TaaFactor;
+};
+
 // Uniform buffer set at each frame
 struct GlobalUniforms
 {
 	mat4 viewProj;     // Camera view * projection
 	mat4 viewInverse;  // Camera inverse view matrix
 	mat4 projInverse;  // Camera inverse projection matrix
+	mat4 oldViewProj;
 	ivec2 viewPort;
 	int clearScreen;
 	int padding;

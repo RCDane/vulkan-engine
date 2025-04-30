@@ -248,7 +248,7 @@ void main()
 		// while the roughness is stored in the G channel of the MetallicRougnessTexture
 		vec2 metalRough = texture(textureSamplers[mat.metalIdx], uv).gb;
 		roughness = metalRough.x;
-		metallic = metalRough.y;
+		metallic = metalRough.y; 
 	}   
 
 	// Shininess exponent for Blinn-Phong

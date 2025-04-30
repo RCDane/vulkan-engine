@@ -1455,6 +1455,7 @@ void RaytracingHandler::raytrace(VkCommandBuffer cmd, VulkanEngine* engine) {
 	writer2.write_image(3, engine->_gBuffer_Emissive.imageView, engine->_defaultSamplerNearest, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 	writer2.write_image(4, engine->_depthImage.imageView, engine->_defaultSamplerNearest, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 	writer2.write_image(5, engine->_colorHistory.imageView, engine->_defaultSamplerNearest, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+	writer2.write_image(6, engine->_depthHistory.imageView, engine->_defaultSamplerNearest, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 
 	writer2.update_set(engine->_device, engine->_gBufferDescriptors);
 	// Bind the ray tracing descriptor sets

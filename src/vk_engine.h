@@ -124,6 +124,7 @@ struct GlobalUniforms
 	glm::mat4 viewProj;     // Camera view * projection
 	glm::mat4 viewInverse;  // Camera inverse view matrix
 	glm::mat4 projInverse;  // Camera inverse projection matrix
+	glm::mat4 oldViewProj;
 	glm::ivec2 resolution;  // Framebuffer resolution
 	int clearScreen;
 	int padding;
@@ -242,7 +243,6 @@ public:
 	std::vector<std::shared_ptr<MeshAsset>> testMeshes;
 
 	AllocatedImage _drawImage;
-	AllocatedImage _colorHistory;
 	AllocatedImage _depthImage;
 	AllocatedImage _gBuffer_normal;
 	AllocatedImage _gBuffer_albedo;
@@ -250,6 +250,11 @@ public:
 	AllocatedImage _gBuffer_Emissive;
 
 
+
+
+	// History buffers
+	AllocatedImage _colorHistory;
+	AllocatedImage _depthHistory;
 
 
 	AllocatedImage _whiteImage;

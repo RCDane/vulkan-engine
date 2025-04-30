@@ -85,6 +85,8 @@ void VulkanEngine::init()
 		vkutil::transition_image_relaxed(cmd, _gBuffer_metallicRougnes.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
 		vkutil::transition_image_relaxed(cmd, _gBuffer_Emissive.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
 		vkutil::transition_image_relaxed(cmd, _depthImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_DEPTH_BIT);
+		vkutil::transition_image_relaxed(cmd, _depthHistory.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_DEPTH_BIT);
+
 		vkutil::transition_image_relaxed(cmd, _drawImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_ASPECT_COLOR_BIT);
 
 		});
@@ -106,7 +108,7 @@ void VulkanEngine::init()
 
 
 
-	_cubeMap = load_cube_map(this, "../assets/skybox");
+	_cubeMap = load_cube_map(this, "../assets/black_skybox");
 
 
 
@@ -137,15 +139,15 @@ void VulkanEngine::init()
 	//loadedScenes["helmet"]->rootTransform = glm::scale(glm::vec3(10.0f)) * loadedScenes["helmet"]->rootTransform;
 	//loadedScenes["helmet"]->rootTransform = glm::translate(glm::vec3(0.0f, 20.0f, 0.0f)) * loadedScenes["helmet"]->rootTransform;
 
-	//std::string sponzaPath = { "../assets/sponza.glb" };
-	//auto sponzaFile = loadGltf(this, sponzaPath);
-	//assert(sponzaFile.has_value());
-	//loadedScenes["sponza"] = *sponzaFile;
+	std::string sponzaPath = { "../assets/sponza.glb" };
+	auto sponzaFile = loadGltf(this, sponzaPath);
+	assert(sponzaFile.has_value());
+	loadedScenes["sponza"] = *sponzaFile;
 
-	std::string sphereTestPath = { "../assets/sphere test.glb" };
-	auto sphereTestFile = loadGltf(this, sphereTestPath);
-	assert(sphereTestFile.has_value());
-	loadedScenes["sphereTest"] = *sphereTestFile;
+	//std::string sphereTestPath = { "../assets/sphere test.glb" };
+	//auto sphereTestFile = loadGltf(this, sphereTestPath);
+	//assert(sphereTestFile.has_value());
+	//loadedScenes["sphereTest"] = *sphereTestFile;
 
 
 	for (auto const& [key, scene] : loadedScenes) {
@@ -475,7 +477,7 @@ void VulkanEngine::draw()
 	// we will overwrite it all so we dont care about what was the older layout
 	printf("transition depth\n");
 
-	vkutil::transition_image(cmd, _depthImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, VK_IMAGE_ASPECT_DEPTH_BIT);
+	vkutil::transition_image(cmd, _depthImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, VK_IMAGE_ASPECT_DEPTH_BIT);
 
 	printf("Start new deferred\n");
 
@@ -523,7 +525,17 @@ void VulkanEngine::draw()
 
 		vkutil::transition_image(cmd, _colorHistory.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
 
+		vkutil::transition_image(cmd, _depthHistory.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_DEPTH_BIT);
+
+
 		_raytracingHandler.raytrace(cmd, this);
+		
+
+		vkutil::transition_image(cmd, _depthImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_ASPECT_DEPTH_BIT);
+
+		vkutil::transition_image(cmd, _depthHistory.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_ASPECT_DEPTH_BIT);
+		
+		vkutil::copy_image_to_image_depth(cmd, _depthImage.image, _depthHistory.image, _swapchainExtent, _swapchainExtent);
 		//RemoveMarker(cmd);
 
 
@@ -1451,13 +1463,28 @@ void VulkanEngine::init_swapchain()
 	depthImageUsages |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
 	depthImageUsages |= VK_IMAGE_USAGE_SAMPLED_BIT;
 	depthImageUsages |= VK_IMAGE_USAGE_STORAGE_BIT;
+	depthImageUsages |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
 	_depthImage.imageFormat = VK_FORMAT_D32_SFLOAT;
 	_depthImage.imageExtent = drawImageExtent;
 
 	create_render_buffer(_depthImage, depthImageUsages, VK_IMAGE_ASPECT_DEPTH_BIT);
-	NameImage(_device, _depthImage.image, "G-buffer-Depth");
-	NameImageView(_device, _depthImage.imageView, "G-buffer-Depth View");
+	NameImage(_device, _depthImage.image, "G-buffer-Depth 1 ");
+	NameImageView(_device, _depthImage.imageView, "G-buffer-Depth 1 View");
 
+
+	VkImageUsageFlags depthHistoryImageUsages{};
+	depthHistoryImageUsages |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+	depthHistoryImageUsages |= VK_IMAGE_USAGE_SAMPLED_BIT;
+	depthHistoryImageUsages |= VK_IMAGE_USAGE_STORAGE_BIT;
+	depthHistoryImageUsages |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+
+	_depthHistory.imageFormat = VK_FORMAT_D32_SFLOAT;
+
+	_depthHistory.imageExtent = drawImageExtent;
+
+	create_render_buffer(_depthHistory, depthHistoryImageUsages, VK_IMAGE_ASPECT_DEPTH_BIT);
+	NameImage(_device, _depthHistory.image, "G-buffer-Depth 2 ");
+	NameImageView(_device, _depthHistory.imageView, "G-buffer-Depth 2 View");
 
 
 	// normal buffer
@@ -1650,7 +1677,7 @@ void VulkanEngine::init_descriptors(){
 		builder.add_binding(3, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, flags); // emissive
 		builder.add_binding(4, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, flags); // emissive
 		builder.add_binding(5, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, flags); // color history
-
+		builder.add_binding(6, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, flags);
 
 		_deferredDscSetLayout = builder.build(_device,
 			VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_FRAGMENT_BIT,
@@ -2597,6 +2624,7 @@ void VulkanEngine::update_scene()
 
 	// Directly write to the mapped uniform buffer
 	if (_raytracingHandler.m_uniformMappedPtr) {
+		_raytracingHandler.m_uniformMappedPtr->oldViewProj = _raytracingHandler.m_uniformMappedPtr->viewProj;
 		_raytracingHandler.m_uniformMappedPtr->viewProj = sceneData.viewproj;
 		_raytracingHandler.m_uniformMappedPtr->viewInverse = glm::inverse(view);
 		_raytracingHandler.m_uniformMappedPtr->projInverse = glm::inverse(rayTracingProjection);

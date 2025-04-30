@@ -241,7 +241,7 @@ LightSource loadLight(fastgltf::Light light, Node *node) {
     }
     else if (light.type == fastgltf::LightType::Point) {
         newLight.color = glm::vec3(light.color[0], light.color[1], light.color[2]);
-        newLight.intensity = light.intensity;
+        newLight.intensity = light.intensity * 4 * glm::pi<float>();
         newLight.position = node->localTransform[3];
         newLight.type = LightType::Point;
     }
@@ -900,7 +900,7 @@ CubeMap load_cube_map(VulkanEngine* engine, std::string_view filePath)
     // We expect all images in cube map to be same resolution
     int width, height, nrChannels;
 
-    std::filesystem::path path = fmt::format("{}/{}.jpg", filePath, suffixes[0]);
+    std::filesystem::path path = fmt::format("{}/{}.png", filePath, suffixes[0]);
     auto stringPath = path.string();
 
     unsigned char* data = stbi_load(stringPath.c_str(), &width, &height, &nrChannels, 4);
