@@ -946,13 +946,13 @@ void RaytracingBuilder::cmdCreateTlas(
 	if (update)
 	{
 		tlasBuildData.asGeometry[0].geometry.instances.data.deviceAddress = instBufferAddr;
-		tlasBuildData.cmdUpdateAccelerationStructure(cmdBuf, m_tlas.accel, alignedScratchAddr);
+		tlasBuildData.cmdUpdateAccelerationStructure(cmdBuf, m_tlas.accel, scratchAddress);
 	}
 	else
 	{
 		VkAccelerationStructureCreateInfoKHR createInfo = tlasBuildData.makeCreateInfo();
 		m_tlas = engine->globalDescriptorAllocator.createAcceleration(engine->_device, createInfo);
-		tlasBuildData.cmdBuildAccelerationStructure(cmdBuf, m_tlas.accel, alignedScratchAddr);
+		tlasBuildData.cmdBuildAccelerationStructure(cmdBuf, m_tlas.accel, scratchAddress);
 	}
 }
 

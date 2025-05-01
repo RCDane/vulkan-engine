@@ -87,7 +87,7 @@ vec3 sampleSphere(vec3 center, float radius, inout uint seed)
   return position;  
 }
 
-const float INF_DISTANCE = 1e20;
+const float INF_DISTANCE = 100000.0;
 
 LightSample sampleLightsPdf(vec3 hitPoint, inout uint seed) {
     // 1) Pick one light uniformly
@@ -119,13 +119,39 @@ LightSample sampleLightsPdf(vec3 hitPoint, inout uint seed) {
         ls.direction = dir;
         ls.distance  = dist;
     } else {
-        vec3 dir = -normalize(Ls.direction);
+                vec3 w = normalize(-Ls.direction);
 
-        // ls.pdf         = selectPdf;      // no changes to the pdf needed
-        
-        ls.direction   = Ls.direction;
-        ls.distance    = INF_DISTANCE;   // treat as infinitely distant
+        // 2) branchless ONB (Duff et al. 2017)
+        float s = (w.z >= 0.0 ? 1.0 : -1.0);
+        float a = -1.0 / (s + w.z);
+        float b = w.x * w.y * a;
+        vec3 u  = vec3(1.0 + s * w.x * w.x * a, s * b, -s * w.x);
+        vec3 v  = vec3(b, s + w.y * w.y * a, -w.y);
+
+        // 3) sample a direction within the cone of half-angle sunAngle
+        float cosMax = cos(Ls.sunAngle/2.0);
+        float u1 = rnd(seed);
+        float u2 = rnd(seed);
+        float z  = mix(cosMax, 1.0, u1);
+        float r  = sqrt(max(0.0, 1.0 - z*z));
+        float phi = 2.0 * PI * u2;
+        vec2 d    = vec2(cos(phi)*r, sin(phi)*r);
+
+        // 4) build sample vector in local ONB space
+        vec3 localDir = vec3(d.x, d.y, z);
+
+        // 5) rotate into world space
+        vec3 sampleDir = normalize(u * localDir.x + v * localDir.y + w * localDir.z);
+
+        // 6) set output
+        ls.direction   = sampleDir;
+        ls.distance    = INF_DISTANCE;
         ls.attenuation = vec3(1.0);
+
+        // 7) account for cone PDF
+        float coneSolidAngle = 2.0 * PI * (1.0 - cosMax);
+        float conePdf        = 1.0 / coneSolidAngle;
+        ls.pdf = selectPdf * conePdf;
     }
 
     return ls;
@@ -166,6 +192,7 @@ void main()
   vec4 currentColor = imageLoad(colorHistory, ivec2(gl_LaunchIDEXT.xy));
   double currentDepth = imageLoad(depth, ivec2(gl_LaunchIDEXT.xy)).r;
   if (currentDepth == 0.0) {
+    imageStore(colorHistory, ivec2(gl_LaunchIDEXT.xy), vec4(0.0, 0.0, 0.0, 1.0));
     return; // If there is no depth, then nothing has been rendered here.
   }
   vec3 N =        imageLoad(normal, ivec2(gl_LaunchIDEXT.xy)).xyz;
@@ -274,7 +301,7 @@ void main()
     
 
 
-		indirectIllumination += result.color * prd.attenuation;
+		indirectIllumination += result.color;
     if(prd.depth > 0 || prd.done == 1)
       break;
     rayOrigin = prd.rayOrigin + V*e;
@@ -296,7 +323,7 @@ void main()
 
     if(dot(N, l_Sample.direction) > 0)
     {
-      float tMin   = 0.01;
+      float tMin   = 0.001;
       float tMax   = l_Sample.distance;
       vec3  rayOrigin = worldPos;
       vec3  rayDir = L;
@@ -315,7 +342,7 @@ void main()
       );
 
       if (!isShadowed){
-        PBR_result res =  CalculatePBRResult(N,V,L,albedoColor.xyz,l_Sample.color, l_Sample.intensity, F0, metalness, roughness);
+        PBR_result res =  CalculatePBRResult(N,V,L,albedoColor.xyz, l_Sample.color, l_Sample.intensity, F0, metalness, roughness);
         directIllumination += (res.color * l_Sample.attenuation) / l_Sample.pdf;
 
       }
@@ -327,11 +354,9 @@ void main()
   vec3 rayBudget =  vec3(uni.raytracingSettings.rayBudget);
   vec3 invNext = rayBudget / (currentRayCount + rayBudget);
 
-  // new progressive average in one line
+  
   vec3 accumulatedColor = currentColor.rgb
                         + (combined - currentColor.rgb) * invNext;
-
-  // gamma‑correct and store
 
   vec3 dotp = vec3(dot(N, l_Sample.direction));
 

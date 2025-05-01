@@ -90,7 +90,7 @@ LightSample sampleLightsPdf(vec3 hitPoint, inout uint seed) {
         // directional (sun) light with finite sunAngle for soft shadows
 
         // 1) base direction (w) is the normalized light direction
-        vec3 w = normalize(Ls.direction);
+        vec3 w = normalize(-Ls.direction);
 
         // 2) branchless ONB (Duff et al. 2017)
         float s = (w.z >= 0.0 ? 1.0 : -1.0);

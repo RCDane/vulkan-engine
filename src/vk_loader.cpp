@@ -255,9 +255,7 @@ std::unordered_map<size_t, int> textureMap;
 bool textureMapInitialized = false;
 
 
-uint32_t findMaxVertexIdx(std::span<uint32_t> indices) {
-    return *std::max_element(indices.begin(), indices.end());
-}
+
 
 
 
@@ -640,6 +638,7 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGltf(VulkanEngine* engine, std::s
         // Clear the mesh arrays for the new mesh
         indices.clear();
         vertices.clear();
+        raytracingIndices.clear();
         int lastMeshesIndex = 0;
 
         // Clear surfaces for the new mesh
@@ -744,7 +743,7 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGltf(VulkanEngine* engine, std::s
             newSurface.bounds.extents = (maxpos - minpos) / 2.f;
             newSurface.bounds.sphereRadius = glm::length(newSurface.bounds.extents);
 
-            newSurface.maxVertex = *std::max_element(indices.begin(), indices.end());
+            newSurface.maxVertex = *std::max_element(raytracingIndices.begin(), raytracingIndices.end());
             fastgltf::Accessor& posAccessor = gltf.accessors[p.findAttribute("POSITION")->accessorIndex];
             newSurface.vertexCount = static_cast<uint32_t>(posAccessor.count);
 

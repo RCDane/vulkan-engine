@@ -1985,9 +1985,7 @@ void VulkanEngine::draw_imgui(VkCommandBuffer cmd, VkImageView targetImageView)
 	vkCmdEndRendering(cmd);
 }
 
-uint32_t findMaxVertexIndex(std::span<uint32_t> indices) {
-	return *std::max_element(indices.begin(), indices.end());
-}
+
 
 GPUMeshBuffers VulkanEngine::uploadMesh(
 	std::span<uint32_t> indices,
