@@ -40,6 +40,15 @@ END_BINDING();
 // clang-format on
 
 
+struct LightSample {
+	vec3 color;
+	vec3 direction;
+	float intensity;
+	float distance;
+	vec3 attenuation;
+	float pdf;
+  };
+
 // Information of a obj model when referenced in a shader
 struct ObjDesc
 {

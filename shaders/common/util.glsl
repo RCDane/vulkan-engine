@@ -1,4 +1,8 @@
 
+
+
+
+
 vec3 getColorFromInstanceIndex(int index) {
 	// Normalize the index to a range [0, 1]
 	float normalizedIndex = float(index % 256) / 255.0;
@@ -94,3 +98,84 @@ void createCoordinateSystem(in vec3 N, out vec3 Nt, out vec3 Nb)
     Nt = vec3(0, -N.z, N.y) / sqrt(N.y * N.y + N.z * N.z);
   Nb = cross(N, Nt);
 }
+
+
+// Sample sphere 
+vec3 sampleSphere(vec3 center, float radius, inout uint seed)
+{
+  vec3 position = vec3(0.0);
+  float u = rnd(seed);
+  float v = rnd(seed);
+  float theta = 2.0 * PI * u;
+  float phi = acos(1.0 - 2.0 * v);
+  position.x = radius * sin(phi) * cos(theta) + center.x;
+  position.y = radius * sin(phi) * sin(theta) + center.y;
+  position.z = radius * cos(phi) + center.z;
+  return position;  
+}
+
+const int MAX_LIGHTS = 1000;
+const float INF_DISTANCE = 1e10;
+
+LightSample ProcessLight(vec3 hitPoint, inout uint seed, LightSource Ls){
+    LightSample ls;
+    ls.color = Ls.color;           // base color of the light
+    ls.intensity = Ls.intensity;   // scalar intensity
+
+    if (Ls.type == 0) {
+
+        vec3 samplePos = sampleSphere(Ls.position, Ls.radius, seed);
+
+        vec3 toLight   = samplePos - hitPoint;
+        float dist     = length(toLight);
+        vec3 dir       = normalize(toLight);
+
+        float area     = 4.0 * PI * Ls.radius * Ls.radius;
+        float areaPdf  = 1.0 / area;
+
+        ls.pdf = areaPdf;
+
+        ls.intensity = ls.intensity / (area*PI); // scale intensity by area pdf
+        ls.attenuation =  vec3(1)/(dist * dist);
+
+        ls.direction = dir;
+        ls.distance  = dist;
+    } else {
+                vec3 w = normalize(-Ls.direction);
+
+        // 2) branchless ONB (Duff et al. 2017)
+        float s = (w.z >= 0.0 ? 1.0 : -1.0);
+        float a = -1.0 / (s + w.z);
+        float b = w.x * w.y * a;
+        vec3 u  = vec3(1.0 + s * w.x * w.x * a, s * b, -s * w.x);
+        vec3 v  = vec3(b, s + w.y * w.y * a, -w.y);
+
+        // 3) sample a direction within the cone of half-angle sunAngle
+        float cosMax = cos(Ls.sunAngle/2.0);
+        float u1 = rnd(seed);
+        float u2 = rnd(seed);
+        float z  = mix(cosMax, 1.0, u1);
+        float r  = sqrt(max(0.0, 1.0 - z*z));
+        float phi = 2.0 * PI * u2;
+        vec2 d    = vec2(cos(phi)*r, sin(phi)*r);
+
+        // 4) build sample vector in local ONB space
+        vec3 localDir = vec3(d.x, d.y, z);
+
+        // 5) rotate into world space
+        vec3 sampleDir = normalize(u * localDir.x + v * localDir.y + w * localDir.z);
+
+        // 6) set output
+        ls.direction   = sampleDir;
+        ls.distance    = INF_DISTANCE;
+        ls.attenuation = vec3(1.0);
+
+        // 7) account for cone PDF
+        float coneSolidAngle = 2.0 * PI * (1.0 - cosMax);
+        float conePdf        = 1.0 / coneSolidAngle;
+        ls.pdf = conePdf;
+    }
+    return ls;
+}
+
+

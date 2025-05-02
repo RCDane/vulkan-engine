@@ -241,7 +241,7 @@ LightSource loadLight(fastgltf::Light light, Node *node) {
     }
     else if (light.type == fastgltf::LightType::Point) {
         newLight.color = glm::vec3(light.color[0], light.color[1], light.color[2]);
-        newLight.intensity = light.intensity * 4 * glm::pi<float>();
+        newLight.intensity = light.intensity;
         newLight.position = node->localTransform[3];
         newLight.type = LightType::Point;
     }

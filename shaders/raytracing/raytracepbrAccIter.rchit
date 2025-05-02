@@ -1,8 +1,8 @@
 #version 460
 #extension GL_EXT_ray_tracing : require
-#extension GL_EXT_nonuniform_qualifier : require
-#extension GL_EXT_scalar_block_layout : require
-#extension GL_GOOGLE_include_directive : require
+#extension GL_EXT_nonuniform_qualifier : require  
+#extension GL_EXT_scalar_block_layout : require 
+#extension GL_GOOGLE_include_directive : require 
 
 #extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
 #extension GL_EXT_buffer_reference2 : require
@@ -21,7 +21,7 @@ layout(buffer_reference, scalar) buffer Indices {int i[]; }; // Triangle indices
 layout(set = 0, binding = eTlas) uniform accelerationStructureEXT topLevelAS;
 layout(set = 1, binding = eObjDescs, scalar) buffer ObjDesc_ { ObjDesc i[]; } objDesc;
 layout(set = 1, binding = eTextures) uniform sampler2D textureSamplers[];
-layout(set = 1, binding = 5, scalar) buffer LightSources { LightSource lights[]; };
+layout(set = 1, binding = 5, scalar) buffer LightSources { LightSource lights[MAX_LIGHTS]; };
 layout(set = 1, binding = 0) uniform _GlobalUniforms { GlobalUniforms uni; };
 
 
@@ -31,101 +31,18 @@ layout(set = 1, binding=4) uniform samplerCube cubeMap;
 
 layout(push_constant) uniform _PushConstantRay { PushConstantRay pcRay; };
 
-struct LightSample {
-  vec3 color;
-  vec3 direction;
-  float intensity;
-  float distance;
-  vec3 attenuation;
-  float pdf;
-};
 
 
-// Sample sphere 
-vec3 sampleSphere(vec3 center, float radius, inout uint seed)
-{
-  vec3 position = vec3(0.0);
-  float u = rnd(seed);
-  float v = rnd(seed);
-  float theta = 2.0 * PI * u;
-  float phi = acos(1.0 - 2.0 * v);
-  position.x = radius * sin(phi) * cos(theta) + center.x;
-  position.y = radius * sin(phi) * sin(theta) + center.y;
-  position.z = radius * cos(phi) + center.z;
-  return position;  
-}
 
-const float INF_DISTANCE = 1e20;
-
-LightSample sampleLightsPdf(vec3 hitPoint, inout uint seed) {
+LightSample sampleLightsPdf(vec3 hitPoint, inout uint seed,  int lightCount) {
     // 1) Pick one light uniformly
-    uint i = randRange(seed, 0, uni.raytracingSettings.lightCount - 1);
+    uint i = randRange(seed, 0, lightCount - 1);
     LightSource Ls = lights[i];
-    float selectPdf = 1.0 / float(uni.raytracingSettings.lightCount);  // P(l)
+    float selectPdf = 1.0 / float(lightCount);  // P(l)
 
-    LightSample ls;
-    ls.pdf = selectPdf;         // pdf of the light source
-    ls.color = Ls.color;           // base color of the light
-    ls.intensity = Ls.intensity;   // scalar intensity
-
-    if (Ls.type == 0) {
-
-        vec3 samplePos = sampleSphere(Ls.position, Ls.radius, seed);
-
-        vec3 toLight   = samplePos - hitPoint;
-        float dist     = length(toLight);
-        vec3 dir       = normalize(toLight);
-
-        float area     = 4.0 * PI * Ls.radius * Ls.radius;
-        float areaPdf  = 1.0 / area;
-
-        ls.pdf = ls.pdf * areaPdf;
-
-        ls.intensity = ls.intensity / (area*PI); // scale intensity by area pdf
-        ls.attenuation =  vec3(1)/(dist * dist);
-
-        ls.direction = dir;
-        ls.distance  = dist;
-    } else {
-        // directional (sun) light with finite sunAngle for soft shadows
-
-        // 1) base direction (w) is the normalized light direction
-        vec3 w = normalize(-Ls.direction);
-
-        // 2) branchless ONB (Duff et al. 2017)
-        float s = (w.z >= 0.0 ? 1.0 : -1.0);
-        float a = -1.0 / (s + w.z);
-        float b = w.x * w.y * a;
-        vec3 u  = vec3(1.0 + s * w.x * w.x * a, s * b, -s * w.x);
-        vec3 v  = vec3(b, s + w.y * w.y * a, -w.y);
-
-        // 3) sample a direction within the cone of half-angle sunAngle
-        float cosMax = cos(Ls.sunAngle);
-        float u1 = rnd(seed);
-        float u2 = rnd(seed);
-        float z  = mix(cosMax, 1.0, u1);
-        float r  = sqrt(max(0.0, 1.0 - z*z));
-        float phi = 2.0 * PI * u2;
-        vec2 d    = vec2(cos(phi)*r, sin(phi)*r);
-
-        // 4) build sample vector in local ONB space
-        vec3 localDir = vec3(d.x, d.y, z);
-
-        // 5) rotate into world space
-        vec3 sampleDir = normalize(u * localDir.x + v * localDir.y + w * localDir.z);
-
-        // 6) set output
-        ls.direction   = sampleDir;
-        ls.distance    = INF_DISTANCE;
-        ls.attenuation = vec3(1.0);
-
-        // 7) account for cone PDF
-        float coneSolidAngle = 2.0 * PI * (1.0 - cosMax);
-        float conePdf        = 1.0 / coneSolidAngle;
-        ls.pdf = selectPdf * conePdf;
-    }
-
-    return ls;
+    LightSample s = ProcessLight(hitPoint, seed, Ls); // Sample the light source
+    s.pdf *= selectPdf; // Scale the pdf by the light source pdf
+    return s;
 }
 
 
@@ -167,6 +84,8 @@ vec3 computeMappedNormal(Vertex v0, Vertex v1, Vertex v2, vec3 barycentrics, GLT
                      bitangent * sampledNormal.y +
                      worldNrm * sampledNormal.z);
 }
+
+
 void main()
 {
    
@@ -199,7 +118,7 @@ void main()
 	
 	
 	uint i = randRange(prd.seed, 0, 3);
-	LightSample l_Sample = sampleLightsPdf(worldPos, prd.seed);
+	LightSample l_Sample = sampleLightsPdf(worldPos, prd.seed, uni.raytracingSettings.lightCount);
 
 	vec3 L = l_Sample.direction; // Light direction (from fragment to light)
 	
@@ -310,5 +229,5 @@ void main()
 	prd.attenuation *= bsdf * cosNL;
 
 	// 6) write your radiance into the payload
-	prd.hitValue = directRadiance;
+	prd.hitValue = directRadiance ;
 }

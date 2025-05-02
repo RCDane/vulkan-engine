@@ -77,27 +77,31 @@ PBR_result CalculatePBRResult(
     vec3 F0, 
     float metallness,
     float roughness){
-    vec3 radiance = lightColor*lightIntensity;
-    vec3 H = normalize(V+L);
+    vec3 radiance =  lightColor * lightIntensity; //Incoming Radiance
 
-
+    vec3 H = normalize(V + L); //half vector
     // cook-torrance brdf
-    float NDF = DistributionGGX(N, H, roughness);        
-    float G   = GeometrySmith(N, V, L, roughness);      
-    vec3 F    = fresnelSchlick(max(dot(H, V), 0.0), F0);       
-        
+    float NDF = DistributionGGX(N, H, roughness);
+    float G   = GeometrySmith(N, V, L,roughness);
+    vec3 F    = fresnelSchlick(max(dot(H, V), 0.0), F0);
+
     vec3 kS = F;
     vec3 kD = vec3(1.0) - kS;
-    kD *= 1.0 - metallness;	  
-        
-    vec3 numerator    =  NDF* G * F;
-    float denominator = 4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 0.0001;
-    vec3 specular     = numerator / denominator;  
-            
+    kD *= 1.0 - metallness;
+
+    vec3 nominator    = NDF * G * F;
+    float denominator = 4 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 0.00001/* avoid divide by zero*/;
+    vec3 specular     = nominator / denominator;
+
+
     // add to outgoing radiance Lo
-    float NdotL = max(dot(N, L), 0.0);                
+    float NdotL = max(dot(N, L), 0.0);
+    vec3 diffuse_radiance = kD * (albedo)/ PI;
+
+    vec3 outgoing = (diffuse_radiance + specular) * radiance * NdotL;
+
     PBR_result res;
-    res.color = (kD * albedo / PI + specular) * radiance * NdotL;
+    res.color =(diffuse_radiance + specular) * radiance * NdotL;
     res.f = kD * albedo / PI;
     return res; 
 }
@@ -117,7 +121,7 @@ vec3 CalculatePBR(vec3 N, vec3 V, vec3 L,vec3 albedo, vec3 lightColor, float lig
     kD *= 1.0 - metallness;	  
         
     vec3 numerator    =  NDF* G * F;
-    float denominator = 4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 0.0001;
+    float denominator = 4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 0.0000001;
     vec3 specular     = numerator / denominator;  
             
     // add to outgoing radiance Lo

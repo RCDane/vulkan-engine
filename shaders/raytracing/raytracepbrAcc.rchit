@@ -219,10 +219,10 @@ void main()
 		}
 		// color /= 2;
 		prd.depth -= 1;
-	}
+	} 
 
 
-	float attenuation = 1;
+	float attenuation = 1; 
 	isShadowed   = true; 
 
 	// Tracing shadow ray only if the light is visible from the surface
@@ -246,7 +246,7 @@ void main()
 					1            // payload is isShadowed
 		);
 	}
-	
+	 
 
 	
 
