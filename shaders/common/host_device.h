@@ -47,6 +47,7 @@ struct LightSample {
 	float distance;
 	vec3 attenuation;
 	float pdf;
+	
   };
 
 // Information of a obj model when referenced in a shader

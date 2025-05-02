@@ -7,7 +7,7 @@ const float InvPi = 0.318309886183;
 // Link: https://learnopengl.com/PBR/Theory
 float DistributionGGX(vec3 N, vec3 H, float roughness)
 {
-    float a      = roughness*roughness;
+    float a      = roughness;
     float a2     = a*a;
     float NdotH  = max(dot(N, H), 0.0);
     float NdotH2 = NdotH*NdotH;
@@ -89,7 +89,7 @@ PBR_result CalculatePBRResult(
     vec3 kD = vec3(1.0) - kS;
     kD *= 1.0 - metallness;
 
-    vec3 nominator    = NDF * G * F;
+    vec3 nominator    = NDF*G * F;
     float denominator = 4 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 0.00001/* avoid divide by zero*/;
     vec3 specular     = nominator / denominator;
 

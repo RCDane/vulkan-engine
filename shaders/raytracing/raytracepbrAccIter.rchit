@@ -206,7 +206,7 @@ void main()
 
 	// 2) pick unshadowed radiance
 	vec3 directRadiance = isShadowed ? vec3(0.0) : res.color;
-
+	directRadiance /= l_Sample.pdf; // divide by the pdf of the light sample
 	// 3) clamp the light falloff
 	const float minD = 0.01;
 
@@ -226,8 +226,9 @@ void main()
 	invSq = min(invSq, maxAtt);
 
 	// 5) update attenuation
-	prd.attenuation *= bsdf * cosNL;
+	prd.attenuation *= l_Sample.attenuation * bsdf * cosNL;
 
 	// 6) write your radiance into the payload
-	prd.hitValue = directRadiance ;
+	prd.hitValue = directRadiance * l_Sample.attenuation;
 }
+ 

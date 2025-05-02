@@ -24,7 +24,7 @@ layout(set = 2, binding = 0, rgba16f) uniform image2D albedo;
 layout(set = 2, binding = 1, rgba16f) uniform image2D normal; 
 layout(set = 2, binding = 2, rgba16f) uniform image2D material;
 layout(set = 2, binding = 3, rgba32f) uniform image2D emission; 
-layout(set = 2, binding = 4, r32f) uniform image2D depth;
+layout(set = 2, binding = 4, r32f) uniform image2D depth; 
 layout(set = 2, binding = 5, rgba32f) uniform image2D colorHistory;
 layout(set = 2, binding = 6, r32f) uniform image2D depthHistory;
 
