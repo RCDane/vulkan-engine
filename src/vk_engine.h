@@ -115,7 +115,7 @@ struct RaytracingSettings {
 	int offlineMode;
 	int rayBudget;
 	int currentRayCount;
-	int seed;
+	uint32_t seed;
 	int lightCount;
 };
 
@@ -222,6 +222,9 @@ public:
 	VkDescriptorSet _tonemappingImageDescriptors;
 
 	
+	VkDescriptorSet _lightsourceDescriptorSet;
+	VkDescriptorSetLayout _lightsourceDescriptorSetLayout;
+
 	VkPipeline _deferredPipeline;
 	VkPipelineLayout _deferredPipelineLayout;
 	VkDescriptorSetLayout _deferredDscSetLayout;

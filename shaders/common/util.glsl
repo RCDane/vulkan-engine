@@ -20,12 +20,33 @@ vec3 getColorFromInstanceIndex(int index) {
 	return color;
 }
 
+
+
+uint interleave_32bit(uvec2 v)
+{
+    uint x = v.x & 0x0000ffff;       // x = ---- ---- ---- ---- fedc ba98 7654 3210
+    x = (x | (x << 8)) & 0x00FF00FF; // x = ---- ---- fedc ba98 ---- ---- 7654 3210
+    x = (x | (x << 4)) & 0x0F0F0F0F; // x = ---- fedc ---- ba98 ---- 7654 ---- 3210
+    x = (x | (x << 2)) & 0x33333333; // x = --fe --dc --ba --98 --76 --54 --32 --10
+    x = (x | (x << 1)) & 0x55555555; // x = -f-e -d-c -b-a -9-8 -7-6 -5-4 -3-2 -1-0
+
+    uint y = v.y & 0x0000ffff;
+    y = (y | (y << 8)) & 0x00FF00FF;
+    y = (y | (y << 4)) & 0x0F0F0F0F;
+    y = (y | (y << 2)) & 0x33333333;
+    y = (y | (y << 1)) & 0x55555555;
+
+    return x | (y << 1);
+}
+
+
+
 uint tea(uint val0, uint val1)
 {
   uint v0 = val0;
   uint v1 = val1;
   uint s0 = 0;
-
+  
   for(uint n = 0; n < 16; n++)
   {
     s0 += 0x9e3779b9;
@@ -49,7 +70,7 @@ uint lcg(inout uint prev)
 // Generate a random float in [0, 1) given the previous RNG state
 float rnd(inout uint prev)
 {
-  return (float(lcg(prev)) / float(0x01000000));
+  return clamp(float(lcg(prev)) / float(0x01000000), 0.0, 1.0);
 }
 
 uint pcg_hash (uint x)
@@ -61,11 +82,25 @@ uint pcg_hash (uint x)
 
 // sample an *inclusive* integer range [lo, hi]
 // mutates 'seed' so the next call is decorrelated
-int randRange (inout uint seed, int lo, int hi)
+uint randRange (inout uint seed, uint lo, uint hi)
 {
     seed = pcg_hash(seed);
-    uint span = uint(hi - lo + 1);            // assumes hi ≥ lo
+    uint span = hi - lo + 1;            // assumes hi ≥ lo
     return lo + int(seed % span);
+}
+
+float random (vec2 st) {
+    return fract(sin(dot(st.xy,
+                         vec2(12.9898,78.233)))*
+        43758.5453123);
+}
+
+uint randIndex(inout uint seed, uint lo, uint hi)
+{
+
+    float r = rnd(seed);
+    uint i = uint(r * float(hi - lo + 1));
+    return i + uint(lo);
 }
 
 
@@ -114,8 +149,18 @@ vec3 sampleSphere(vec3 center, float radius, inout uint seed)
   return position;  
 }
 
-const int MAX_LIGHTS = 1000;
+const int MAX_LIGHTS = 100;
 const float INF_DISTANCE = 1e10;
+
+double nan_to_zero(double x) {
+    return isnan(x) ? 0.0001 : x;
+}
+
+
+float nan_to_zero(float x) {
+    return isnan(x) ? 0.0001 : x;
+}
+
 
 LightSample ProcessLight(vec3 hitPoint, inout uint seed, LightSource Ls){
     LightSample ls;
@@ -130,12 +175,14 @@ LightSample ProcessLight(vec3 hitPoint, inout uint seed, LightSource Ls){
         float dist     = length(toLight);
         vec3 dir       = normalize(toLight);
 
-        float area     = 4.0 * PI * Ls.radius * Ls.radius;
-        float areaPdf  = 1.0 / area;
+        double radius2 = Ls.radius * Ls.radius;
+
+        double area     = 4.0 * PI * radius2;
+        double areaPdf  = 1.0 / area;
 
         ls.pdf = areaPdf;
 
-        ls.intensity = ls.intensity / (area*PI); // scale intensity by area pdf
+        ls.intensity = Ls.intensity; // scale intensity by area pdf
         ls.attenuation =  vec3(1)/(dist * dist);
 
         ls.direction = dir;
@@ -179,3 +226,49 @@ LightSample ProcessLight(vec3 hitPoint, inout uint seed, LightSource Ls){
 }
 
 
+
+
+// Helper to reflect the lower-hemisphere folds over the diagonals
+vec2 oct_wrap(vec2 v)
+{
+    // (1 – abs(v.yx)) * sign(v.xy)
+    vec2 m = vec2(1.0) - abs(v.yx);
+    vec2 s = vec2(
+        v.x >= 0.0 ?  1.0 : -1.0,
+        v.y >= 0.0 ?  1.0 : -1.0
+    );
+    return m * s;
+}
+
+// Signed-normalized octahedral encode: direction → [-1,1]×[-1,1]
+vec2 ndir_to_oct_snorm(vec3 n)
+{
+    vec2 p = n.xy * (1.0 / (abs(n.x) + abs(n.y) + abs(n.z)));
+    if (n.z < 0.0)
+        p = oct_wrap(p);
+    return p;
+}
+
+// Unsigned-normalized octahedral encode: direction → [0,1]×[0,1]
+vec2 ndir_to_oct_unorm(vec3 n)
+{
+    // map signed [-1,1] → unsigned [0,1]
+    return ndir_to_oct_snorm(n) * 0.5 + 0.5;
+}
+
+// Signed-normalized octahedral decode: [-1,1]×[-1,1] → direction
+vec3 oct_to_ndir_snorm(vec2 p)
+{
+    vec3 n = vec3(p, 1.0 - abs(p.x) - abs(p.y));
+    if (n.z < 0.0)
+        n.xy = oct_wrap(n.xy);
+    return normalize(n);
+}
+
+// Unsigned-normalized octahedral decode: [0,1]×[0,1] → direction
+vec3 oct_to_ndir_unorm(vec2 u)
+{
+    // unpack unsigned [0,1] → signed [-1,1]
+    vec2 p = u * 2.0 - 1.0;
+    return oct_to_ndir_snorm(p);
+}

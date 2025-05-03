@@ -1106,7 +1106,7 @@ void RaytracingHandler::createDescriptorSetLayout(VulkanEngine* engine) {
 	builder.add_binding(2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, flags, 1000);
 	builder.add_binding(3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,flags, 1000);
 	builder.add_binding(4, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, flags, 1);
-	builder.add_binding(5, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, flags, 1000);
+	//builder.add_binding(5, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, flags, 100);
 	VkDescriptorSetLayoutCreateFlags createFlags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
 	m_descSetLayout = builder.build(engine->_device,
 		VK_SHADER_STAGE_VERTEX_BIT |
@@ -1261,7 +1261,7 @@ void RaytracingHandler::createRtPipeline(VulkanEngine* engine) {
 	pipelineLayoutCreateInfo.pPushConstantRanges = &pushConstant;
 
 	// Descriptor sets: one specific to ray tracing, and one shared with the rasterization pipeline
-	std::vector<VkDescriptorSetLayout> rtDescSetLayouts = { m_rtDescSetLayout, m_descSetLayout, engine->_deferredDscSetLayout };
+	std::vector<VkDescriptorSetLayout> rtDescSetLayouts = { m_rtDescSetLayout, m_descSetLayout, engine->_deferredDscSetLayout, engine->_lightsourceDescriptorSetLayout };
 	pipelineLayoutCreateInfo.setLayoutCount = static_cast<uint32_t>(rtDescSetLayouts.size());
 	pipelineLayoutCreateInfo.pSetLayouts = rtDescSetLayouts.data();
 	
@@ -1396,7 +1396,7 @@ void RaytracingHandler::raytrace(VkCommandBuffer cmd, VulkanEngine* engine) {
 
 	m_uniformMappedPtr->raytracingSettings.offlineMode = offlineMode ? 1 : 0;
 	m_uniformMappedPtr->raytracingSettings.rayBudget = rayBudget;
-	m_uniformMappedPtr->raytracingSettings.seed = rand();
+	m_uniformMappedPtr->raytracingSettings.seed = uint32_t(std::rand());
 	m_uniformMappedPtr->raytracingSettings.lightCount = engine->lightSources.size();
 	m_uniformMappedPtr->clearScreen = clearScreen ? 1 : 0;
 	m_uniformMappedPtr->raytracingSettings.currentRayCount = currentRayCount;
@@ -1439,15 +1439,24 @@ void RaytracingHandler::raytrace(VkCommandBuffer cmd, VulkanEngine* engine) {
 		engine->_cubeMap, 
 		VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 
 		VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
-	writer.write_buffer(
-		5,
+	//writer.write_buffer(
+	//	5,
+	//	engine->_lightingDataBuffer.buffer,
+	//	sizeof(ShaderLightSource) * engine->lightSources.size(),
+	//	0,
+	//	VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+	//	engine->lightSources.size());
+
+	writer.update_set(engine->_device, uniformsDescriptor);
+	DescriptorWriter writer3;
+	writer3.write_buffer(
+		0,
 		engine->_lightingDataBuffer.buffer,
 		sizeof(ShaderLightSource) * engine->lightSources.size(),
 		0,
 		VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
 		engine->lightSources.size());
-
-	writer.update_set(engine->_device, uniformsDescriptor);
+	writer3.update_set(engine->_device, engine->_lightsourceDescriptorSet);
 	DescriptorWriter writer2;
 	writer2.write_image(0, engine->_gBuffer_albedo.imageView, engine->_defaultSamplerNearest, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 	writer2.write_image(1, engine->_gBuffer_normal.imageView, engine->_defaultSamplerNearest, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
@@ -1459,7 +1468,7 @@ void RaytracingHandler::raytrace(VkCommandBuffer cmd, VulkanEngine* engine) {
 
 	writer2.update_set(engine->_device, engine->_gBufferDescriptors);
 	// Bind the ray tracing descriptor sets
-	std::vector<VkDescriptorSet> descSets{ m_rtDescSet, uniformsDescriptor, engine->_gBufferDescriptors };
+	std::vector<VkDescriptorSet> descSets{ m_rtDescSet, uniformsDescriptor, engine->_gBufferDescriptors, engine->_lightsourceDescriptorSet };
 	vkCmdBindDescriptorSets(
 		cmd,
 		VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR,

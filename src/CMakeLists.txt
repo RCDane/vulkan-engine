@@ -31,6 +31,8 @@ add_executable(engine
   alignment.hpp
   vk_buffers.cpp
   vk_buffers.h
+  svgf.h
+  svgf.cpp
   )
 
 set_property(TARGET engine PROPERTY CXX_STANDARD 20)

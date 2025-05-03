@@ -4,7 +4,6 @@
 #extension GL_EXT_scalar_block_layout : require 
 #extension GL_GOOGLE_include_directive : require 
 
-#extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
 #extension GL_EXT_buffer_reference2 : require
 
 #include "../common/host_device.h"
@@ -12,16 +11,15 @@
 #include "../common/util.glsl"
 hitAttributeEXT vec2 attribs;
  
-// clang-format off
 layout(location = 0) rayPayloadInEXT hitPayload prd;
-layout(location = 1) rayPayloadEXT bool isShadowed;
+layout(location = 1) rayPayloadEXT bool isShadowed; // Hit value for the ray
 
 layout(buffer_reference, std430) buffer Vertices {Vertex v[]; }; // Positions of an object
 layout(buffer_reference, scalar) buffer Indices {int i[]; }; // Triangle indices
 layout(set = 0, binding = eTlas) uniform accelerationStructureEXT topLevelAS;
 layout(set = 1, binding = eObjDescs, scalar) buffer ObjDesc_ { ObjDesc i[]; } objDesc;
 layout(set = 1, binding = eTextures) uniform sampler2D textureSamplers[];
-layout(set = 1, binding = 5, scalar) buffer LightSources { LightSource lights[MAX_LIGHTS]; };
+layout(set = 3, binding = 0, scalar) buffer LightSources {LightSource lights[]; };
 layout(set = 1, binding = 0) uniform _GlobalUniforms { GlobalUniforms uni; };
 
 
@@ -35,13 +33,14 @@ layout(push_constant) uniform _PushConstantRay { PushConstantRay pcRay; };
 
 
 LightSample sampleLightsPdf(vec3 hitPoint, inout uint seed,  int lightCount) {
-    // 1) Pick one light uniformly
-    uint i = randRange(seed, 0, lightCount - 1);
+    // 1) Pick one light uniformly 
+    uint i = randRange(seed, 0, lightCount - 1); 
+
     LightSource Ls = lights[i];
-    float selectPdf = 1.0 / float(lightCount);  // P(l)
 
     LightSample s = ProcessLight(hitPoint, seed, Ls); // Sample the light source
-    s.pdf *= selectPdf; // Scale the pdf by the light source pdf
+	s.intensity = Ls.intensity;
+    // s.pdf /= double(lightCount); // Scale the pdf by the light source pdf 
     return s;
 }
 
@@ -88,7 +87,6 @@ vec3 computeMappedNormal(Vertex v0, Vertex v1, Vertex v2, vec3 barycentrics, GLT
 
 void main()
 {
-   
 	// Object data
 	ObjDesc    objResource = objDesc.i[gl_InstanceCustomIndexEXT];
 	Indices    indices     = Indices(objResource.indexAddress);
@@ -117,7 +115,6 @@ void main()
 	vec3 worldNrm = normalize(vec3(nrm * gl_WorldToObjectEXT));  // Transforming the normal to world space
 	
 	
-	uint i = randRange(prd.seed, 0, 3);
 	LightSample l_Sample = sampleLightsPdf(worldPos, prd.seed, uni.raytracingSettings.lightCount);
 
 	vec3 L = l_Sample.direction; // Light direction (from fragment to light)
@@ -201,11 +198,11 @@ void main()
 	// 1) compute direct PBR_result
 	PBR_result res = CalculatePBRResult(worldNrm, V, L,
 										baseColor, l_Sample.color,
-										l_Sample.intensity, F0,
+										float(l_Sample.intensity), F0,
 										metallic, roughness);
 
 	// 2) pick unshadowed radiance
-	vec3 directRadiance = isShadowed ? vec3(0.0) : res.color;
+	dvec3 directRadiance = isShadowed ? vec3(0.0) : res.color;
 	directRadiance /= l_Sample.pdf; // divide by the pdf of the light sample
 	// 3) clamp the light falloff
 	const float minD = 0.01;
@@ -227,8 +224,12 @@ void main()
 
 	// 5) update attenuation
 	prd.attenuation *= l_Sample.attenuation * bsdf * cosNL;
+	// prd.intensity = l_Sample.intensity;
+	// prd.attenuation = vec3(l_Sample.intensity);
 
 	// 6) write your radiance into the payload
-	prd.hitValue = directRadiance * l_Sample.attenuation;
+	prd.hitValue = vec3(directRadiance * l_Sample.attenuation);
+	// prd.hitValue = l_Sample.color;
+
 }
  

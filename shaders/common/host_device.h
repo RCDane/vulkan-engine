@@ -43,10 +43,10 @@ END_BINDING();
 struct LightSample {
 	vec3 color;
 	vec3 direction;
-	float intensity;
+	double intensity;
 	float distance;
 	vec3 attenuation;
-	float pdf;
+	double pdf;
 	
   };
 
@@ -69,7 +69,7 @@ struct RaytracingSettings {
 	int offlineMode;
 	int rayBudget;
 	int currentRayCount;
-	int seed;
+	uint seed;
 	int lightCount;
 };
 
@@ -99,7 +99,7 @@ struct hitPayload
   vec3 rayOrigin;
   vec3 rayDir;
   vec3 normal;
-  float currentIoR;
+  double intensity;
   int hitMax;
   uint seed;
   int rayBudget;

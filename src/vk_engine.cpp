@@ -54,6 +54,9 @@ void VulkanEngine::init()
     assert(loadedEngine == nullptr);
     loadedEngine = this;
 
+	std::srand(std::time({}));
+
+
     // We initialize SDL and create a window with it.
     SDL_Init(SDL_INIT_VIDEO);
 
@@ -93,7 +96,7 @@ void VulkanEngine::init()
 
 
 	init_descriptors();	
-	init_background_pipelines();
+	//init_background_pipelines();
 
 	init_pipelines();
 
@@ -406,6 +409,25 @@ void NameImageView(VkDevice device, VkImageView image, std::string name) {
 	//vkSetDebugUtilsObjectNameEXT(device, &nameInfo);
 }
 
+
+void WaitAll(VkCommandBuffer cmd) {
+	VkMemoryBarrier2 fullBarrier2{
+	.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
+	.srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+	.srcAccessMask = VK_ACCESS_2_MEMORY_WRITE_BIT | VK_ACCESS_2_MEMORY_READ_BIT,
+	.dstStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+	.dstAccessMask = VK_ACCESS_2_MEMORY_WRITE_BIT | VK_ACCESS_2_MEMORY_READ_BIT
+	};
+
+	VkDependencyInfo depInfo{
+		.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+		.memoryBarrierCount = 1,
+		.pMemoryBarriers = &fullBarrier2
+	};
+
+	vkCmdPipelineBarrier2(cmd, &depInfo);
+}
+
 #include <thread>
 #include <iostream>
 #include <chrono>
@@ -415,7 +437,7 @@ void VulkanEngine::draw()
 	update_scene();
 	// wait until the gpu has finished rendering the last frame. Timeout of 1
 	// second
-	VK_CHECK(vkWaitForFences(_device, 1, &get_current_frame()._renderFence, true, 1000000000));
+	VK_CHECK(vkWaitForFences(_device, 1, &get_current_frame()._renderFence, true, 10000000000));
 	get_current_frame()._deletionQueue.flush();
 	get_current_frame()._frameDescriptors.clear_pools(_device);
 	VK_CHECK(vkResetFences(_device, 1, &get_current_frame()._renderFence));
@@ -427,7 +449,7 @@ void VulkanEngine::draw()
 
 
 	// Handling resizing
-	VkResult e = vkAcquireNextImageKHR(_device, _swapchain, 100000000, get_current_frame()._swapchainSemaphore, VK_NULL_HANDLE, &swapchainImageIndex);
+	VkResult e = vkAcquireNextImageKHR(_device, _swapchain, 1000000000, get_current_frame()._swapchainSemaphore, VK_NULL_HANDLE, &swapchainImageIndex);
 	if (e == VK_ERROR_OUT_OF_DATE_KHR) {
         resize_requested = true;       
 		return ;
@@ -494,6 +516,7 @@ void VulkanEngine::draw()
 		VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
 	);
 	
+	WaitAll(cmd);
 
 
 	printf("first transitions\n");
@@ -527,9 +550,9 @@ void VulkanEngine::draw()
 
 		vkutil::transition_image(cmd, _depthHistory.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_DEPTH_BIT);
 
-
 		_raytracingHandler.raytrace(cmd, this);
 		
+		WaitAll(cmd);
 
 		vkutil::transition_image(cmd, _depthImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_ASPECT_DEPTH_BIT);
 
@@ -561,15 +584,24 @@ void VulkanEngine::draw()
 
 
 	}
+	WaitAll(cmd);
 
 	compute_tonemapping(cmd);
+	
+	WaitAll(cmd);
+
+	vkutil::transition_image(cmd, _colorHistory.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
 
 	vkutil::transition_image_relaxed(cmd, _drawImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_ASPECT_COLOR_BIT);
 
 	printf("time to blit\n");
 
 	vkutil::transition_image(cmd, _swapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_ASPECT_COLOR_BIT);
+	
+	WaitAll(cmd);
+
 	vkutil::copy_image_to_image(cmd, _drawImage.image, _swapchainImages[swapchainImageIndex], _drawExtent, _swapchainExtent);
+	WaitAll(cmd);
 
 	vkutil::transition_image(cmd, _swapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
@@ -583,6 +615,7 @@ void VulkanEngine::draw()
 
 	vkCmdWriteTimestamp(cmd, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, _timestampQueryPool, currentFrame._queryEnd);
 
+	WaitAll(cmd);
 
 
 	VK_CHECK(vkEndCommandBuffer(cmd));
@@ -1131,14 +1164,9 @@ void VulkanEngine::run()
             if (e.type == SDL_QUIT)
                 bQuit = true;
 
-			glm::mat4 currentView = mainCamera->getViewMatrix();
-			glm::mat4 currentProjection = mainCamera->getProjectionMatrix(useRaytracing);
+
 		    mainCamera->processSDLEvent(e);
-			if (currentView != mainCamera->getViewMatrix() ||
-				currentProjection != mainCamera->getProjectionMatrix(useRaytracing) ||
-					glm::length(mainCamera->velocity) > 0.1f) {
-				cameraMoved = true;
-			}
+			
 
 
             if (e.type == SDL_WINDOWEVENT) {
@@ -1171,18 +1199,18 @@ void VulkanEngine::run()
 
 
 		ImGui::Begin("Main");
-		ImGui::Checkbox("Raytracing", &useRaytracing);
-		ImGui::Checkbox("Use PCF", &usePCF);
-		ImGui::Checkbox("Offline mode", &_raytracingHandler.offlineMode);
-		ImGui::InputInt("Ray budget", &_raytracingHandler.rayBudget);
+		//ImGui::Checkbox("Raytracing", &useRaytracing);
+		//ImGui::Checkbox("Use PCF", &usePCF);
+		//ImGui::Checkbox("Offline mode", &_raytracingHandler.offlineMode);
+		//ImGui::InputInt("Ray budget", &_raytracingHandler.rayBudget);
 
 
 
-		ImGui::Text("Directional Light");
-		GPUSceneData& tmpData = sceneData;
-		ImGui::InputFloat4("Intensity", (float*)&   	tmpData.sunlightColor);
-		ImGui::InputFloat4("Direction", (float*)&    	tmpData.sunlightDirection);
-		ImGui::InputFloat4("Ambient Color", (float*)&	tmpData.ambientColor);
+		//ImGui::Text("Directional Light");
+		//GPUSceneData& tmpData = sceneData;
+		//ImGui::InputFloat4("Intensity", (float*)&   	tmpData.sunlightColor);
+		//ImGui::InputFloat4("Direction", (float*)&    	tmpData.sunlightDirection);
+		//ImGui::InputFloat4("Ambient Color", (float*)&	tmpData.ambientColor);
 		
 		
 		ImGui::Text("Stats:");
@@ -1321,6 +1349,7 @@ void VulkanEngine::init_vulkan()
 		.add_required_extension("VK_KHR_deferred_host_operations")
 		.set_required_features_13(features)
 		.set_required_features_12(features12)
+		.set_required_features_11(features11)
 		.set_surface(_surface)
 		.select()
 		.value();
@@ -1611,7 +1640,7 @@ void VulkanEngine::init_descriptors(){
 		{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 2 }
 		,
 		{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 100 },
-		{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1 },
+		{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 3 },
 	};
 
 	globalDescriptorAllocator.init(_device,&_allocator, 10 , sizes);
@@ -1695,8 +1724,18 @@ void VulkanEngine::init_descriptors(){
 			VK_SHADER_STAGE_COMPUTE_BIT,
 			NULL);
 	}
+	{
+		VkDescriptorBindingFlags flags = VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT;
 
+		DescriptorLayoutBuilder builder;
+		builder.add_binding(0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, flags, 100); // 
+		_lightsourceDescriptorSetLayout = builder.build(_device,
+			VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR,
+			NULL,
+			VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT);
+	}
 
+	_lightsourceDescriptorSet = updatingGlobalDescriptorAllocator.allocate(_device, _lightsourceDescriptorSetLayout);
 	_gBufferDescriptors = updatingGlobalDescriptorAllocator.allocate(_device, _deferredDscSetLayout);
 	_drawImageDescriptors = updatingGlobalDescriptorAllocator.allocate(_device,_drawImageDescriptorLayout);	
 	_textureArrayDescriptor = updatingGlobalDescriptorAllocator.allocate(_device, _textureArrayLayout);
@@ -2588,7 +2627,9 @@ void VulkanEngine::update_scene()
 	glm::mat4 topMat = glm::mat4{ 1.f };
 	topMat = glm::scale(topMat, glm::vec3(1.0f));
 
-
+	if (mainCamera->isMoving()) {
+		cameraMoved = true;
+	}
 
 
 	for (auto& n : loadedScenes) {

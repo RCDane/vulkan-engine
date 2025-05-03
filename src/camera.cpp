@@ -10,6 +10,10 @@ void Camera::update()
     position += glm::vec3(cameraRotation * glm::vec4(velocity * 0.5f, 0.f));
 }
 
+bool Camera::isMoving() {
+    return glm::length(velocity) > 0.1 || rightClick;
+}
+
 void Camera::processSDLEvent(SDL_Event& e)
 {
     if (e.type == SDL_KEYDOWN) {
@@ -31,12 +35,16 @@ void Camera::processSDLEvent(SDL_Event& e)
     }
     else if (e.type == SDL_MOUSEBUTTONUP && e.button .button== SDL_BUTTON_RIGHT) {
         rightClick = false;
+
     }
+       
 
     if (e.type == SDL_MOUSEMOTION && rightClick) {
         yaw += (float)e.motion.xrel / 200.f;
         pitch -= (float)e.motion.yrel / 200.f;
     }
+
+
     
 }
 

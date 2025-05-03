@@ -1,4 +1,6 @@
 const float PI = 3.1415926535;
+const double dPI = 3.1415926535;
+
 const float InvPi = 0.318309886183;
 
 
@@ -76,13 +78,13 @@ PBR_result CalculatePBRResult(
     float lightIntensity, 
     vec3 F0, 
     float metallness,
-    float roughness){
+    float a){
     vec3 radiance =  lightColor * lightIntensity; //Incoming Radiance
 
     vec3 H = normalize(V + L); //half vector
     // cook-torrance brdf
-    float NDF = DistributionGGX(N, H, roughness);
-    float G   = GeometrySmith(N, V, L,roughness);
+    float NDF = DistributionGGX(N, H, a);
+    float G   = GeometrySmith(N, V, L,a);
     vec3 F    = fresnelSchlick(max(dot(H, V), 0.0), F0);
 
     vec3 kS = F;

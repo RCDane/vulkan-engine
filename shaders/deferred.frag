@@ -9,6 +9,7 @@
 #include "input_structures.glsl"
 #include "common/host_device.h"
 #include "common/PBR_functions.glsl"
+#include "common/util.glsl"
 layout (location = 0) in vec3 inNormal;
 layout (location = 1) in vec3 inColor;
 layout (location = 2) in vec2 inUV;
@@ -96,7 +97,6 @@ void main()
 {
     // Normalize input normal
     vec3 N = normalize(inNormal);
-    outNormal = vec4(N,1.0);
 
     if (materialData.normalIdx != 2){
         mat3 TBN = calculate_TBN(normalize(inNormal), inUV);
@@ -105,8 +105,10 @@ void main()
         textureNormal = normalize(textureNormal * 2.0 - 1.0);
         N = normalize(TBN * textureNormal);
 
-        outNormal = vec4(N, 1.0);        
     }
+    float linearZ = -vPos.z;            // vPos is view‑space, so −z is linear depth
+    float dz     = fwidth(linearZ);     // |dFdx|+|dFdy|
+    outNormal = vec4(ndir_to_oct_unorm(N), length(fwidth(N)), linearZ);        
 
     outAlbedo = vec4(inColor,1.0);
     if (materialData.colorIdx != 0){

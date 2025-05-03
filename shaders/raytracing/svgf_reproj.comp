@@ -1,0 +1,38 @@
+#version 450
+
+#extension GL_GOOGLE_include_directive : require
+#extension GL_EXT_buffer_reference : require
+#include "../common/PBR_functions.glsl"
+
+#include "../input_structures.glsl"
+#include "../common/host_device.h"
+#include "../common/util.glsl"
+
+// From Falcor
+    // Texture2D gMotion;
+    // Texture2D gPositionNormalFwidth;
+    // Texture2D gColor;
+    // Texture2D gAlbedo;
+    // Texture2D gEmission;
+    // Texture2D gPrevIllum;
+    // Texture2D gPrevMoments;
+    // Texture2D gLinearZAndNormal;
+    // Texture2D gPrevLinearZAndNormal;
+    // Texture2D gPrevHistoryLength;
+
+// Motion not needed
+layout(set = 0, binding = 0, rgba16f) uniform image2D normalFWidthZWidth;
+layout(set = 0, binding = 1, rgba16f) uniform image2D color;
+layout(set = 0, binding = 2, r32f) uniform image2D depth;
+layout(set = 0, binding = 3, rgba16f) uniform image2D albedo;
+layout(set = 0, binding = 4, r16f) uniform image2D prevIllumination;
+layout(set = 0, binding = 5, r32f) uniform image2D prevDepth;
+layout(set = 0, binding = 6, rgba16f) uniform image2D prevNormalFWidthZWidth;
+layout(set = 0, binding = 7, r8) uniform image2D prevHistoryLength;
+
+float gAlpha = 0.2;
+float gMomentsAlpha = 0.2;
+
+void main(){
+    
+}

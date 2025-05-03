@@ -226,12 +226,17 @@ std::optional<Camera> loadCamera(fastgltf::Camera& camera) {
         return newCamera;
     }
 }
+
+struct LightExtras {
+    double radius = 0.0;
+    double sunAngle = 0.0;
+};
 //
-LightSource loadLight(fastgltf::Light light, Node *node) {
+LightSource loadLight(fastgltf::Light light, Node *node, LightExtras extra) {
     LightSource newLight;
     if (light.type == fastgltf::LightType::Directional) {
         newLight.color = glm::vec3(light.color[0], light.color[1], light.color[2]);
-        newLight.intensity = light.intensity;
+        newLight.intensity = light.intensity ;
         glm::quat rotation = glm::quat_cast(node->localTransform);
         glm::vec4 transformedDirection = node->localTransform * glm::vec4(0, 0, -1, 0);
 
@@ -241,7 +246,7 @@ LightSource loadLight(fastgltf::Light light, Node *node) {
     }
     else if (light.type == fastgltf::LightType::Point) {
         newLight.color = glm::vec3(light.color[0], light.color[1], light.color[2]);
-        newLight.intensity = light.intensity;
+        newLight.intensity = light.intensity / (4.0 * extra.radius * extra.radius);
         newLight.position = node->localTransform[3];
         newLight.type = LightType::Point;
     }
@@ -259,10 +264,7 @@ bool textureMapInitialized = false;
 
 
 
-struct LightExtras {
-    double radius = 0.0;
-    double sunAngle = 0.0;
-};
+
 std::optional<std::shared_ptr<LoadedGLTF>> loadGltf(VulkanEngine* engine, std::string_view filePath){
     fmt::print("Loading GLTF: {}\n", filePath);
 
@@ -813,8 +815,9 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGltf(VulkanEngine* engine, std::s
             
 
 
-			auto lightSource = loadLight(light, static_cast<MeshNode*>(newNode.get()));
+			auto lightSource = loadLight(light, static_cast<MeshNode*>(newNode.get()), lightExtras[lightIdx]);
 			lightSource.radius = lightExtras[lightIdx].radius;
+            
 			lightSource.sunAngle = lightExtras[lightIdx].sunAngle;
             scene->lightSources.push_back(std::make_shared<LightSource>(lightSource));
         }
