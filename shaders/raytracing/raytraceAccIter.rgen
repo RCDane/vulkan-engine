@@ -2,9 +2,11 @@
 #extension GL_EXT_ray_tracing : require
 #extension GL_GOOGLE_include_directive : enable
 #extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
+// #extension GL_EXT_nonuniform_qualifier : require  
+#extension GL_EXT_buffer_reference : require
 #extension GL_EXT_scalar_block_layout : require
-
-
+#extension GL_ARB_shader_clock : enable
+#extension GL_EXT_buffer_reference2 : require
 #include "../common/host_device.h"
 #include "../common/PBR_functions.glsl"
 #include "../common/util.glsl" 
@@ -17,13 +19,13 @@ layout(set = 0, binding = eTlas) uniform accelerationStructureEXT topLevelAS;
 layout(set = 0, binding = eOutImage, rgba16f) uniform image2D image;
 layout(set = 1, binding = 0) uniform _GlobalUniforms { GlobalUniforms uni; };
 
-layout(set = 3, binding = 0, scalar) buffer LightSources {LightSource lights[]; };
+layout(set = 3, binding = 0, std430) readonly buffer LightSources {LightSource l[]; } lights;
 layout(set = 2, binding = 0, rgba16f) uniform image2D albedo; 
 layout(set = 2, binding = 1, rgba16f) uniform image2D normal; 
 layout(set = 2, binding = 2, rgba16f) uniform image2D material;
 layout(set = 2, binding = 3, rgba32f) uniform image2D emission; 
 layout(set = 2, binding = 4, r32f) uniform image2D depth; 
-layout(set = 2, binding = 5, rgba32f) uniform image2D colorHistory;
+layout(set = 2, binding = 5, rgba32f) uniform image2D colorHistory; 
 layout(set = 2, binding = 6, r32f) uniform image2D depthHistory;
 
 layout(push_constant) uniform _PushConstantRay { PushConstantRay pcRay; };
@@ -58,20 +60,20 @@ vec3 reconstructWorldPosition(
 
     // 5) Transform into world space
     dvec4 worldPosH = invView * viewPos;
-    return vec3(worldPosH.xyz);
+    return vec3(worldPosH.xyz); 
 }
 
 
 
 
-LightSample sampleLightsPdf(vec3 hitPoint, inout uint seed,  int lightCount) {
+LightSample sampleLightsPdf(vec3 hitPoint, inout uint seed,  int lightCount) { 
     // 1) Pick one light uniformly 
-    uint i = randRange(seed, 0, lightCount - 1); 
+    uint i = randRange(seed, 0, lightCount - 1);
 
-    LightSource Ls = lights[i];
+    LightSource Ls = lights.l[i];
 
     LightSample s = ProcessLight(hitPoint, seed, Ls); // Sample the light source
-    s.pdf /= lightCount ; // Scale the pdf by the light source pdf 
+    // s.pdf /= lightCount ; // Scale the pdf by the light source pdf 
     return s;
 }
 
@@ -136,7 +138,7 @@ vec3 sampleGGXDirection(
 
 void main()
 {
-
+  
   const vec2 pixelCenter = vec2(gl_LaunchIDEXT.xy) + vec2(0.5);
   const vec2 inUV        = pixelCenter / vec2(gl_LaunchSizeEXT.xy);
   vec2       d           = inUV * 2.0 - 1.0; 
@@ -145,7 +147,6 @@ void main()
   vec4 target    = uni.projInverse * vec4(d.x, d.y, 1, 1);
   vec4 direction = uni.viewInverse * vec4(normalize(target.xyz), 0);
 
-  dvec3 currentColor = imageLoad(colorHistory, ivec2(gl_LaunchIDEXT.xy)).rgb;
   double currentDepth = imageLoad(depth, ivec2(gl_LaunchIDEXT.xy)).r;
   if (currentDepth == 0.0) {
     imageStore(colorHistory, ivec2(gl_LaunchIDEXT.xy), vec4(0.0, 0.0, 0.0, 1.0));
@@ -167,19 +168,19 @@ void main()
   // Linearize currentDepth
 
   // Reproject and get screen space position
-  vec4 reprojectedPos = uni.oldViewProj * vec4(worldPos, 1.0);
-  vec3 reprojNDC = reprojectedPos.xyz / reprojectedPos.w;      // NDC xyz
-  vec2 reprojUV  = reprojNDC.xy * 0.5 + 0.5; 
-  vec2 reprojPixel = reprojUV.xy * vec2(gl_LaunchSizeEXT.xy);
-  bool reprojectionSuccessFull = false;
-  if (CheckUv(vec2(reprojPixel), vec2(gl_LaunchSizeEXT.xy))) {
-    float oldRawDepth = imageLoad(depthHistory, ivec2(reprojPixel.xy)).r;    // reversed‐Z
-    float reprojDepth  = reprojNDC.z;                           // also reversed‐Z
-    // optional: linearize both depths to view‐space
-    float linOld  = zNear * zFar / (zFar + oldRawDepth * (zNear - zFar));;
-    float linNew  = zNear * zFar / (zFar + reprojDepth * (zNear - zFar));;
-    reprojectionSuccessFull = abs(linOld - linNew) > eps;
-  }
+  // vec4 reprojectedPos = uni.oldViewProj * vec4(worldPos, 1.0);
+  // vec3 reprojNDC = reprojectedPos.xyz / reprojectedPos.w;      // NDC xyz
+  // vec2 reprojUV  = reprojNDC.xy * 0.5 + 0.5; 
+  // vec2 reprojPixel = reprojUV.xy * vec2(gl_LaunchSizeEXT.xy);
+  // bool reprojectionSuccessFull = false;
+  // if (CheckUv(vec2(reprojPixel), vec2(gl_LaunchSizeEXT.xy))) {
+  //   float oldRawDepth = imageLoad(depthHistory, ivec2(reprojPixel.xy)).r;    // reversed‐Z
+  //   float reprojDepth  = reprojNDC.z;                           // also reversed‐Z
+  //   // optional: linearize both depths to view‐space
+  //   float linOld  = zNear * zFar / (zFar + oldRawDepth * (zNear - zFar));;
+  //   float linNew  = zNear * zFar / (zFar + reprojDepth * (zNear - zFar));;
+  //   reprojectionSuccessFull = abs(linOld - linNew) > eps;
+  // }
 
 
   // sample old depth and compare
@@ -189,13 +190,15 @@ void main()
 
   float roughness = material.r;
   float metalness = material.g;
-  prd.seed = tea(gl_LaunchIDEXT.y *gl_LaunchIDEXT.x + gl_LaunchIDEXT.x, uni.raytracingSettings.seed);;
+  prd.seed = tea(gl_LaunchIDEXT.x* gl_LaunchIDEXT.y +gl_LaunchIDEXT.x , uint(clockARB()));
+  uint seed = tea(gl_LaunchIDEXT.x* gl_LaunchIDEXT.y +gl_LaunchIDEXT.x , uint(clockARB()));
+  
   // prd.seed = uni.raytracingSettings.seed;
 
 
-  direction = -direction;
+  // direction = -direction;
   vec3 V = normalize(origin.xyz- worldPos);
-  LightSample l_Sample = sampleLightsPdf(worldPos, prd.seed, uni.raytracingSettings.lightCount);
+  LightSample l_Sample = sampleLightsPdf(worldPos, seed, uni.raytracingSettings.lightCount);
   
 
 
@@ -203,7 +206,7 @@ void main()
 
   int rayDepth = 0;
 	prd.depth = 0;
-	vec3 tangent, bitangent;
+	vec3 tangent, bitangent; 
   float e = 1e-3;
 
   prd.rayOrigin = worldPos;
@@ -223,11 +226,10 @@ void main()
       roughness,
       tangent,
       bitangent,
-      prd.seed,
+      seed,
       pdf
   );
-  // vec3 firstDirection = rayDirection;
-  dvec3 indirectIllumination = dvec3(0);
+  vec3 indirectIllumination = vec3(0);
   for (;;){
 
 		float tMin   = e;
@@ -249,7 +251,6 @@ void main()
 						tMax,        // ray max range
 						0            // payload is payload
 		);
-
   	// float cosNL    = max(dot(N, rayDirection), 0.0);
     // float hemiPdf  = cosNL / PI;
     // float invPdf   = PI / max(cosNL, 1e-6);
@@ -278,18 +279,18 @@ void main()
         roughness,
         tangent,
         bitangent,
-        prd.seed,
+        seed,
         pdf
     );
   }
 
   // Next event estimation for direct lighting
-  dvec3 directIllumination = vec3(0.0);
+  vec3 directIllumination = vec3(0.0);
 
-  vec3 L = normalize(l_Sample.direction);
+  vec3 L = normalize(l_Sample.direction); 
   isShadowed   = true; 
 
-    if(dot(N, L) > 0)
+    if(dot(N, L) > 0) 
     {
 
       prd.rayOrigin = worldPos;
@@ -299,7 +300,7 @@ void main()
       float tMin   = 0.003;
       float tMax   = l_Sample.distance; 
       vec3  rayOrigin = worldPos + V*e;
-      vec3  rayDir = L;
+      vec3  rayDir = L; 
       uint  flags  = gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsOpaqueEXT | gl_RayFlagsSkipClosestHitShaderEXT;
       traceRayEXT(topLevelAS,  // acceleration structure
             flags,       // rayFlags
@@ -318,30 +319,26 @@ void main()
     }
     if (!isShadowed) { 
         PBR_result res =  CalculatePBRResult(N,V,L,albedoColor.xyz, l_Sample.color, float(l_Sample.intensity), F0, metalness, roughness);
-        directIllumination += dvec3((res.color * l_Sample.attenuation)) / l_Sample.pdf; // divide by the pdf of the light sample
+        directIllumination += ((res.color * l_Sample.attenuation)) / l_Sample.pdf; // divide by the pdf of the light sample
 
-      }
-  dvec3 combined = directIllumination + indirectIllumination; 
+      } 
+  vec3 combined = directIllumination + indirectIllumination.rgb; // combine direct and indirect illumination
 
-  double currentRayCount =  double(uni.raytracingSettings.currentRayCount);
-  double rayBudget =  double(uni.raytracingSettings.rayBudget); 
-  double invNext = rayBudget / (currentRayCount + rayBudget);  
+  float currentRayCount =  float(uni.raytracingSettings.currentRayCount);
+  float rayBudget =  float(uni.raytracingSettings.rayBudget); 
+  float invNext = rayBudget / (currentRayCount + rayBudget);  
 
-   
-  dvec3 accumulatedColor = currentColor.rgb 
+
+  vec3 currentColor = imageLoad(colorHistory, ivec2(gl_LaunchIDEXT.xy)).rgb;
+
+
+  vec3 accumulatedColor = currentColor.rgb 
                         + (combined - currentColor.rgb) * invNext;
-  // uint i = randRange(prd.seed, 0, 4);    
-  
-  // vec3 debugColor = vec3(0.0, 0.0,0.0); 
-  // if ((isnan(l_Sample.pdf)))
-  //   {
-  //     debugColor = vec3(0.0, 1.0, 0.0); 
-  //   } else if (isinf(l_Sample.pdf)) {
-  //     debugColor = vec3(0.0, 0.0, 1.0); 
-  //   }
+
+
 
   imageStore(colorHistory,
             ivec2(gl_LaunchIDEXT.xy),
-            vec4(accumulatedColor,1.0)); // store the color in the history buffer
+            vec4(accumulatedColor, 1.0)); // store the color in the history buffer
 
 }

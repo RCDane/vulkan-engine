@@ -1449,10 +1449,12 @@ void RaytracingHandler::raytrace(VkCommandBuffer cmd, VulkanEngine* engine) {
 
 	writer.update_set(engine->_device, uniformsDescriptor);
 	DescriptorWriter writer3;
+
+	uint32_t bufferSize = sizeof(ShaderLightSource) * engine->lightSources.size();
 	writer3.write_buffer(
 		0,
 		engine->_lightingDataBuffer.buffer,
-		sizeof(ShaderLightSource) * engine->lightSources.size(),
+		bufferSize,
 		0,
 		VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
 		engine->lightSources.size());

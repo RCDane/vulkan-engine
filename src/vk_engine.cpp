@@ -39,7 +39,7 @@
 #include <filesystem>
 #include <iostream>
 
-constexpr bool bUseValidationLayers = true;
+constexpr bool bUseValidationLayers = false;
 
 
 VulkanEngine* loadedEngine = nullptr;
@@ -434,6 +434,7 @@ void WaitAll(VkCommandBuffer cmd) {
 using namespace std::chrono_literals;
 void VulkanEngine::draw()
 {
+
 	update_scene();
 	// wait until the gpu has finished rendering the last frame. Timeout of 1
 	// second
@@ -546,9 +547,10 @@ void VulkanEngine::draw()
 		//AddCmdMarker(cmd, "Start Raytracing");
 		vkutil::transition_image(cmd, _depthImage.image, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_DEPTH_BIT);
 
-		vkutil::transition_image(cmd, _colorHistory.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+		vkutil::transition_image(cmd, _colorHistory.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
 
 		vkutil::transition_image(cmd, _depthHistory.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_DEPTH_BIT);
+		WaitAll(cmd);
 
 		_raytracingHandler.raytrace(cmd, this);
 		
@@ -673,10 +675,22 @@ void VulkanEngine::draw()
 
 
 }
+template<typename T>
+T roundTo(T value, int decimalPlaces)
+{
+	static_assert(std::is_floating_point_v<T>, "T must be float, double or long double");
 
+	// Guard against extreme exponents that would overflow pow()
+	if (std::abs(decimalPlaces) > 308)         // 308 ≈ max exponent for double
+		return value;                          // nothing reasonable to do
+
+	const T factor = std::pow(T(10), decimalPlaces);
+	return std::round(value * factor) / factor;
+}
 
 void VulkanEngine::prepare_lighting_data() {
 	// Point light data
+	int size = sizeof(ShaderLightSource) * lightSources.size();
 	_lightingDataBuffer = create_buffer(&_device, 
 		&_allocator, 
 		sizeof(ShaderLightSource)*lightSources.size(), 
@@ -684,6 +698,7 @@ void VulkanEngine::prepare_lighting_data() {
 		VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
 	//add it to the deletion queue of this frame so it gets deleted once its been used
 	std::vector<ShaderLightSource> shaderLightSources;
+	float lightCount = lightSources.size();
 	for (auto & light : lightSources) {
 		ShaderLightSource shaderLight;
 		shaderLight.color = light->color;
@@ -693,6 +708,9 @@ void VulkanEngine::prepare_lighting_data() {
 		shaderLight.type = light->type;
 		shaderLight.radius = light->radius;
 		shaderLight.sunAngle = light->sunAngle;
+		shaderLight.pdf = 1.0f / ((light->radius * light->radius) * (4.0*glm::pi<float>()));
+		//shaderLight.pdf = 0.2f;
+		//shaderLight.pdf = roundTo<float>(shaderLight.pdf, 3);
 		shaderLightSources.push_back(shaderLight);
 	}
 
@@ -1250,8 +1268,8 @@ void VulkanEngine::init_vulkan()
 		.require_api_version(1, 3, 0)
 		//.add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_BEST_PRACTICES_EXT)
 		.add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT)
-		.add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_RESERVE_BINDING_SLOT_EXT)
-		.add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT) // Add validation features
+		//.add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_RESERVE_BINDING_SLOT_EXT)
+		//.add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT) // Add validation features
 		.build();
 
     vkb::Instance vkb_inst = inst_ret.value();
@@ -1276,22 +1294,25 @@ void VulkanEngine::init_vulkan()
 	
 
     VkPhysicalDeviceVulkan12Features features12{ .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES };
-	features12.bufferDeviceAddress = true;
 	features12.descriptorIndexing = true;
 	features12.descriptorBindingStorageImageUpdateAfterBind = true;
 	features12.descriptorBindingUniformBufferUpdateAfterBind = true;
 	features12.descriptorBindingStorageBufferUpdateAfterBind = true;
 	features12.descriptorBindingSampledImageUpdateAfterBind = true;
 	features12.uniformAndStorageBuffer8BitAccess = true;
+	features12.uniformBufferStandardLayout = true;
 	features12.scalarBlockLayout = true;
 	features12.runtimeDescriptorArray = true;
+	features12.shaderStorageBufferArrayNonUniformIndexing = true;
 	features12.shaderSampledImageArrayNonUniformIndexing = true;
 	features12.bufferDeviceAddressCaptureReplay = true;
 	features12.bufferDeviceAddress = true;
 	features12.hostQueryReset = true;
 	features12.timelineSemaphore = true;
 	
-	
+	VkPhysicalDeviceShaderClockFeaturesKHR shaderClockFeatures{ .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_CLOCK_FEATURES_KHR };
+	shaderClockFeatures.shaderSubgroupClock = true;
+
 	VkPhysicalDeviceVulkan11Features features11{ .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES };
 	features11.storageBuffer16BitAccess = true;
 	features11.uniformAndStorageBuffer16BitAccess = true;
@@ -1331,12 +1352,14 @@ void VulkanEngine::init_vulkan()
 		.set_required_features(deviceFeatures)
 		.add_required_extension("VK_KHR_acceleration_structure")
 		.add_required_extension("VK_KHR_shader_relaxed_extended_instruction")
-
+		.add_required_extension("VK_KHR_buffer_device_address")
+		.add_required_extension("VK_KHR_shader_clock")
 		.add_required_extension("VK_KHR_push_descriptor")
 		.add_required_extension("VK_KHR_ray_query")
 		.add_required_extension_features(rayQueryFeatures)
 		.add_required_extension_features(localreadfeatures)
 		.add_required_extension_features(accelerationStructureFeatures)
+		.add_required_extension_features(shaderClockFeatures)
 		.add_required_extension_features(rtPipelineFeatures)
 		.add_desired_extension("VK_EXT_debug_utils")
 		.add_desired_extension("VK_EXT_debug_marker")
@@ -2953,11 +2976,16 @@ void  VulkanEngine::compute_tonemapping(VkCommandBuffer cmd) {
 
 	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _tonemappingPipeline);
 
+	VkDescriptorSet globalDescriptor = get_current_frame()._frameDescriptors.allocate(_device, _tonemappingDscSetLayout);
 
+	DescriptorWriter writer;
+	writer.write_image(0, _colorHistory.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+	writer.write_image(1, _drawImage.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+	writer.update_set(_device, globalDescriptor);
 
 
 	// bind the descriptor set containing the draw image for the compute pipeline
-	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _tonemappingLayout, 0, 1, &_tonemappingImageDescriptors, 0, nullptr);
+	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, _tonemappingLayout, 0, 1, &globalDescriptor, 0, nullptr);
 
 
 	ToneMappingSettings settings;

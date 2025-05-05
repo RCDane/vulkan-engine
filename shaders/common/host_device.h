@@ -40,15 +40,7 @@ END_BINDING();
 // clang-format on
 
 
-struct LightSample {
-	vec3 color;
-	vec3 direction;
-	double intensity;
-	float distance;
-	vec3 attenuation;
-	double pdf;
-	
-  };
+
 
 // Information of a obj model when referenced in a shader
 struct ObjDesc
@@ -150,13 +142,20 @@ struct PushConstantRay
 
 struct LightSource {
 	vec3 position;
-	float intensity;
-	vec3 color;
-	int type;
-	vec3 direction; 
-    float radius;
     float sunAngle;
-	vec3 padding;
+	vec3 color;
+    float radius;
+
+	vec3 direction; 
+	float intensity;
+	vec2 padding;
+	int type;
+
+	float pdf;
+	// vec4 padding1;
+	// vec4 padding2;
+
+
 };
 
 

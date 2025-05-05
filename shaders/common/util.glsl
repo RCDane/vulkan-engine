@@ -75,17 +75,16 @@ float rnd(inout uint prev)
 
 uint pcg_hash (uint x)
 {
-    x = x * 747796405u + 2891336453u;          // LCG step
+    x = x * 747796405u + 2891336453u;
     uint word = ((x >> ((x >> 28u) + 4u)) ^ x) * 277803737u;
     return (word >> 22u) ^ word;
 }
 
-// sample an *inclusive* integer range [lo, hi]
-// mutates 'seed' so the next call is decorrelated
+
 uint randRange (inout uint seed, uint lo, uint hi)
 {
     seed = pcg_hash(seed);
-    uint span = hi - lo + 1;            // assumes hi ≥ lo
+    uint span = hi - lo + 1;           
     return lo + int(seed % span);
 }
 
@@ -100,7 +99,7 @@ uint randIndex(inout uint seed, uint lo, uint hi)
 
     float r = rnd(seed);
     uint i = uint(r * float(hi - lo + 1));
-    return i + uint(lo);
+    return clamp(i + uint(lo), 0, hi);
 }
 
 
@@ -153,23 +152,30 @@ const int MAX_LIGHTS = 100;
 const float INF_DISTANCE = 1e10;
 
 double nan_to_zero(double x) {
-    return isnan(x) ? 0.0001 : x;
+    return isnan(x) ? 0.0001 : x; 
 }
 
 
 float nan_to_zero(float x) {
     return isnan(x) ? 0.0001 : x;
 }
-
+struct LightSample { 
+	vec3 color;
+	vec3 direction;
+	double intensity;
+	float distance;
+	vec3 attenuation;
+	float pdf;
+};
 
 LightSample ProcessLight(vec3 hitPoint, inout uint seed, LightSource Ls){
     LightSample ls;
-    ls.color = Ls.color;           // base color of the light
+    ls.color = Ls.color.xyz;           // base color of the light
     ls.intensity = Ls.intensity;   // scalar intensity
 
     if (Ls.type == 0) {
 
-        vec3 samplePos = sampleSphere(Ls.position, Ls.radius, seed);
+        vec3 samplePos = sampleSphere(Ls.position.xyz, Ls.radius, seed);
 
         vec3 toLight   = samplePos - hitPoint;
         float dist     = length(toLight);
@@ -177,10 +183,8 @@ LightSample ProcessLight(vec3 hitPoint, inout uint seed, LightSource Ls){
 
         double radius2 = Ls.radius * Ls.radius;
 
-        double area     = 4.0 * PI * radius2;
-        double areaPdf  = 1.0 / area;
 
-        ls.pdf = areaPdf;
+        ls.pdf = Ls.pdf;
 
         ls.intensity = Ls.intensity; // scale intensity by area pdf
         ls.attenuation =  vec3(1)/(dist * dist);
@@ -188,7 +192,7 @@ LightSample ProcessLight(vec3 hitPoint, inout uint seed, LightSource Ls){
         ls.direction = dir;
         ls.distance  = dist;
     } else {
-                vec3 w = normalize(-Ls.direction);
+                vec3 w = normalize(-Ls.direction.xyz);
 
         // 2) branchless ONB (Duff et al. 2017)
         float s = (w.z >= 0.0 ? 1.0 : -1.0);
