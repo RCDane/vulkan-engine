@@ -176,6 +176,7 @@ void main()
     vec3 F0 = mix(vec3(0.04), baseColor.xyz, metallic);
 	isShadowed   = true; 
 	vec3 directRadiance = vec3(0.0);
+	vec3  bsdf = vec3(0.0);
 	if (dot(worldNrm,L) > 0){
 
 		float tMin   = 0.01;
@@ -195,18 +196,20 @@ void main()
 			tMax,        // ray max range
 			1            // payload is isShadowed
 		);
-		PBR_result res = CalculatePBRResult(worldNrm, V, L,
+
+
+		// 2) pick unshadowed radiance
+		if (!isShadowed) {
+			PBR_result res = CalculatePBRResult(worldNrm, V, L,
 										baseColor, l_Sample.color,
 										float(l_Sample.intensity), F0,
 										metallic, roughness);
 
-		// 2) pick unshadowed radiance
-		if (!isShadowed) {
-
-
 			// 4) compute the direct radiance
 			directRadiance = l_Sample.color  * l_Sample.attenuation;
 			directRadiance /= l_Sample.pdf;
+			bsdf = res.f;
+
 		}
 	}
 	
@@ -220,10 +223,8 @@ void main()
 	// 4) build your throughput update **without dividing by pdf**
 	//    since you’re cosine‑hemisphere sampling: 
 	
-  	float cosNL    = max(dot(worldNrm, L), 0.0); 
 
 
-	vec3  bsdf = res.f;
 
 	float tHit = gl_HitTEXT;
 	const float maxAtt = 100.0;
@@ -232,7 +233,7 @@ void main()
 	invSq = min(invSq, maxAtt);
 
 	// 5) update attenuation
-	prd.attenuation *= l_Sample.attenuation * bsdf * cosNL;
+	prd.attenuation *= l_Sample.attenuation * bsdf ;
 
 
 	// 6) write your radiance into the payload

@@ -99,7 +99,7 @@ glm::mat4 perspective_vulkan_rh(
         0.0f, -1.0f, 0.0f, 0.0f,
         0.0f,  0.0f, 1.0f, 0.0f,
         0.0f,  0.0f, 0.0f, 1.0f
-    };  // :contentReference[oaicite:3]{index=3}
+    }; 
 
     return flip_y * reverse_z * normalize_range * opengl_perspective;
 }

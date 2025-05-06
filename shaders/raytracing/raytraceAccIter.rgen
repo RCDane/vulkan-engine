@@ -190,7 +190,7 @@ void main()
 
   float roughness = material.r;
   float metalness = material.g;
-  prd.seed = tea(gl_LaunchIDEXT.x* gl_LaunchIDEXT.y +gl_LaunchIDEXT.x , uint(clockARB()));
+  prd.seed = tea(gl_LaunchIDEXT.x* gl_LaunchIDEXT.y +gl_LaunchIDEXT.x , gl_LaunchIDEXT.x* gl_LaunchIDEXT.y *uint(clockARB()));
   uint seed = tea(gl_LaunchIDEXT.x* gl_LaunchIDEXT.y +gl_LaunchIDEXT.x , uint(clockARB()));
   
   // prd.seed = uni.raytracingSettings.seed;
@@ -222,7 +222,7 @@ void main()
   float pdf = 0.0;
   vec3 rayDirection = sampleGGXDirection(
       prd.normal,
-      -prd.rayDir,
+      V,
       roughness,
       tangent,
       bitangent,
@@ -237,7 +237,7 @@ void main()
 		vec3  rayDir = rayDirection;
 		uint  flags  = gl_RayFlagsNoneEXT;
 		prd.depth += 1;
-		prd.rayDir = rayDir;
+		prd.rayDir = rayDirection;
     prd.hitValue = vec3(0);
 		traceRayEXT(topLevelAS,  // acceleration structure
 						flags,       // rayFlags
@@ -322,7 +322,7 @@ void main()
         directIllumination += ((res.color * l_Sample.attenuation)) / l_Sample.pdf; // divide by the pdf of the light sample
 
       } 
-  vec3 combined = directIllumination + indirectIllumination.rgb; // combine direct and indirect illumination
+  vec3 combined = indirectIllumination + directIllumination; // combine direct and indirect illumination
 
   float currentRayCount =  float(uni.raytracingSettings.currentRayCount);
   float rayBudget =  float(uni.raytracingSettings.rayBudget); 

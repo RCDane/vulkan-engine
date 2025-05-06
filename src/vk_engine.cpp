@@ -38,8 +38,10 @@
 
 #include <filesystem>
 #include <iostream>
+//#include <windows.h>
+//#include <tchar.h>
 
-constexpr bool bUseValidationLayers = false;
+constexpr bool bUseValidationLayers = true;
 
 
 VulkanEngine* loadedEngine = nullptr;
@@ -106,8 +108,10 @@ void VulkanEngine::init()
 
 	init_default_data();
 
+	//DWORD dwError, dwPriClass;
+	//dwPriClass = GetPriorityClass(GetCurrentProcess());
 
-
+	//_tprintf(TEXT("Current priority class is 0x%x\n"), dwPriClass);
 
 
 
@@ -256,6 +260,9 @@ void VulkanEngine::init()
 
 	_raytracingHandler.createRtShaderBindingTable(this);
 	// everything went fine
+
+	prepare_lighting_data();
+
     _isInitialized = true;
 }
 
@@ -446,7 +453,6 @@ void VulkanEngine::draw()
     uint32_t swapchainImageIndex;
 
 
-	prepare_lighting_data();
 
 
 	// Handling resizing
@@ -476,7 +482,7 @@ void VulkanEngine::draw()
 
 
    	VK_CHECK(vkBeginCommandBuffer(cmd, &cmdBeginInfo));
-	std::cout << "Starting command buffer: " << std::addressof(cmd) << std::endl;
+	//std::cout << "Starting command buffer: " << std::addressof(cmd) << std::endl;
 	// Get current frame index
 	uint32_t frameIndex = _frameNumber % FRAME_OVERLAP;
 	auto& currentFrame = _frames[frameIndex];
@@ -498,11 +504,11 @@ void VulkanEngine::draw()
 
 	// transition our main draw image into general layout so we can write into it
 	// we will overwrite it all so we dont care about what was the older layout
-	printf("transition depth\n");
+	//printf("transition depth\n");
 
 	vkutil::transition_image(cmd, _depthImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, VK_IMAGE_ASPECT_DEPTH_BIT);
 
-	printf("Start new deferred\n");
+	//printf("Start new deferred\n");
 
 	std::vector<VkImage> gBufferImages = {
 		_gBuffer_albedo.image,
@@ -520,10 +526,10 @@ void VulkanEngine::draw()
 	WaitAll(cmd);
 
 
-	printf("first transitions\n");
+	//printf("first transitions\n");
 
 	draw_deferred(cmd);
-	printf("start second transitions\n");
+	//printf("start second transitions\n");
 	//vkutil::transition_image(cmd, _depthImage.image, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL, VK_IMAGE_ASPECT_DEPTH_BIT);
 
 
@@ -536,10 +542,10 @@ void VulkanEngine::draw()
 	);
 
 
-	printf("second transitions\n");
+	//printf("second transitions\n");
 
-	printf("end new deferred\n");
-	printf("transition main_color_image\n");
+	//printf("end new deferred\n");
+	//printf("transition main_color_image\n");
 
 	vkutil::transition_main_color_image(cmd, _drawImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
 
@@ -596,7 +602,7 @@ void VulkanEngine::draw()
 
 	vkutil::transition_image_relaxed(cmd, _drawImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_ASPECT_COLOR_BIT);
 
-	printf("time to blit\n");
+	//printf("time to blit\n");
 
 	vkutil::transition_image(cmd, _swapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_ASPECT_COLOR_BIT);
 	
@@ -704,13 +710,25 @@ void VulkanEngine::prepare_lighting_data() {
 		shaderLight.color = light->color;
 		shaderLight.direction = light->direction;
 		shaderLight.intensity = light->intensity;
+
 		shaderLight.position = light->position;
 		shaderLight.type = light->type;
 		shaderLight.radius = light->radius;
 		shaderLight.sunAngle = light->sunAngle;
-		shaderLight.pdf = 1.0f / ((light->radius * light->radius) * (4.0*glm::pi<float>()));
-		//shaderLight.pdf = 0.2f;
-		//shaderLight.pdf = roundTo<float>(shaderLight.pdf, 3);
+		if (light->type == LightType::Directional) {
+			shaderLight.pdf = 1.0f / lightCount;
+			shaderLight.intensity = light->intensity*10;
+
+		}
+		else if (light->type == LightType::Point){
+			shaderLight.intensity = light->intensity;
+
+			float area = light->radius * light->radius * (4.0f * glm::pi<float>());
+			shaderLight.pdf = 1.0f / area;
+		}
+		else {
+			shaderLight.pdf = 1.0f / lightCount;
+		}
 		shaderLightSources.push_back(shaderLight);
 	}
 
@@ -723,12 +741,22 @@ void VulkanEngine::prepare_lighting_data() {
 	std::memcpy(mappedData, shaderLightSources.data(), sizeof(ShaderLightSource) * shaderLightSources.size());
 	vmaUnmapMemory(_allocator, _lightingDataBuffer.allocation);
 	
+	DescriptorWriter writer3;
+
+	uint32_t bufferSize = sizeof(ShaderLightSource) * lightSources.size();
+	writer3.write_buffer(
+		0,
+		_lightingDataBuffer.buffer,
+		bufferSize,
+		0,
+		VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+		lightSources.size());
+	writer3.update_set(_device, _lightsourceDescriptorSet);
 
 
-
-	get_current_frame()._deletionQueue.push_function([=, this]() {
-		destroy_buffer(_lightingDataBuffer);
-		});
+	//get_current_frame()._deletionQueue.push_function([=, this]() {
+	//	destroy_buffer(_lightingDataBuffer);
+	//	});
 }
 
 void VulkanEngine::draw_geometry(VkCommandBuffer cmd)
@@ -1028,11 +1056,11 @@ void VulkanEngine::draw_deferred(VkCommandBuffer cmd)
 	renderInfo.pStencilAttachment = nullptr;
 
 
-	printf("test\n");
+	//printf("test\n");
 
 	vkCmdBeginRendering(cmd, &renderInfo);
 
-	printf("begin rendering\n");
+	//printf("begin rendering\n");
 
 
 
@@ -1181,7 +1209,6 @@ void VulkanEngine::run()
             // close the window when user alt-f4s or clicks the X button
             if (e.type == SDL_QUIT)
                 bQuit = true;
-
 
 		    mainCamera->processSDLEvent(e);
 			
@@ -1659,11 +1686,11 @@ void VulkanEngine::init_sync_structures()
 void VulkanEngine::init_descriptors(){
 	std::vector<DescriptorAllocatorGrowable::PoolSizeRatio> sizes =
 	{
-		{ VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1 },
-		{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 2 }
+		{ VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 10 },
+		{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 10 }
 		,
-		{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 100 },
-		{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 3 },
+		{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 300},
+		{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 100 },
 	};
 
 	globalDescriptorAllocator.init(_device,&_allocator, 10 , sizes);
@@ -2664,9 +2691,9 @@ void VulkanEngine::update_scene()
 	}
 
 	mainCamera->update();
-	glm::vec3 jitter = glm::ballRand(0.001);
+	//glm::vec3 jitter = glm::ballRand(0.001);
 
-	glm::mat4 view = mainCamera->getViewMatrix(jitter);
+	glm::mat4 view = mainCamera->getViewMatrix(glm::vec3(0.0));
 	glm::mat4 rasterizationProjection = mainCamera->getProjectionMatrix(false);
 	glm::mat4 rayTracingProjection = mainCamera->getProjectionMatrix(true);
 
