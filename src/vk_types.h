@@ -89,7 +89,7 @@ struct LightSource {
 
 
 
-struct ShaderLightSource {
+struct alignas(16) ShaderLightSource {
     glm::vec3 position;
     float sunAngle;
     glm::vec3 color;

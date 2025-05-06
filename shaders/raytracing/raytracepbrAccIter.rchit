@@ -11,7 +11,7 @@
 
 #include "../common/host_device.h"
 #include "../common/PBR_functions.glsl"
-#include "../common/util.glsl"
+#include "../common/util.glsl" 
 hitAttributeEXT vec2 attribs;
  
 layout(location = 0) rayPayloadInEXT hitPayload prd;
@@ -174,11 +174,11 @@ void main()
 	vec3 tmpColor = vec3(1.0);
 	
     vec3 F0 = mix(vec3(0.04), baseColor.xyz, metallic);
-	isShadowed   = true; 
 	vec3 directRadiance = vec3(0.0);
 	vec3  bsdf = vec3(0.0);
 	if (dot(worldNrm,L) > 0){
-
+		isShadowed   = true; 
+		
 		float tMin   = 0.01;
 		float tMax   = l_Sample.distance;
 		vec3  rayOrigin = worldPos;
@@ -211,6 +211,8 @@ void main()
 			bsdf = res.f;
 
 		}
+		isShadowed   = true; 
+
 	}
 	
 	

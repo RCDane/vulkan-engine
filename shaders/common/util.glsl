@@ -70,7 +70,7 @@ uint lcg(inout uint prev)
 // Generate a random float in [0, 1) given the previous RNG state
 float rnd(inout uint prev)
 {
-  return clamp(float(lcg(prev)) / float(0x01000000), 0.0, 1.0);
+  return float(lcg(prev)) / float(0x01000000);
 }
 
 uint pcg_hash (uint x)
@@ -220,11 +220,7 @@ LightSample ProcessLight(vec3 hitPoint, inout uint seed, LightSource Ls){
         ls.direction   = sampleDir;
         ls.distance    = INF_DISTANCE;
         ls.attenuation = vec3(1.0);
-
-        // 7) account for cone PDF
-        float coneSolidAngle = 2.0 * PI * (1.0 - cosMax);
-        float conePdf        = 1.0 / coneSolidAngle;
-        ls.pdf = conePdf;
+        ls.pdf = Ls.pdf;
     }
     return ls;
 }

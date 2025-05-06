@@ -1377,6 +1377,7 @@ void RaytracingHandler::createRtShaderBindingTable(VulkanEngine* engine) {
 void RaytracingHandler::raytrace(VkCommandBuffer cmd, VulkanEngine* engine) {
 	
 
+	VkDescriptorSet globalDescriptor = engine->get_current_frame()._frameDescriptors.allocate(engine->_device, engine->_gpuSceneDataDescriptorLayout);
 
 	
 

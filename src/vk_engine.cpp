@@ -41,7 +41,7 @@
 //#include <windows.h>
 //#include <tchar.h>
 
-constexpr bool bUseValidationLayers = true;
+constexpr bool bUseValidationLayers = false;
 
 
 VulkanEngine* loadedEngine = nullptr;
@@ -717,7 +717,13 @@ void VulkanEngine::prepare_lighting_data() {
 		shaderLight.sunAngle = light->sunAngle;
 		if (light->type == LightType::Directional) {
 			shaderLight.pdf = 1.0f / lightCount;
-			shaderLight.intensity = light->intensity*10;
+			shaderLight.intensity = light->intensity;
+
+			float cosMax = cos(shaderLight.sunAngle / 2.0);
+
+			float coneSolidAngle = 2.0 * glm::pi<float>() * (1.0 - cosMax);
+
+			shaderLight.pdf = coneSolidAngle;
 
 		}
 		else if (light->type == LightType::Point){
@@ -1687,7 +1693,7 @@ void VulkanEngine::init_descriptors(){
 	std::vector<DescriptorAllocatorGrowable::PoolSizeRatio> sizes =
 	{
 		{ VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 10 },
-		{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 10 }
+		{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 30 }
 		,
 		{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 300},
 		{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 100 },
@@ -1801,14 +1807,14 @@ void VulkanEngine::init_descriptors(){
 	for (int i = 0; i < FRAME_OVERLAP; i++) {
 		// create a descriptor pool
 		std::vector<DescriptorAllocatorGrowable::PoolSizeRatio> frame_sizes = { 
-			{ VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 3 },
+			{ VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,10 },
 			{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 100 },
-			{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 3 },
-			{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 4 },
+			{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 10 },
+			{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 10 },
 		};
 
 		_frames[i]._frameDescriptors = DescriptorAllocatorGrowable{};
-		_frames[i]._frameDescriptors.init(_device,&_allocator, 1000, frame_sizes,true);
+		_frames[i]._frameDescriptors.init(_device,&_allocator, 100, frame_sizes,true);
 	
 		_mainDeletionQueue.push_function([&, i]() {
 			_frames[i]._frameDescriptors.destroy_pools(_device);
@@ -2691,16 +2697,16 @@ void VulkanEngine::update_scene()
 	}
 
 	mainCamera->update();
-	//glm::vec3 jitter = glm::ballRand(0.001);
+	glm::vec3 jitter = glm::ballRand(0.1);
 
-	glm::mat4 view = mainCamera->getViewMatrix(glm::vec3(0.0));
+	glm::mat4 view = mainCamera->getViewMatrix(jitter);
 	glm::mat4 rasterizationProjection = mainCamera->getProjectionMatrix(false);
 	glm::mat4 rayTracingProjection = mainCamera->getProjectionMatrix(true);
 
 
 	
 
-	sceneData.proj = rasterizationProjection;
+	sceneData.proj = rayTracingProjection;
 	// Invert the Y direction on projection matrix to match OpenGL and glTF conventions
 	sceneData.view = view;
 	sceneData.viewproj = sceneData.proj * sceneData.view;
