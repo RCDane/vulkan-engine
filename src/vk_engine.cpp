@@ -1,8 +1,8 @@
 ﻿//> includes
 #include "vk_engine.h"
 
-#include <SDL.h>
-#include <SDL_vulkan.h>
+#include <SDL3/SDL.h>
+#include <SDL3/SDL_vulkan.h>
 
 #include <string>
 #include <vk_initializers.h>
@@ -16,7 +16,7 @@
 
 #include "glm/ext/vector_float3.hpp"
 #include "imgui.h"
-#include "imgui_impl_sdl2.h"
+#include "imgui_impl_sdl3.h"
 #include "imgui_impl_vulkan.h"
 #include "shadows.h"
 #include <raytracing.h>
@@ -41,7 +41,7 @@
 //#include <windows.h>
 //#include <tchar.h>
 
-constexpr bool bUseValidationLayers = false;
+constexpr bool bUseValidationLayers = true;
 
 
 VulkanEngine* loadedEngine = nullptr;
@@ -66,15 +66,14 @@ void VulkanEngine::init()
 
     _window = SDL_CreateWindow(
         "Vulkan Engine",
-        SDL_WINDOWPOS_UNDEFINED,
-        SDL_WINDOWPOS_UNDEFINED,
         _windowExtent.width,
         _windowExtent.height,
         window_flags);
-	SDL_Renderer* renderer = SDL_CreateRenderer(_window, 0, SDL_RENDERER_ACCELERATED);
-
-	SDL_SetWindowFullscreen(_window, 0);
-	SDL_RenderSetVSync(renderer, 0);
+	//SDL_Renderer* renderer = SDL_CreateRenderer(_window, "vulkan");
+	
+	
+	//SDL_SetWindowFullscreen(_window, 0);
+	//SDL_SetRenderVSync(renderer, 0);
     init_vulkan();
 
     init_swapchain();
@@ -634,7 +633,7 @@ void VulkanEngine::draw()
 
 	VkCommandBufferSubmitInfo cmdinfo = vkinit::command_buffer_submit_info(cmd);	
 	
-	VkSemaphoreSubmitInfo waitInfo = vkinit::semaphore_submit_info(VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT_KHR,get_current_frame()._swapchainSemaphore);
+	VkSemaphoreSubmitInfo waitInfo = vkinit::semaphore_submit_info(VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT,get_current_frame()._swapchainSemaphore);
 	VkSemaphoreSubmitInfo signalInfo = vkinit::semaphore_submit_info(VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT, get_current_frame()._renderSemaphore);	
 	
 	VkSubmitInfo2 submit = vkinit::submit_info(&cmdinfo,&signalInfo,&waitInfo);	
@@ -1213,22 +1212,20 @@ void VulkanEngine::run()
 		auto start = std::chrono::system_clock::now();
         while (SDL_PollEvent(&e) != 0) {
             // close the window when user alt-f4s or clicks the X button
-            if (e.type == SDL_QUIT)
+            if (e.type == SDL_EVENT_QUIT)
                 bQuit = true;
 
 		    mainCamera->processSDLEvent(e);
 			
 
 
-            if (e.type == SDL_WINDOWEVENT) {
-                if (e.window.event == SDL_WINDOWEVENT_MINIMIZED) {
+                if (e.window.type == SDL_EVENT_WINDOW_MINIMIZED) {
                     stop_rendering = true;
                 }
-                if (e.window.event == SDL_WINDOWEVENT_RESTORED) {
+                if (e.window.type == SDL_EVENT_WINDOW_RESTORED) {
                     stop_rendering = false;
                 }
-            }
-			ImGui_ImplSDL2_ProcessEvent(&e);
+			ImGui_ImplSDL3_ProcessEvent(&e);
         }
 
         // do not draw if we are minimized
@@ -1245,7 +1242,7 @@ void VulkanEngine::run()
 
 		// imgui new frame
 		ImGui_ImplVulkan_NewFrame();
-		ImGui_ImplSDL2_NewFrame();
+		ImGui_ImplSDL3_NewFrame();
 		ImGui::NewFrame();
 
 
@@ -1292,26 +1289,35 @@ void VulkanEngine::init_vulkan()
 {
     vkb::InstanceBuilder builder;
 
+	Uint32 count_instance_extensions;
+	const char * const *instance_extensions = SDL_Vulkan_GetInstanceExtensions(&count_instance_extensions);
 
 
 	auto inst_ret = builder.set_app_name("Example Vulkan Application")
-		.request_validation_layers(bUseValidationLayers)
-		.add_validation_feature_disable(VK_VALIDATION_FEATURE_DISABLE_UNIQUE_HANDLES_EXT)
-		.use_default_debug_messenger()
-		.require_api_version(1, 3, 0)
+				.set_engine_name("test");
+	auto inst_ret2 = inst_ret.use_default_debug_messenger();
+	auto inst_ret3 = inst_ret2.require_api_version(1, 3, 0).request_validation_layers(bUseValidationLayers);
+		
+		//.add_validation_feature_disable(VK_VALIDATION_FEATURE_DISABLE_UNIQUE_HANDLES_EXT)
 		//.add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_BEST_PRACTICES_EXT)
-		.add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT)
+		//.add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT)
 		//.add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_RESERVE_BINDING_SLOT_EXT)
 		//.add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT) // Add validation features
-		.build();
-
-    vkb::Instance vkb_inst = inst_ret.value();
+	auto inst_ret4 = inst_ret3.build();
+	if (!inst_ret4) {
+		std::cerr << "Failed to create Vulkan instance. Error: " << inst_ret4.error().message() << "\n";
+		return ;
+	}
+    vkb::Instance vkb_inst = inst_ret4.value();
 
     _instance =vkb_inst.instance;
     _debug_messenger = vkb_inst.debug_messenger;
 
 
-    SDL_Vulkan_CreateSurface(_window, _instance, &_surface);
+	if (!SDL_Vulkan_CreateSurface(_window, _instance, NULL, &_surface)) {
+		std::cerr << "Failed to create SDL Vulkan surface. Error: " << SDL_GetError() << "\n";
+		return;
+	}
 
 	VkPhysicalDeviceDynamicRenderingLocalReadFeaturesKHR localreadfeatures =
 	{
@@ -1380,7 +1386,7 @@ void VulkanEngine::init_vulkan()
 	vkb::PhysicalDeviceSelector selector{ vkb_inst };
 	
 
-	vkb::PhysicalDevice physicalDevice = selector
+	auto tmp = selector
 		.set_minimum_version(1, 3)
 		.set_required_features(deviceFeatures)
 		.add_required_extension("VK_KHR_acceleration_structure")
@@ -1394,10 +1400,7 @@ void VulkanEngine::init_vulkan()
 		.add_required_extension_features(accelerationStructureFeatures)
 		.add_required_extension_features(shaderClockFeatures)
 		.add_required_extension_features(rtPipelineFeatures)
-		.add_desired_extension("VK_EXT_debug_utils")
-		.add_desired_extension("VK_EXT_debug_marker")
 		.add_required_extension("VK_EXT_descriptor_buffer")
-		.add_desired_extension("VK_EXT_validation_features")
 		.add_required_extension("VK_NV_ray_tracing_validation")
 		.add_required_extension("VK_KHR_dynamic_rendering_local_read")
 		.add_required_extension_features(rtValidationFeatures)
@@ -1406,19 +1409,35 @@ void VulkanEngine::init_vulkan()
 		.set_required_features_13(features)
 		.set_required_features_12(features12)
 		.set_required_features_11(features11)
-		.set_surface(_surface)
-		.select()
-		.value();
+		.set_surface(_surface);
 
+
+	
+	auto physicalDevice = tmp.select();
+
+	if (!physicalDevice) {
+		std::cerr << "Failed to create Vulkan instance. Error: " << physicalDevice.error().message() << "\n";
+		
+		return;
+	}
+
+	//.add_required_extension("VK_EXT_debug_utils")
+		//.add_required_extension("VK_EXT_debug_marker")
+		//.add_required_extension("VK_EXT_validation_features")
+
+	auto device = physicalDevice.value();
+	//device.enable_extension_if_present(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+	//device.enable_extension_if_present(VK_EXT_DEBUG_MARKER_EXTENSION_NAME);
+	//device.enable_extension_if_present(VK_EXT_VALIDATION_FEATURES_EXTENSION_NAME);
 
     //create the final vulkan device
-	vkb::DeviceBuilder deviceBuilder{ physicalDevice };
+	vkb::DeviceBuilder deviceBuilder{ device };
 
 	vkb::Device vkbDevice = deviceBuilder.build().value();
 
 	// Get the VkDevice handle used in the rest of a vulkan application
 	_device = vkbDevice.device;
-	_chosenGPU = physicalDevice.physical_device;
+	_chosenGPU = device;
 
     _graphicsQueue = vkbDevice.get_queue(vkb::QueueType::graphics).value();
     _graphicsQueueFamily = vkbDevice.get_queue_index(vkb::QueueType::graphics).value();
@@ -1450,15 +1469,22 @@ void VulkanEngine::create_swapchain(uint32_t width, uint32_t height)
 
 	_swapchainImageFormat = VK_FORMAT_B8G8R8A8_UNORM;
 
-	vkb::Swapchain vkbSwapchain = swapchainBuilder
+	auto tmp = swapchainBuilder
 		//.use_default_format_selection()
 		.set_desired_format(VkSurfaceFormatKHR{ .format = _swapchainImageFormat, .colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR })
 		//use vsync present mode
-		.set_desired_present_mode(VK_PRESENT_MODE_IMMEDIATE_KHR)
+		.set_desired_present_mode(VK_PRESENT_MODE_MAILBOX_KHR)
 		.set_desired_extent(width, height)
 		.add_image_usage_flags(VK_IMAGE_USAGE_TRANSFER_DST_BIT)
-		.build()
-		.value();
+		.build();
+
+
+	if (!tmp) {
+			std::cerr << "Failed to create Vulkan swapchain. Error: " << tmp.error().message() << "\n";
+
+			return;
+	}
+	vkb::Swapchain vkbSwapchain = tmp.value();
 
 	_swapchainExtent = vkbSwapchain.extent;
 	//store swapchain and its related images
@@ -2035,7 +2061,7 @@ void VulkanEngine::init_imgui()
 	ImGui::CreateContext();
 
 	// this initializes imgui for SDL
-	ImGui_ImplSDL2_InitForVulkan(_window);
+	ImGui_ImplSDL3_InitForVulkan(_window);
 
 	// this initializes imgui for Vulkan
 	ImGui_ImplVulkan_InitInfo init_info = {};
@@ -2699,7 +2725,7 @@ void VulkanEngine::update_scene()
 	mainCamera->update();
 	glm::vec3 jitter = glm::ballRand(0.1);
 
-	glm::mat4 view = mainCamera->getViewMatrix(jitter);
+	glm::mat4 view = mainCamera->getViewMatrix(glm::vec3(0.0));
 	glm::mat4 rasterizationProjection = mainCamera->getProjectionMatrix(false);
 	glm::mat4 rayTracingProjection = mainCamera->getProjectionMatrix(true);
 

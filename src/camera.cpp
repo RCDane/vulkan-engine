@@ -1,5 +1,7 @@
-﻿#include <SDL_events.h>
-#include <SDL_mouse.h>
+﻿#include <SDL3/SDL_events.h>
+#include <SDL3/SDL_mouse.h>
+#include <SDL3/SDL_keyboard.h>
+#include <SDL3/SDL_keycode.h>
 #include <camera.h>
 #include <glm/gtx/transform.hpp>
 #include <glm/gtx/quaternion.hpp>
@@ -16,30 +18,30 @@ bool Camera::isMoving() {
 
 void Camera::processSDLEvent(SDL_Event& e)
 {
-    if (e.type == SDL_KEYDOWN) {
-        if (e.key.keysym.sym == SDLK_w) { velocity.z = -1; }
-        if (e.key.keysym.sym == SDLK_s) { velocity.z = 1; }
-        if (e.key.keysym.sym == SDLK_a) { velocity.x = -1; }
-        if (e.key.keysym.sym == SDLK_d) { velocity.x = 1; }
+    if (e.type == SDL_EVENT_KEY_DOWN) {
+        if (e.key.key == SDLK_W) { velocity.z = -1; }
+        if (e.key.key== SDLK_S) { velocity.z = 1; }
+        if (e.key.key== SDLK_A) { velocity.x = -1; }
+        if (e.key.key== SDLK_D) { velocity.x = 1; }
     }
 
-    if (e.type == SDL_KEYUP) {
-        if (e.key.keysym.sym == SDLK_w) { velocity.z = 0; }
-        if (e.key.keysym.sym == SDLK_s) { velocity.z = 0; }
-        if (e.key.keysym.sym == SDLK_a) { velocity.x = 0; }
-        if (e.key.keysym.sym == SDLK_d) { velocity.x = 0; }
+    if (e.type == SDL_EVENT_KEY_UP) {
+        if (e.key.key== SDLK_W) { velocity.z = 0; }
+        if (e.key.key== SDLK_S) { velocity.z = 0; }
+        if (e.key.key== SDLK_A) { velocity.x = 0; }
+        if (e.key.key== SDLK_D) { velocity.x = 0; }
     }
 
-    if (e.type == SDL_MOUSEBUTTONDOWN && e.button .button== SDL_BUTTON_RIGHT){
+    if (e.type == SDL_EVENT_MOUSE_BUTTON_DOWN && e.button .button== SDL_BUTTON_RIGHT){
         rightClick = true;
     }
-    else if (e.type == SDL_MOUSEBUTTONUP && e.button .button== SDL_BUTTON_RIGHT) {
+    else if (e.type == SDL_EVENT_MOUSE_BUTTON_UP && e.button .button== SDL_BUTTON_RIGHT) {
         rightClick = false;
 
     }
        
 
-    if (e.type == SDL_MOUSEMOTION && rightClick) {
+    if (e.type == SDL_EVENT_MOUSE_MOTION && rightClick) {
         yaw += (float)e.motion.xrel / 200.f;
         pitch -= (float)e.motion.yrel / 200.f;
     }

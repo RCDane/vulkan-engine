@@ -34,6 +34,10 @@
 #define VKB_MAKE_VK_VERSION(variant, major, minor, patch) VK_MAKE_VERSION(major, minor, patch)
 #endif
 
+#if defined(VK_API_VERSION_1_4) || defined(VK_VERSION_1_4)
+#define VKB_VK_API_VERSION_1_4 VKB_MAKE_VK_VERSION(0, 1, 4, 0)
+#endif
+
 #if defined(VK_API_VERSION_1_3) || defined(VK_VERSION_1_3)
 #define VKB_VK_API_VERSION_1_3 VKB_MAKE_VK_VERSION(0, 1, 3, 0)
 #endif
@@ -75,6 +79,7 @@ template <typename T> class Result {
             m_error = expected.m_error;
     }
     Result& operator=(Result const& result) noexcept {
+        destroy();
         m_init = result.m_init;
         if (m_init)
             new (&m_value) T{ result.m_value };
@@ -87,9 +92,9 @@ template <typename T> class Result {
             new (&m_value) T{ std::move(expected.m_value) };
         else
             m_error = std::move(expected.m_error);
-        expected.destroy();
     }
     Result& operator=(Result&& result) noexcept {
+        destroy();
         m_init = result.m_init;
         if (m_init)
             new (&m_value) T{ std::move(result.m_value) };
@@ -165,8 +170,10 @@ struct GenericFeaturesPNextNode {
 
     GenericFeaturesPNextNode();
 
+    void disable_fields();
+
     template <typename T> GenericFeaturesPNextNode(T const& features) noexcept {
-        memset(fields, UINT8_MAX, sizeof(VkBool32) * field_capacity);
+        disable_fields();
         memcpy(this, &features, sizeof(T));
     }
 
@@ -185,7 +192,7 @@ struct GenericFeatureChain {
     template <typename T> void add(T const& features) noexcept {
         // If this struct is already in the list, combine it
         for (auto& node : nodes) {
-            if (features.sType == node.sType) {
+            if (static_cast<VkStructureType>(features.sType) == node.sType) {
                 node.combine(features);
                 return;
             }
@@ -194,7 +201,8 @@ struct GenericFeatureChain {
         nodes.push_back(features);
     }
 
-    bool match(GenericFeatureChain const& extension_requested) const noexcept;
+    bool match_all(GenericFeatureChain const& extension_requested) const noexcept;
+    bool find_and_match(GenericFeatureChain const& extension_requested) const noexcept;
 
     void chain_up(VkPhysicalDeviceFeatures2& feats2) noexcept;
 
@@ -208,6 +216,8 @@ enum class InstanceError {
     vulkan_version_unavailable,
     vulkan_version_1_1_unavailable,
     vulkan_version_1_2_unavailable,
+    vulkan_version_1_3_unavailable,
+    vulkan_version_1_4_unavailable,
     failed_create_instance,
     failed_create_debug_messenger,
     requested_layers_not_present,
@@ -273,11 +283,18 @@ struct SystemInfo {
     bool is_layer_available(const char* layer_name) const;
     // Returns true if an extension is available
     bool is_extension_available(const char* extension_name) const;
+    // Returns true if the Instance API Version is greater than or equal to the specified version
+    bool is_instance_version_available(uint32_t major_api_version, uint32_t minor_api_version);
+    // Returns true if the Instance API Version is greater than or equal to the specified version.
+    // Should be constructed with VK_MAKE_VERSION or VK_MAKE_API_VERSION.
+    bool is_instance_version_available(uint32_t api_version);
 
     std::vector<VkLayerProperties> available_layers;
     std::vector<VkExtensionProperties> available_extensions;
     bool validation_layers_available = false;
     bool debug_utils_available = false;
+
+    uint32_t instance_api_version = VKB_VK_API_VERSION_1_0;
 };
 
 // Forward declared - check VkBoostrap.cpp for implementations
@@ -292,9 +309,13 @@ inline VKAPI_ATTR VkBool32 VKAPI_CALL default_debug_callback(VkDebugUtilsMessage
     void*) {
     auto ms = to_string_message_severity(messageSeverity);
     auto mt = to_string_message_type(messageType);
-    printf("[%s: %s]\n%s\n", ms, mt, pCallbackData->pMessage);
+    if (messageType & VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT) {
+        printf("[%s: %s] - %s\n%s\n", ms, mt, pCallbackData->pMessageIdName, pCallbackData->pMessage);
+    } else {
+        printf("[%s: %s]\n%s\n", ms, mt, pCallbackData->pMessage);
+    }
 
-    return VK_FALSE; // Applications must return false here
+    return VK_FALSE; // Applications must return false here (Except Validation, if return true, will skip calling to driver)
 }
 
 class InstanceBuilder;
@@ -303,9 +324,13 @@ class PhysicalDeviceSelector;
 struct Instance {
     VkInstance instance = VK_NULL_HANDLE;
     VkDebugUtilsMessengerEXT debug_messenger = VK_NULL_HANDLE;
-    VkAllocationCallbacks* allocation_callbacks = VK_NULL_HANDLE;
+    VkAllocationCallbacks* allocation_callbacks = nullptr;
     PFN_vkGetInstanceProcAddr fp_vkGetInstanceProcAddr = nullptr;
     PFN_vkGetDeviceProcAddr fp_vkGetDeviceProcAddr = nullptr;
+    // The apiVersion used to create the instance
+    uint32_t instance_version = VKB_VK_API_VERSION_1_0;
+    // The instance version queried from vkEnumerateInstanceVersion
+    uint32_t api_version = VKB_VK_API_VERSION_1_0;
 
     // A conversion function which allows this Instance to be used
     // in places where VkInstance would have been used.
@@ -317,8 +342,6 @@ struct Instance {
     private:
     bool headless = false;
     bool properties2_ext_enabled = false;
-    uint32_t instance_version = VKB_VK_API_VERSION_1_0;
-    uint32_t api_version = VKB_VK_API_VERSION_1_0;
 
     friend class InstanceBuilder;
     friend class PhysicalDeviceSelector;
@@ -332,7 +355,7 @@ void destroy_instance(Instance const& instance); // release instance resources
 
 #if defined(_WIN32)
     VK_KHR_win32_surface
-#elif defined(__linux__)
+#elif defined(__linux__) || defined(__FreeBSD__)
     VK_KHR_xcb_surface
     VK_KHR_xlib_surface
     VK_KHR_wayland_surface
@@ -386,15 +409,6 @@ class InstanceBuilder {
     InstanceBuilder& set_minimum_instance_version(uint32_t minimum_instance_version);
     // Overrides required API version for instance creation. Will fail to create if this version isn't available.
     InstanceBuilder& set_minimum_instance_version(uint32_t major, uint32_t minor, uint32_t patch = 0);
-
-    // Prefer a vulkan instance API version. If the desired version isn't available, it will use the
-    // highest version available. Should be constructed with VK_MAKE_VERSION or VK_MAKE_API_VERSION.
-    [[deprecated("Use require_api_version + set_minimum_instance_version instead.")]] InstanceBuilder&
-    desire_api_version(uint32_t preferred_vulkan_version);
-
-    // Prefer a vulkan instance API version. If the desired version isn't available, it will use the highest version available.
-    [[deprecated("Use require_api_version + set_minimum_instance_version instead.")]] InstanceBuilder&
-    desire_api_version(uint32_t major, uint32_t minor, uint32_t patch = 0);
 
     // Adds a layer to be enabled. Will fail to create an instance if the layer isn't available.
     InstanceBuilder& enable_layer(const char* layer_name);
@@ -450,7 +464,6 @@ class InstanceBuilder {
         uint32_t engine_version = 0;
         uint32_t minimum_instance_version = 0;
         uint32_t required_api_version = VKB_VK_API_VERSION_1_0;
-        uint32_t desired_api_version = VKB_VK_API_VERSION_1_0;
 
         // VkInstanceCreateInfo
         std::vector<const char*> layers;
@@ -473,7 +486,7 @@ class InstanceBuilder {
         std::vector<VkValidationFeatureDisableEXT> disabled_validation_features;
 
         // Custom allocator
-        VkAllocationCallbacks* allocation_callbacks = VK_NULL_HANDLE;
+        VkAllocationCallbacks* allocation_callbacks = nullptr;
 
         bool request_validation_layers = false;
         bool enable_validation_layers = false;
@@ -528,6 +541,11 @@ struct PhysicalDevice {
     // Returns true if an extension should be enabled on the device
     bool is_extension_present(const char* extension) const;
 
+    // Returns true if all the features are present
+    template <typename T> bool are_extension_features_present(T const& features) const {
+        return is_features_node_present(detail::GenericFeaturesPNextNode(features));
+    }
+
     // If the given extension is present, make the extension be enabled on the device.
     // Returns true the extension is present.
     bool enable_extension_if_present(const char* extension);
@@ -537,11 +555,11 @@ struct PhysicalDevice {
     bool enable_extensions_if_present(const std::vector<const char*>& extensions);
 
     // If the features from VkPhysicalDeviceFeatures are all present, make all of the features be enable on the device.
-    // Returns true all of the features are present.
+    // Returns true if all the features are present.
     bool enable_features_if_present(const VkPhysicalDeviceFeatures& features_to_enable);
 
     // If the features from the provided features struct are all present, make all of the features be enable on the
-    // device. Returns true all of the features are present.
+    // device. Returns true if all of the features are present.
     template <typename T> bool enable_extension_features_if_present(T const& features_check) {
         return enable_features_node_if_present(detail::GenericFeaturesPNextNode(features_check));
     }
@@ -564,21 +582,15 @@ struct PhysicalDevice {
     friend class PhysicalDeviceSelector;
     friend class DeviceBuilder;
 
+    bool is_features_node_present(detail::GenericFeaturesPNextNode const& node) const;
     bool enable_features_node_if_present(detail::GenericFeaturesPNextNode const& node);
 };
 
 enum class PreferredDeviceType { other = 0, integrated = 1, discrete = 2, virtual_gpu = 3, cpu = 4 };
 
-enum class DeviceSelectionMode {
-    // return all suitable and partially suitable devices
-    partially_and_fully_suitable,
-    // return only physical devices which are fully suitable
-    only_fully_suitable
-};
 
-// Enumerates the physical devices on the system, and based on the added criteria, returns a physical device or list of physical devies
-// A device is considered suitable if it meets all the 'required' and 'desired' criteria.
-// A device is considered partially suitable if it meets only the 'required' criteria.
+// Enumerates the physical devices on the system, and based on the added criteria, returns a physical device or list of
+// physical devies A device is considered suitable if it meets all the 'required' criteria.
 class PhysicalDeviceSelector {
     public:
     // Requires a vkb::Instance to construct, needed to pass instance creation info.
@@ -588,15 +600,13 @@ class PhysicalDeviceSelector {
 
     // Return the first device which is suitable
     // use the `selection` parameter to configure if partially
-    Result<PhysicalDevice> select(DeviceSelectionMode selection = DeviceSelectionMode::partially_and_fully_suitable) const;
+    Result<PhysicalDevice> select() const;
 
     // Return all devices which are considered suitable - intended for applications which want to let the user pick the physical device
-    Result<std::vector<PhysicalDevice>> select_devices(
-        DeviceSelectionMode selection = DeviceSelectionMode::partially_and_fully_suitable) const;
+    Result<std::vector<PhysicalDevice>> select_devices() const;
 
     // Return the names of all devices which are considered suitable - intended for applications which want to let the user pick the physical device
-    Result<std::vector<std::string>> select_device_names(
-        DeviceSelectionMode selection = DeviceSelectionMode::partially_and_fully_suitable) const;
+    Result<std::vector<std::string>> select_device_names() const;
 
     // Set the surface in which the physical device should render to.
     // Be sure to set it if swapchain functionality is to be used.
@@ -624,25 +634,12 @@ class PhysicalDeviceSelector {
 
     // Require a memory heap from VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT with `size` memory available.
     PhysicalDeviceSelector& required_device_memory_size(VkDeviceSize size);
-    // Prefer a memory heap from VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT with `size` memory available.
-    [[deprecated]] PhysicalDeviceSelector& desired_device_memory_size(VkDeviceSize size);
 
     // Require a physical device which supports a specific extension.
     PhysicalDeviceSelector& add_required_extension(const char* extension);
     // Require a physical device which supports a set of extensions.
     PhysicalDeviceSelector& add_required_extensions(std::vector<const char*> const& extensions);
     PhysicalDeviceSelector& add_required_extensions(size_t count, const char* const* extensions);
-
-    // Prefer a physical device which supports a specific extension.
-    [[deprecated("Use vkb::PhysicalDevice::enable_extension_if_present instead")]] PhysicalDeviceSelector&
-    add_desired_extension(const char* extension);
-    // Prefer a physical device which supports a set of extensions.
-    [[deprecated("Use vkb::PhysicalDevice::enable_extensions_if_present instead")]] PhysicalDeviceSelector&
-    add_desired_extensions(const std::vector<const char*>& extensions);
-
-    // Prefer a physical device that supports a (major, minor) version of vulkan.
-    [[deprecated("Use set_minimum_version + InstanceBuilder::require_api_version.")]] PhysicalDeviceSelector&
-    set_desired_version(uint32_t major, uint32_t minor);
 
     // Require a physical device that supports a (major, minor) version of vulkan.
     PhysicalDeviceSelector& set_minimum_version(uint32_t major, uint32_t minor);
@@ -673,6 +670,11 @@ class PhysicalDeviceSelector {
     // Require a physical device which supports the features in VkPhysicalDeviceVulkan13Features.
     // Must have vulkan version 1.3
     PhysicalDeviceSelector& set_required_features_13(VkPhysicalDeviceVulkan13Features const& features_13);
+#endif
+#if defined(VKB_VK_API_VERSION_1_4)
+    // Require a physical device which supports the features in VkPhysicalDeviceVulkan13Features.
+    // Must have vulkan version 1.4
+    PhysicalDeviceSelector& set_required_features_14(VkPhysicalDeviceVulkan14Features const& features_14);
 #endif
 
     // Used when surface creation happens after physical device selection.
@@ -705,13 +707,10 @@ class PhysicalDeviceSelector {
         bool require_separate_transfer_queue = false;
         bool require_separate_compute_queue = false;
         VkDeviceSize required_mem_size = 0;
-        VkDeviceSize desired_mem_size = 0;
 
         std::vector<std::string> required_extensions;
-        std::vector<std::string> desired_extensions;
 
         uint32_t required_version = VKB_VK_API_VERSION_1_0;
-        uint32_t desired_version = VKB_VK_API_VERSION_1_0;
 
         VkPhysicalDeviceFeatures required_features{};
         VkPhysicalDeviceFeatures2 required_features2{};
@@ -727,7 +726,7 @@ class PhysicalDeviceSelector {
 
     PhysicalDevice::Suitable is_device_suitable(PhysicalDevice const& phys_device) const;
 
-    Result<std::vector<PhysicalDevice>> select_impl(DeviceSelectionMode selection) const;
+    Result<std::vector<PhysicalDevice>> select_impl() const;
 };
 
 // ---- Queue ---- //
@@ -735,7 +734,7 @@ enum class QueueType { present, graphics, compute, transfer };
 
 namespace detail {
 // Sentinel value, used in implementation only
-inline const uint32_t QUEUE_INDEX_MAX_VALUE = 65536;
+inline const uint32_t QUEUE_INDEX_MAX_VALUE = UINT32_MAX;
 } // namespace detail
 
 // ---- Device ---- //
@@ -745,7 +744,7 @@ struct Device {
     PhysicalDevice physical_device;
     VkSurfaceKHR surface = VK_NULL_HANDLE;
     std::vector<VkQueueFamilyProperties> queue_families;
-    VkAllocationCallbacks* allocation_callbacks = VK_NULL_HANDLE;
+    VkAllocationCallbacks* allocation_callbacks = nullptr;
     PFN_vkGetDeviceProcAddr fp_vkGetDeviceProcAddr = nullptr;
     uint32_t instance_version = VKB_VK_API_VERSION_1_0;
 
@@ -810,7 +809,7 @@ class DeviceBuilder {
         VkDeviceCreateFlags flags = static_cast<VkDeviceCreateFlags>(0);
         std::vector<VkBaseOutStructure*> pNext_chain;
         std::vector<CustomQueueDescription> queue_descriptions;
-        VkAllocationCallbacks* allocation_callbacks = VK_NULL_HANDLE;
+        VkAllocationCallbacks* allocation_callbacks = nullptr;
     } info;
 };
 
@@ -827,7 +826,7 @@ struct Swapchain {
     uint32_t requested_min_image_count = 0;
     VkPresentModeKHR present_mode = VK_PRESENT_MODE_IMMEDIATE_KHR; // The present mode actually used when creating the swapchain.
     uint32_t instance_version = VKB_VK_API_VERSION_1_0;
-    VkAllocationCallbacks* allocation_callbacks = VK_NULL_HANDLE;
+    VkAllocationCallbacks* allocation_callbacks = nullptr;
 
     // Returns a vector of VkImage handles to the swapchain.
     Result<std::vector<VkImage>> get_images();
@@ -985,7 +984,7 @@ class SwapchainBuilder {
         std::vector<VkPresentModeKHR> desired_present_modes;
         bool clipped = true;
         VkSwapchainKHR old_swapchain = VK_NULL_HANDLE;
-        VkAllocationCallbacks* allocation_callbacks = VK_NULL_HANDLE;
+        VkAllocationCallbacks* allocation_callbacks = nullptr;
     } info;
 };
 

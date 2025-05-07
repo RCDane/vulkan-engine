@@ -13,7 +13,7 @@
 
 // clang-format off
 layout(location = 0) rayPayloadEXT hitPayload prd;
-layout(location = 2) rayPayloadEXT bool isShadowed2;
+layout(location = 1) rayPayloadEXT bool isShadowed;
 
 layout(set = 0, binding = eTlas) uniform accelerationStructureEXT topLevelAS;
 layout(set = 0, binding = eOutImage, rgba16f) uniform image2D image;
@@ -115,7 +115,7 @@ vec3 sampleGGXDirection(
     // }
 
     // 2) Otherwise clamp and do regular GGX sampling
-    float a = max(roughness * roughness, 1e-4);
+    float a = max(roughness, 1e-2);
     float u1 = rnd(seed), u2 = rnd(seed);
 
     float phi  = 2.0 * PI * u1;
@@ -214,14 +214,14 @@ void main()
   prd.normal = N;
   prd.attenuation = vec3(1.0);
   vec3 F0 = mix(vec3(0.04), albedoColor.xyz, metalness);
-	vec3 rayOrigin = prd.rayOrigin + V*e;
+	vec3 rayOrigin = prd.rayOrigin;
 	vec3 hitNormal = prd.normal;
   createCoordinateSystem(hitNormal, tangent, bitangent);
 
 	// vec3 rayDirection = samplingHemisphere(prd.seed, tangent, bitangent, hitNormal);
   float pdf = 0.0;
   vec3 rayDirection = sampleGGXDirection(
-      prd.normal,
+      hitNormal,
       V,
       roughness,
       tangent,
@@ -239,18 +239,18 @@ void main()
 		prd.depth += 1;
 		prd.rayDir = rayDirection;
     prd.hitValue = vec3(0);
-		// traceRayEXT(topLevelAS,  // acceleration structure
-		// 				flags,       // rayFlags
-		// 				0xFF,        // cullMask
-		// 				0,           // sbtRecordOffset 
-		// 				0,           // sbtRecordStride
-		// 				0,           // missIndex
-		// 				rayOrigin,      // ray origin
-		// 				tMin,        // ray min range
-		// 				rayDirection,      // ray direction
-		// 				tMax,        // ray max range
-		// 				0            // payload is payload
-		// );
+		traceRayEXT(topLevelAS,  // acceleration structure
+						flags,       // rayFlags
+						0xFF,        // cullMask
+						0,           // sbtRecordOffset 
+						0,           // sbtRecordStride
+						0,           // missIndex
+						rayOrigin,      // ray origin
+						tMin,        // ray min range
+						rayDirection,      // ray direction
+						tMax,        // ray max range
+						0            // payload is payload
+		);
   	// float cosNL    = max(dot(N, rayDirection), 0.0);
     // float hemiPdf  = cosNL / PI;
     // float invPdf   = PI / max(cosNL, 1e-6);
@@ -288,14 +288,14 @@ void main()
   vec3 directIllumination = vec3(0.0); 
 
   vec3 L = normalize(Ls.direction); 
-  isShadowed2   = true; 
+  isShadowed   = true; 
 
     if(dot(N, L) > 0) 
     {
       
       float tMin   = 0.01;
       float tMax   = Ls.distance; 
-      vec3  rayOrigin = vec3(worldPos) + L*e; // offset the ray origin to avoid self-intersection
+      vec3  rayOrigin = vec3(worldPos); // offset the ray origin to avoid self-intersection
       vec3  rayDir = L; 
       uint  flags  = gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsOpaqueEXT | gl_RayFlagsSkipClosestHitShaderEXT;
       traceRayEXT(topLevelAS,  // acceleration structure
@@ -308,12 +308,12 @@ void main()
             tMin,        // ray min range
             Ls.direction,      // ray direction
             tMax,        // ray max range
-            2            // payload is isShadowed
+            1            // payload is isShadowed
       );
  
       
     }
-    if (!isShadowed2) { 
+    if (!isShadowed) { 
         PBR_result res =  CalculatePBRResult(N,V,L,albedoColor.xyz, Ls.color, float(Ls.intensity), F0, metalness, roughness);
         directIllumination += ((res.color * Ls.attenuation)) / Ls.pdf; // divide by the pdf of the light sample
 
@@ -331,15 +331,18 @@ void main()
   vec3 accumulatedColor = currentColor.rgb 
                         + (combined - currentColor.rgb) * invNext;
 
-  if (isShadowed2) {
-    accumulatedColor = vec3(0.0); // If the pixel is shadowed, set the color to black
+  // if (isShadowed2) {
+  //   accumulatedColor = vec3(0.0); // If the pixel is shadowed, set the color to black
+  // }
+  // else {
+  //   accumulatedColor = vec3(1.0); // Invert the color if not shadowed
+  // }
+  if (any(isnan(combined)))
+  {
+    combined = vec3(1.0,0.0,1.0);
   }
-  else {
-    accumulatedColor = vec3(1.0); // Invert the color if not shadowed
-  }
-
   imageStore(colorHistory,
             ivec2(gl_LaunchIDEXT.xy),
-            vec4(worldPos.xyz/50.0,1.0)); // store the color in the history buffer
+            vec4(rayDirection,1.0)); // store the color in the history buffer
 
 }

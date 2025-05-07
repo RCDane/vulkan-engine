@@ -36,7 +36,7 @@ void main()
   prd.done        = 1;
   prd.rayOrigin   = origin.xyz;
   prd.rayDir      = direction.xyz;
-  prd.currentIoR  = 1.0;
+  // prd.currentIoR  = 1.0;
   traceRayEXT(topLevelAS,     // acceleration structure
               rayFlags,       // rayFlags
               0xFF,           // cullMask

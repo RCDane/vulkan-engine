@@ -95,6 +95,8 @@ mat3 calculate_TBN(vec3 normal, vec2 uv){
 
 void main()
 {
+
+
     // Normalize input normal
     vec3 N = normalize(inNormal);
 
@@ -110,11 +112,20 @@ void main()
     float dz     = fwidth(linearZ);     // |dFdx|+|dFdy|
     outNormal = vec4(ndir_to_oct_unorm(N), length(fwidth(N)), linearZ);        
 
+
+
     outAlbedo = vec4(inColor,1.0);
     if (materialData.colorIdx != 0){
-        vec3 baseColor = SRGBtoLINEAR(texture(textureSamplers[materialData.colorIdx], inUV).rgb);
+        vec4 sampledColor = texture(textureSamplers[materialData.colorIdx], inUV);
+        if (sampledColor.a < 0.5){
+            discard;
+        }
+        vec3 baseColor = SRGBtoLINEAR(sampledColor.rgb);
+
         outAlbedo = vec4(baseColor,1.0);
     }
+
+
     // Material properties
     
 

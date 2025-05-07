@@ -176,8 +176,9 @@ void main()
     vec3 F0 = mix(vec3(0.04), baseColor.xyz, metallic);
 	vec3 directRadiance = vec3(0.0);
 	vec3  bsdf = vec3(0.0);
+	isShadowed   = true; 
+
 	if (dot(worldNrm,L) > 0){
-		isShadowed   = true; 
 		
 		float tMin   = 0.01;
 		float tMax   = l_Sample.distance;

@@ -33,7 +33,11 @@ set(CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake/")
 
 if(ENABLE_CPM)
   # include(CPM)
-  CPMAddPackage("gh:libsdl-org/SDL#release-2.30.4")
+  CPMAddPackage(
+    NAME SDL3  
+    GITHUB_REPOSITORY libsdl-org/SDL
+    GIT_TAG release-3.2.12 
+    EXCLUDE_FROM_ALL YES)
   CPMAddPackage("gh:wolfpld/tracy#v0.11.0")
   CPMAddPackage("gh:simdjson/simdjson#v3.12.3")
   CPMAddPackage(
@@ -46,17 +50,16 @@ if(ENABLE_CPM)
   )
 
 
-
   option ( TRACY_ENABLE " " OFF )
   option ( TRACY_ON_DEMAND " " OFF )
 endif()
 
-add_library(sdl2 INTERFACE)
+add_library(sdl3 INTERFACE)
 
-target_include_directories(sdl2 INTERFACE $ENV{VULKAN_SDK}/Include/SDL2 )
-target_link_directories(sdl2 INTERFACE $ENV{VULKAN_SDK}/Lib )
+target_include_directories(sdl3 INTERFACE $ENV{VULKAN_SDK}/Include/SDL3 )
+target_link_directories(sdl3 INTERFACE $ENV{VULKAN_SDK}/Lib )
 
-target_link_libraries(sdl2 INTERFACE SDL2 SDL2main Tracy::TracyClient)
+target_link_libraries(sdl3 INTERFACE SDL3 SDL3main Tracy::TracyClient)
 
 add_library(imgui STATIC)
 
@@ -70,9 +73,9 @@ target_sources(imgui PRIVATE
   imgui/imgui_widgets.cpp
   imgui/imgui_tables.cpp
   imgui/imgui_impl_vulkan.cpp
-  imgui/imgui_impl_sdl2.cpp
+  imgui/imgui_impl_sdl3.cpp
   )
 
-target_link_libraries(imgui PUBLIC Vulkan::Vulkan SDL2::SDL2)
+target_link_libraries(imgui PUBLIC Vulkan::Vulkan SDL3::SDL3)
 
 target_include_directories(stb_image INTERFACE stb_image)
