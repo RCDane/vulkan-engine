@@ -482,7 +482,11 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGltf(VulkanEngine* engine, std::s
         MaterialPass passType = MaterialPass::MainColor;
         if (mat.alphaMode == fastgltf::AlphaMode::Blend) {
             passType = MaterialPass::Transparent;
-        }
+		}
+		else if (mat.alphaMode == fastgltf::AlphaMode::Mask) {
+			passType = MaterialPass::Transparent;
+		}
+
 
         GLTFMetallic_Roughness::MaterialResources materialResources;
         // default the material textures

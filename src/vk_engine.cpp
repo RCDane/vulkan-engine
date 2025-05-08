@@ -41,7 +41,7 @@
 //#include <windows.h>
 //#include <tchar.h>
 
-constexpr bool bUseValidationLayers = true;
+constexpr bool bUseValidationLayers = false;
 
 
 VulkanEngine* loadedEngine = nullptr;
@@ -401,7 +401,7 @@ void NameImage(VkDevice device, VkImage image, std::string name) {
 	VkDebugUtilsObjectNameInfoEXT nameInfo;
 	nameInfo.sType = { VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT };
 	nameInfo.objectType = VK_OBJECT_TYPE_IMAGE;
-	nameInfo.objectHandle = reinterpret_cast<uint64_t>(image);
+	//nameInfo.objectHandle = image;
 	nameInfo.pObjectName = name.c_str();
 	//vkSetDebugUtilsObjectNameEXT(device, &nameInfo);
 }
@@ -410,28 +410,28 @@ void NameImageView(VkDevice device, VkImageView image, std::string name) {
 	VkDebugUtilsObjectNameInfoEXT nameInfo;
 	nameInfo.sType = { VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT };
 	nameInfo.objectType = VK_OBJECT_TYPE_IMAGE_VIEW;
-	nameInfo.objectHandle = reinterpret_cast<uint64_t>(image);
+	//nameInfo.objectHandle = &image;
 	nameInfo.pObjectName = name.c_str();
 	//vkSetDebugUtilsObjectNameEXT(device, &nameInfo);
 }
 
 
 void WaitAll(VkCommandBuffer cmd) {
-	VkMemoryBarrier2 fullBarrier2{
-	.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
-	.srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
-	.srcAccessMask = VK_ACCESS_2_MEMORY_WRITE_BIT | VK_ACCESS_2_MEMORY_READ_BIT,
-	.dstStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
-	.dstAccessMask = VK_ACCESS_2_MEMORY_WRITE_BIT | VK_ACCESS_2_MEMORY_READ_BIT
-	};
+	//VkMemoryBarrier2 fullBarrier2{
+	//.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
+	//.srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+	//.srcAccessMask = VK_ACCESS_2_MEMORY_WRITE_BIT | VK_ACCESS_2_MEMORY_READ_BIT,
+	//.dstStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+	//.dstAccessMask = VK_ACCESS_2_MEMORY_WRITE_BIT | VK_ACCESS_2_MEMORY_READ_BIT
+	//};
 
-	VkDependencyInfo depInfo{
-		.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-		.memoryBarrierCount = 1,
-		.pMemoryBarriers = &fullBarrier2
-	};
+	//VkDependencyInfo depInfo{
+	//	.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+	//	.memoryBarrierCount = 1,
+	//	.pMemoryBarriers = &fullBarrier2
+	//};
 
-	vkCmdPipelineBarrier2(cmd, &depInfo);
+	//vkCmdPipelineBarrier2(cmd, &depInfo);
 }
 
 #include <thread>
@@ -456,6 +456,8 @@ void VulkanEngine::draw()
 
 	// Handling resizing
 	VkResult e = vkAcquireNextImageKHR(_device, _swapchain, 1000000000, get_current_frame()._swapchainSemaphore, VK_NULL_HANDLE, &swapchainImageIndex);
+
+
 	if (e == VK_ERROR_OUT_OF_DATE_KHR) {
         resize_requested = true;       
 		return ;
@@ -633,8 +635,8 @@ void VulkanEngine::draw()
 
 	VkCommandBufferSubmitInfo cmdinfo = vkinit::command_buffer_submit_info(cmd);	
 	
-	VkSemaphoreSubmitInfo waitInfo = vkinit::semaphore_submit_info(VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT,get_current_frame()._swapchainSemaphore);
-	VkSemaphoreSubmitInfo signalInfo = vkinit::semaphore_submit_info(VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT, get_current_frame()._renderSemaphore);	
+	VkSemaphoreSubmitInfo waitInfo = vkinit::semaphore_submit_info(VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT,get_current_frame()._swapchainSemaphore);
+	VkSemaphoreSubmitInfo signalInfo = vkinit::semaphore_submit_info(VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT, submit_semaphores[swapchainImageIndex]);
 	
 	VkSubmitInfo2 submit = vkinit::submit_info(&cmdinfo,&signalInfo,&waitInfo);	
 
@@ -665,7 +667,7 @@ void VulkanEngine::draw()
 	presentInfo.pSwapchains = &_swapchain;
 	presentInfo.swapchainCount = 1;
 
-	presentInfo.pWaitSemaphores = &get_current_frame()._renderSemaphore;
+	presentInfo.pWaitSemaphores = &submit_semaphores[swapchainImageIndex];
 	presentInfo.waitSemaphoreCount = 1;
 
 	presentInfo.pImageIndices = &swapchainImageIndex;
@@ -1296,13 +1298,13 @@ void VulkanEngine::init_vulkan()
 	auto inst_ret = builder.set_app_name("Example Vulkan Application")
 				.set_engine_name("test");
 	auto inst_ret2 = inst_ret.use_default_debug_messenger();
-	auto inst_ret3 = inst_ret2.require_api_version(1, 3, 0).request_validation_layers(bUseValidationLayers);
-		
-		//.add_validation_feature_disable(VK_VALIDATION_FEATURE_DISABLE_UNIQUE_HANDLES_EXT)
-		//.add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_BEST_PRACTICES_EXT)
-		//.add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT)
-		//.add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_RESERVE_BINDING_SLOT_EXT)
-		//.add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT) // Add validation features
+	auto inst_ret3 = inst_ret2.require_api_version(1, 3, 0).request_validation_layers(bUseValidationLayers)
+
+		.add_validation_feature_disable(VK_VALIDATION_FEATURE_DISABLE_UNIQUE_HANDLES_EXT)
+		.add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_BEST_PRACTICES_EXT)
+		.add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT)
+		.add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_RESERVE_BINDING_SLOT_EXT)
+		.add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT); // Add validation features
 	auto inst_ret4 = inst_ret3.build();
 	if (!inst_ret4) {
 		std::cerr << "Failed to create Vulkan instance. Error: " << inst_ret4.error().message() << "\n";
@@ -1473,7 +1475,7 @@ void VulkanEngine::create_swapchain(uint32_t width, uint32_t height)
 		//.use_default_format_selection()
 		.set_desired_format(VkSurfaceFormatKHR{ .format = _swapchainImageFormat, .colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR })
 		//use vsync present mode
-		.set_desired_present_mode(VK_PRESENT_MODE_MAILBOX_KHR)
+		.set_desired_present_mode(VK_PRESENT_MODE_IMMEDIATE_KHR)
 		.set_desired_extent(width, height)
 		.add_image_usage_flags(VK_IMAGE_USAGE_TRANSFER_DST_BIT)
 		.build();
@@ -1491,6 +1493,15 @@ void VulkanEngine::create_swapchain(uint32_t width, uint32_t height)
 	_swapchain = vkbSwapchain.swapchain;
 	_swapchainImages = vkbSwapchain.get_images().value();
 	_swapchainImageViews = vkbSwapchain.get_image_views().value();
+	
+	submit_semaphores.resize(_swapchainImages.size());
+	VkSemaphoreCreateInfo semaphoreCreateInfo = vkinit::semaphore_create_info();
+
+	for (int i = 0; i < _swapchainImages.size(); i++) {
+
+
+		VK_CHECK(vkCreateSemaphore(_device, &semaphoreCreateInfo, nullptr, &submit_semaphores[i]));
+	}
 
 	for (VkImage image : _swapchainImages) {
 		NameImage(_device, image, "Swapchain");
@@ -1721,8 +1732,9 @@ void VulkanEngine::init_descriptors(){
 		{ VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 10 },
 		{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 30 }
 		,
-		{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 300},
+		{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 100},
 		{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 100 },
+		{ VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, 3}
 	};
 
 	globalDescriptorAllocator.init(_device,&_allocator, 10 , sizes);
@@ -1741,9 +1753,9 @@ void VulkanEngine::init_descriptors(){
 	}
 	{
 		DescriptorLayoutBuilder builder;
-		builder.add_binding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+		builder.add_binding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, flags);
 		
-		_gpuSceneDataDescriptorLayout = builder.build(_device, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
+		_gpuSceneDataDescriptorLayout = builder.build(_device, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, NULL, VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT);
 	}
 	{
 		DescriptorLayoutBuilder builder;

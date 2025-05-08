@@ -79,6 +79,20 @@ PBR_result CalculatePBRResult(
     vec3 F0, 
     float metallness,
     float a){
+
+
+
+    if (a < 0.01) {
+        vec3 R = reflect(-V, N);
+        float specFactor = pow(max(dot(R, L), 0.0), 1024.0); // Approximation of delta function
+        vec3 F = fresnelSchlick(max(dot(N, V), 0.0), F0);
+        
+        PBR_result res;
+        res.color = lightColor * lightIntensity * specFactor * F;
+        res.f = F; // For mirrors, BRDF is essentially just Fresnel
+        return res;
+    }
+
     vec3 radiance =  lightColor * lightIntensity; //Incoming Radiance
 
     vec3 H = normalize(V + L); //half vector

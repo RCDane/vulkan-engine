@@ -535,7 +535,7 @@ VkDeviceSize BlasBuilder::getScratchSize(VkDeviceSize                           
 	else
 	{
 		uint64_t numScratch = std::max(uint64_t(1), hintMaxBudget / maxScratch);
-		numScratch = std::min(numScratch, buildData.size());
+		numScratch = std::min((size_t)numScratch, buildData.size());
 		return numScratch * maxScratch;
 	}
 }
@@ -637,7 +637,7 @@ void BlasBuilder::getScratchAddresses(VkDeviceSize hintMaxBudget,
 		// Strategy 2: We only have enough memory to do 'N' BLAS in parallel
 		//  (n-times the largest scratch)
 		uint64_t numScratch = std::max(uint64_t(1), hintMaxBudget / maxScratch);
-		numScratch = std::min(numScratch, buildData.size());
+		numScratch = std::min((size_t)numScratch, buildData.size());
 
 		VkDeviceSize offset = 0;
 		for (int i = 0; i < static_cast<int>(numScratch); i++)
@@ -818,7 +818,10 @@ void RaytracingHandler::createBottomLevelAS(VulkanEngine* engine)
 		// We could add more geometry in each BLAS, but we add only one for now
 		allBlas.emplace_back(blas);
 	}
-	m_rtBuilder.buildBlas(engine,allBlas, VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR);
+	m_rtBuilder.buildBlas(engine,allBlas,
+		VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR ||
+		VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_DATA_ACCESS_KHR
+	);
 }
 
 

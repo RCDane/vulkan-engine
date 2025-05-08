@@ -161,7 +161,7 @@ struct GLTFMetallic_Roughness {
 	MaterialInstance write_material(VulkanEngine* engine, MaterialPass pass, MaterialResources& resources, DescriptorAllocatorGrowable& descriptorAllocator);
 };
 
-constexpr unsigned int FRAME_OVERLAP = 2;
+constexpr unsigned int FRAME_OVERLAP = 1;
 
 
 // Forward declaration
@@ -186,10 +186,15 @@ public:
 
 	std::vector<VkImage> _swapchainImages;
 	std::vector<VkImageView> _swapchainImageViews;
+
+
+	std::vector<VkSemaphore> submit_semaphores;
 	VkExtent2D _swapchainExtent;
 	DeletionQueue _mainDeletionQueue;
     VmaAllocator _allocator;
 	// Framedata
+
+
 
 	FrameData _frames[FRAME_OVERLAP];
 
@@ -311,6 +316,7 @@ public:
 	
 	bool _isInitialized{ false };
 	int _frameNumber {0};
+	int _lastSwapchainImageIndex{ -1 };
 	bool stop_rendering{ false };
 	VkExtent2D _windowExtent{1280  , 720 };
 

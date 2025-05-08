@@ -117,12 +117,10 @@ void main()
     outAlbedo = vec4(inColor,1.0);
     if (materialData.colorIdx != 0){
         vec4 sampledColor = texture(textureSamplers[materialData.colorIdx], inUV);
-        if (sampledColor.a < 0.5){
-            discard;
-        }
+       
         vec3 baseColor = SRGBtoLINEAR(sampledColor.rgb);
 
-        outAlbedo = vec4(baseColor,1.0);
+        outAlbedo = vec4(baseColor,sampledColor.a);
     }
 
 
@@ -154,4 +152,7 @@ void main()
     }   
 
     outMaterial = vec4(roughness,metallic, 1.0,1.0);
+     if (outAlbedo.a < 0.5){
+            discard;
+        }
 }

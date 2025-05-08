@@ -50,7 +50,6 @@ void main()
   prd.done        = 1;
   prd.rayOrigin   = origin.xyz;
   prd.rayDir      = direction.xyz;
-  prd.currentIoR  = 1.0;
   prd.rayBudget = uni.raytracingSettings.rayBudget;
   prd.seed = tea(gl_LaunchIDEXT.y * gl_LaunchSizeEXT.x + gl_LaunchIDEXT.x, int(uni.raytracingSettings.seed));;
   traceRayEXT(topLevelAS,     // acceleration structure

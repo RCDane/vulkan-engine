@@ -19,13 +19,13 @@ layout(set = 0, binding = eTlas) uniform accelerationStructureEXT topLevelAS;
 layout(set = 0, binding = eOutImage, rgba16f) uniform image2D image;
 layout(set = 1, binding = 0) uniform _GlobalUniforms { GlobalUniforms uni; };
 
-layout(set = 2, binding = 0, rgba16f) uniform image2D albedo; 
-layout(set = 2, binding = 1, rgba16f) uniform image2D normal; 
-layout(set = 2, binding = 2, rgba16f) uniform image2D material;
-layout(set = 2, binding = 3, rgba32f) uniform image2D emission; 
-layout(set = 2, binding = 4, r32f) uniform image2D depth; 
+layout(set = 2, binding = 0, rgba16f) readonly uniform image2D albedo; 
+layout(set = 2, binding = 1, rgba16f) readonly uniform image2D normal; 
+layout(set = 2, binding = 2, rgba16f) readonly uniform image2D material;
+layout(set = 2, binding = 3, rgba32f) readonly uniform image2D emission; 
+layout(set = 2, binding = 4, r32f) readonly uniform image2D depth; 
 layout(set = 2, binding = 5, rgba32f) uniform image2D colorHistory; 
-layout(set = 2, binding = 6, r32f) uniform image2D depthHistory;
+layout(set = 2, binding = 6, r32f) readonly uniform image2D depthHistory;
 layout(set = 3, binding = 0, std430) readonly buffer LightSources {LightSource l[]; } lights;
 
 layout(push_constant) uniform _PushConstantRay { PushConstantRay pcRay; };
@@ -44,23 +44,23 @@ dvec3 reconstructWorldPosition(
     highp mat4 invView           // inverse view (camera) matrix
 ) {
     // 1) Compute NDC X/Y ∈ [−1,1]
-    dvec2 ndc;
-    ndc.x = double(fragCoord.x) / double(viewportSize.x) * 2.0 - 1.0;
-    ndc.y = double(fragCoord.y) / double(viewportSize.y) * 2.0 - 1.0;
+    vec2 ndc;
+    ndc.x = (fragCoord.x) / (viewportSize.x) * 2.0 - 1.0;
+    ndc.y = (fragCoord.y) / (viewportSize.y) * 2.0 - 1.0;
     // (You can flip Y here if your proj already flipped it) 
     // 2) Use rawDepth as NDC Z (Vulkan reversed‑Z, already in [0,1])
     double ndcZ = rawDepth;
 
     // 3) Form clip‑space position (homogeneous)
-    dvec4 clipPos = dvec4(ndc, ndcZ, 1.0);
+    vec4 clipPos = vec4(ndc, ndcZ, 1.0);
 
     // 4) Unproject to view (eye) space
-    dvec4 viewPos = invProj * clipPos;
+    vec4 viewPos = invProj * clipPos;
     viewPos /= viewPos.w;
 
     // 5) Transform into world space
-    dvec4 worldPosH = invView * viewPos;
-    return dvec3(worldPosH.xyz); 
+    vec4 worldPosH = invView * viewPos;
+    return vec3(worldPosH.xyz); 
 }
 
 
@@ -108,11 +108,10 @@ vec3 sampleGGXDirection(
     inout uint seed,
     out float pdf_out
 ) {
-    // 1) Mirror‐delta special case
-    // if (roughness < 1e-4) {
-    //     pdf_out = 1.0;                    // all weight on the single direction
-    //     return reflect(-V, N);           // perfect mirror
-    // }
+    if (roughness < 0.001) {
+      pdf_out = 1.0; // For perfect reflections, PDF is a delta function
+      return reflect(-V, N); // Perfect mirror reflection
+    }
 
     // 2) Otherwise clamp and do regular GGX sampling
     float a = max(roughness, 1e-2);
@@ -230,16 +229,15 @@ void main()
       pdf
   );
   vec3 indirectIllumination = vec3(0);
-  for (;;){
 
-		float tMin   = e;
-		float tMax   = 10000000.0;
-		vec3  rayDir = rayDirection;
-		uint  flags  = gl_RayFlagsNoneEXT;
-		prd.depth += 1;
-		prd.rayDir = rayDirection;
-    prd.hitValue = vec3(0);
-		traceRayEXT(topLevelAS,  // acceleration structure
+	float tMin   = e;
+	float tMax   = 10000000.0;
+	vec3  rayDir = rayDirection;
+	uint  flags  = gl_RayFlagsNoneEXT;
+	prd.depth += 1;
+	prd.rayDir = rayDirection;
+  prd.hitValue = vec3(0);
+	traceRayEXT(topLevelAS,  // acceleration structure
 						flags,       // rayFlags
 						0xFF,        // cullMask
 						0,           // sbtRecordOffset 
@@ -250,39 +248,39 @@ void main()
 						rayDirection,      // ray direction
 						tMax,        // ray max range
 						0            // payload is payload
-		);
-  	// float cosNL    = max(dot(N, rayDirection), 0.0);
-    // float hemiPdf  = cosNL / PI;
-    // float invPdf   = PI / max(cosNL, 1e-6);
-    float invPdf = 1.0 / pdf;
+	);
+  // float cosNL    = max(dot(N, rayDirection), 0.0);
+  // float hemiPdf  = cosNL / PI;
+  // float invPdf   = PI / max(cosNL, 1e-6);
+  float invPdf = 1.0 / pdf;
 
-    PBR_result result = CalculatePBRResult(
-      N,V, 
-      rayDirection, albedoColor.xyz, 
-      prd.hitValue, 1.0f, 
-      F0, metalness,  
-      roughness);
+  PBR_result result = CalculatePBRResult(
+    N,V, 
+    rayDirection, albedoColor.xyz, 
+    prd.hitValue, 1.0f, 
+    F0, metalness,  
+    roughness);
     
 
 
-		indirectIllumination += result.color * invPdf;
-    if(prd.depth > 1 || prd.done == 1) // If I increase depth to 2, then something breaks. 
-      break;
-    rayOrigin = prd.rayOrigin + V*e;
-    hitNormal = prd.normal;
-    createCoordinateSystem(hitNormal, tangent, bitangent);
+	indirectIllumination += result.color * invPdf;
+  // if(prd.depth > 1 || prd.done == 1) // If I increase depth to 2, then something breaks. 
+  //   break;
+  //   rayOrigin = prd.rayOrigin + V*e;
+  //   hitNormal = prd.normal;
+  //   createCoordinateSystem(hitNormal, tangent, bitangent);
 
-    // rayDirection = samplingHemisphere(prd.seed, tangent, bitangent, hitNormal);
-    rayDirection = sampleGGXDirection(
-        prd.normal,
-        -prd.rayDir,
-        roughness,
-        tangent,
-        bitangent,
-        seed,
-        pdf
-    );
-  }
+  //   // rayDirection = samplingHemisphere(prd.seed, tangent, bitangent, hitNormal);
+  //   rayDirection = sampleGGXDirection(
+  //       prd.normal,
+  //       -prd.rayDir,
+  //       roughness,
+  //       tangent,
+  //       bitangent,
+  //       seed,
+  //       pdf
+  //   );
+  // }
 
   // Next event estimation for direct lighting
   vec3 directIllumination = vec3(0.0); 
@@ -293,11 +291,11 @@ void main()
     if(dot(N, L) > 0) 
     {
       
-      float tMin   = 0.01;
-      float tMax   = Ls.distance; 
-      vec3  rayOrigin = vec3(worldPos); // offset the ray origin to avoid self-intersection
-      vec3  rayDir = L; 
-      uint  flags  = gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsOpaqueEXT | gl_RayFlagsSkipClosestHitShaderEXT;
+      tMin   = 0.01;
+      tMax   = Ls.distance; 
+      rayOrigin = vec3(worldPos); // offset the ray origin to avoid self-intersection
+      rayDir = L; 
+      flags  = gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsOpaqueEXT | gl_RayFlagsSkipClosestHitShaderEXT;
       traceRayEXT(topLevelAS,  // acceleration structure
             flags,       // rayFlags
             0xFF,        // cullMask
@@ -318,7 +316,7 @@ void main()
         directIllumination += ((res.color * Ls.attenuation)) / Ls.pdf; // divide by the pdf of the light sample
 
       }  
-  vec3 combined =  indirectIllumination; // combine direct and indirect illumination
+  vec3 combined =  indirectIllumination + directIllumination ; // combine direct and indirect illumination
 
   float currentRayCount =  float(uni.raytracingSettings.currentRayCount);
   float rayBudget =  float(uni.raytracingSettings.rayBudget); 
@@ -343,6 +341,6 @@ void main()
   }
   imageStore(colorHistory,
             ivec2(gl_LaunchIDEXT.xy),
-            vec4(rayDirection,1.0)); // store the color in the history buffer
+            vec4(accumulatedColor,1.0)); // store the color in the history buffer
 
 }
