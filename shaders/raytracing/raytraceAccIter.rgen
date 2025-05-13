@@ -30,38 +30,9 @@ layout(set = 3, binding = 0, std430) readonly buffer LightSources {LightSource l
 
 layout(push_constant) uniform _PushConstantRay { PushConstantRay pcRay; };
 // clang-format on
-
-float zNear = 0.1;
-float zFar = 1000.0;
+ 
 
 
-
-dvec3 reconstructWorldPosition(
-    double rawDepth,        // non‑linear depth sample ∈ [0,1], near→1, far→0
-    vec2 fragCoord,        // pixel coords (e.g., gl_FragCoord.xy + 0.5)
-    vec2 viewportSize,     // render target dims
-    highp mat4 invProj,          // inverse projection matrix
-    highp mat4 invView           // inverse view (camera) matrix
-) {
-    // 1) Compute NDC X/Y ∈ [−1,1]
-    vec2 ndc;
-    ndc.x = (fragCoord.x) / (viewportSize.x) * 2.0 - 1.0;
-    ndc.y = (fragCoord.y) / (viewportSize.y) * 2.0 - 1.0;
-    // (You can flip Y here if your proj already flipped it) 
-    // 2) Use rawDepth as NDC Z (Vulkan reversed‑Z, already in [0,1])
-    double ndcZ = rawDepth;
-
-    // 3) Form clip‑space position (homogeneous)
-    vec4 clipPos = vec4(ndc, ndcZ, 1.0);
-
-    // 4) Unproject to view (eye) space
-    vec4 viewPos = invProj * clipPos;
-    viewPos /= viewPos.w;
-
-    // 5) Transform into world space
-    vec4 worldPosH = invView * viewPos;
-    return vec3(worldPosH.xyz); 
-}
 
 
 
@@ -74,13 +45,10 @@ LightSample sampleLightsPdf(vec3 hitPoint, inout uint seed,  int lightCount) {
 
     LightSample s = ProcessLight(hitPoint, seed, Ls); // Sample the light source
     // s.pdf /= lightCount ; // Scale the pdf by the light source pdf 
-    return s;
+    return s; 
 }
 
-float LinearizeDepth(float depth) {
-    // depth ∈ [0,1], where 1.0 → zNear and 0.0 → zFar
-    return zNear * zFar / (zFar + depth * (zNear - zFar));
-}
+
 
 bool CheckUv(vec2 uv, vec2 size){
   if(uv.x < 0.0 || uv.x > size.x) return false;
@@ -141,7 +109,7 @@ void main()
   const vec2 pixelCenter = vec2(gl_LaunchIDEXT.xy) + vec2(0.5);
   const vec2 inUV        = pixelCenter / vec2(gl_LaunchSizeEXT.xy);
   vec2       d           = inUV * 2.0 - 1.0; 
-  vec4 origin    = uni.viewInverse * vec4(0, 0, 0, 1);
+  vec4 origin    = uni.viewInverse * vec4(0, 0, 0, 1);   
 
   vec4 target    = uni.projInverse * vec4(d.x, d.y, 1, 1);
   vec4 direction = uni.viewInverse * vec4(normalize(target.xyz), 0);
@@ -163,6 +131,7 @@ void main()
     vpSize, 
     uni.projInverse, 
     uni.viewInverse);
+
 
   // Linearize currentDepth
 

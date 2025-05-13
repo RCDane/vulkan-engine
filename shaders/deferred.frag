@@ -94,23 +94,25 @@ mat3 calculate_TBN(vec3 normal, vec2 uv){
 }
 
 void main()
-{
+{ 
 
 
     // Normalize input normal
     vec3 N = normalize(inNormal);
 
-    if (materialData.normalIdx != 2){
-        mat3 TBN = calculate_TBN(normalize(inNormal), inUV);
-        vec3 textureNormal = texture(textureSamplers[materialData.normalIdx], inUV).xyz;
+    // if (materialData.normalIdx != 2){
+    //     mat3 TBN = calculate_TBN(normalize(inNormal), inUV);
+    //     vec3 textureNormal = texture(textureSamplers[materialData.normalIdx], inUV).xyz;  
 
-        textureNormal = normalize(textureNormal * 2.0 - 1.0);
-        N = normalize(TBN * textureNormal);
+    //     textureNormal = normalize(textureNormal * 2.0 - 1.0);
+    //     N = normalize(TBN * textureNormal);
 
-    }
-    float linearZ = -vPos.z;            // vPos is view‑space, so −z is linear depth
-    float dz     = fwidth(linearZ);     // |dFdx|+|dFdy|
-    outNormal = vec4(ndir_to_oct_unorm(N), length(fwidth(N)), linearZ);        
+    // }
+    double outViewZ = -vPos.z;
+    outViewZ = LinearizeDepth(outViewZ);
+    float viewZ = float(outViewZ);
+    float dz = fwidth(viewZ);
+    outNormal = vec4(ndir_to_oct_unorm(N), length(fwidth(N)), dz);        
 
 
 

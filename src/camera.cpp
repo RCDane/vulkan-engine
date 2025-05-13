@@ -9,7 +9,7 @@
 void Camera::update()
 {
     glm::mat4 cameraRotation = getRotationMatrix();
-    position += glm::vec3(cameraRotation * glm::vec4(velocity * 0.5f, 0.f));
+    position += glm::vec3(cameraRotation * glm::vec4(velocity * 0.5f /*+ glm::vec3(0,0,0.1)*/, 0.f));
 }
 
 bool Camera::isMoving() {
@@ -108,7 +108,7 @@ glm::mat4 perspective_vulkan_rh(
 
 
 
-glm::mat4 Camera::getProjectionMatrix(bool raytracing) {
+glm::mat4 Camera::getProjectionMatrix() {
 
 
     

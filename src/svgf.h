@@ -1,3 +1,5 @@
+#pragma once
+#ifndef SVGF_H
 #include <vk_engine.h>
 #include <vk_types.h>
 
@@ -9,6 +11,7 @@ struct SVGFSettings {
 class SVGFHandler {
 public:
     SVGFHandler(VulkanEngine* engine, VkExtent2D extent);
+    SVGFHandler();
 
     ~SVGFHandler();
 
@@ -16,17 +19,18 @@ public:
 
     void init(VulkanEngine* engine, VkExtent2D extent);
 
-    void Execute(VkCommandBuffer cmd);
+    void Execute(VkCommandBuffer cmd, VulkanEngine* engine);
 
 private:
 
-    AllocatedImage illuminatuion;
+    AllocatedImage illumination;
     AllocatedImage prevIllumination;
-    AllocatedImage NormalAndDepth;
-    AllocatedImage prevNormalAndDepth;
+    AllocatedImage normalFWidthZWidth;
+    AllocatedImage prevNormalFWidthZWidth;
     AllocatedImage historyLength;
     AllocatedImage prevHistoryLength;
-    AllocatedImage normal;
+    AllocatedImage prevMoments;
+    
 
     VkPipeline m_reprojectionPipeline;
     VkPipelineLayout m_reprojPipelineLayout;
@@ -47,9 +51,11 @@ private:
     /// </summary>
     /// <param name="cmd"></param>
 
-    void Reprojection(VkCommandBuffer cmd);
+    void Reprojection(VkCommandBuffer cmd, VulkanEngine* engine);
 
     void FilterMoments(VkCommandBuffer cmd);
 
     void WaveletFilter(VkCommandBuffer cmd);
 };
+
+#endif // !SVGF_H

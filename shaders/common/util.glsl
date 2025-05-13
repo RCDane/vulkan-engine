@@ -224,8 +224,47 @@ LightSample ProcessLight(vec3 hitPoint, inout uint seed, LightSource Ls){
     }
     return ls;
 }
+float zNear = 0.1;
+float zFar = 300.0;
 
 
+
+double LinearizeDepth(double depth) {
+    // Step 1: remap [0,1] → NDC [-1,1]
+    double z_ndc = depth;
+    // Step 2: invert the perspective projection
+    return (zNear * zFar)
+         / (zFar - z_ndc * (zFar - zNear));
+}
+
+
+
+dvec3 reconstructWorldPosition(
+    double rawDepth,        // non‑linear depth sample ∈ [0,1], near→1, far→0
+    vec2 fragCoord,        // pixel coords (e.g., gl_FragCoord.xy + 0.5)
+    vec2 viewportSize,     // render target dims
+    mat4 invProj,          // inverse projection matrix
+    mat4 invView           // inverse view (camera) matrix
+) {
+    // 1) Compute NDC X/Y ∈ [−1,1]
+    vec2 ndc;
+    ndc.x = (fragCoord.x) / (viewportSize.x) * 2.0 - 1.0;
+    ndc.y = (fragCoord.y) / (viewportSize.y) * 2.0 - 1.0;
+    // (You can flip Y here if your proj already flipped it) 
+    // 2) Use rawDepth as NDC Z (Vulkan reversed‑Z, already in [0,1])
+    double ndcZ = rawDepth;
+
+    // 3) Form clip‑space position (homogeneous)
+    vec4 clipPos = vec4(ndc, ndcZ, 1.0);
+
+    // 4) Unproject to view (eye) space
+    vec4 viewPos = invProj * clipPos;
+    viewPos /= viewPos.w;
+
+    // 5) Transform into world space
+    vec4 worldPosH = invView * viewPos;
+    return vec3(worldPosH.xyz); 
+}
 
 
 // Helper to reflect the lower-hemisphere folds over the diagonals

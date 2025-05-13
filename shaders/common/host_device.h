@@ -1,4 +1,3 @@
-
 #ifndef COMMON_HOST_DEVICE
 #define COMMON_HOST_DEVICE
 
@@ -140,6 +139,15 @@ struct PushConstantRay
 	vec4 ambientColor;
 };
 
+// Push-constant block for SVGF reprojection
+struct PushConstantReproj
+{
+    mat4 projInverse;
+    mat4 viewInverse;
+    mat4 oldViewProj;
+	ivec2 imageSize;
+};
+
 struct LightSource {
 	vec3 position;
     float sunAngle;
@@ -166,7 +174,6 @@ struct Vertex {
 	vec4 color;
 	vec4 tangent;
 }; 
-
 
 
 

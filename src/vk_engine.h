@@ -13,7 +13,7 @@
 #include <raytracing.h>
 #include "vk_mem_alloc.h"  // No #define VMA_IMPLEMENTATION here
 #include "iridescence.h"
-
+#include <svgf.h>
 // forward declarations
 struct ShadowImage;
 struct ShadowPipeline;
@@ -309,6 +309,8 @@ public:
 	bool resize_requested; 
 	bool useRaytracing = true;
     std::shared_ptr<Camera> mainCamera;
+
+	SVGFHandler _svgfHandler;
 
 
 	VkQueryPool _timestampQueryPool;          // Query pool for timestamps

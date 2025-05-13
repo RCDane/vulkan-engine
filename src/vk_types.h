@@ -70,7 +70,13 @@ struct AccelKHR
 		vmaDestroyBuffer(*buffer.buffer.allocator, buffer.buffer.buffer, buffer.buffer.allocation);
 	}
 };
-
+struct PushConstantReproj
+{
+    glm::mat4 projInverse;
+    glm::mat4 viewInverse;
+    glm::mat4 oldViewProj;
+    glm::ivec2 imageSize;
+};
 enum LightType {
     Point = 0,
     Directional = 1

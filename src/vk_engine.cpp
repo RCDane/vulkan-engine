@@ -38,10 +38,13 @@
 
 #include <filesystem>
 #include <iostream>
+
+#include <svgf.h>
+
 //#include <windows.h>
 //#include <tchar.h>
 
-constexpr bool bUseValidationLayers = false;
+constexpr bool bUseValidationLayers = true;
 
 
 VulkanEngine* loadedEngine = nullptr;
@@ -160,7 +163,7 @@ void VulkanEngine::init()
 		if (scene->camera) {
 			mainCamera = scene->camera;
 			mainCamera->zNear = 0.1f;
-			mainCamera->zFar = 1000.0f;
+			mainCamera->zFar = 300.0f;
 		}
 		if (scene->lightSources.size() > 0) {
 			lightSources.insert(lightSources.end(),
@@ -258,6 +261,10 @@ void VulkanEngine::init()
 	_raytracingHandler.createRtPipeline(this);
 
 	_raytracingHandler.createRtShaderBindingTable(this);
+
+
+	_svgfHandler.init(this, _windowExtent);
+
 	// everything went fine
 
 	prepare_lighting_data();
@@ -563,9 +570,11 @@ void VulkanEngine::draw()
 		
 		WaitAll(cmd);
 
-		vkutil::transition_image(cmd, _depthImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_ASPECT_DEPTH_BIT);
+		_svgfHandler.Execute(cmd, this);
 
-		vkutil::transition_image(cmd, _depthHistory.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_ASPECT_DEPTH_BIT);
+		vkutil::transition_image(cmd, _depthImage.image, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_ASPECT_DEPTH_BIT);
+
+		vkutil::transition_image(cmd, _depthHistory.image, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_ASPECT_DEPTH_BIT);
 		
 		vkutil::copy_image_to_image_depth(cmd, _depthImage.image, _depthHistory.image, _swapchainExtent, _swapchainExtent);
 		//RemoveMarker(cmd);
@@ -2738,8 +2747,8 @@ void VulkanEngine::update_scene()
 	glm::vec3 jitter = glm::ballRand(0.1);
 
 	glm::mat4 view = mainCamera->getViewMatrix(glm::vec3(0.0));
-	glm::mat4 rasterizationProjection = mainCamera->getProjectionMatrix(false);
-	glm::mat4 rayTracingProjection = mainCamera->getProjectionMatrix(true);
+	glm::mat4 rasterizationProjection = mainCamera->getProjectionMatrix();
+	glm::mat4 rayTracingProjection = mainCamera->getProjectionMatrix();
 
 
 	

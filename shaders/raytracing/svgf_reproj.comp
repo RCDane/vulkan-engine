@@ -21,18 +21,289 @@
     // Texture2D gPrevHistoryLength;
 
 // Motion not needed
-layout(set = 0, binding = 0, rgba16f) uniform image2D normalFWidthZWidth;
-layout(set = 0, binding = 1, rgba16f) uniform image2D color;
-layout(set = 0, binding = 2, r32f) uniform image2D depth;
+layout(set = 0, binding = 0, rgba16f) uniform image2D NormalFWidthZWidth;
+layout(set = 0, binding = 1, rgba32f) uniform image2D color;
+layout(set = 0, binding = 2) uniform sampler2D  depth;
 layout(set = 0, binding = 3, rgba16f) uniform image2D albedo;
-layout(set = 0, binding = 4, r16f) uniform image2D prevIllumination;
-layout(set = 0, binding = 5, r32f) uniform image2D prevDepth;
+// rename to avoid shadowing below
+layout(set = 0, binding = 4, rgba16f) uniform image2D prevIlluminationImage;
+layout(set = 0, binding = 5) uniform sampler2D  prevDepth;
 layout(set = 0, binding = 6, rgba16f) uniform image2D prevNormalFWidthZWidth;
-layout(set = 0, binding = 7, r8) uniform image2D prevHistoryLength;
+layout(set = 0, binding = 7, r8ui) uniform uimage2D prevHistoryLengthImage;
+layout(set = 0, binding = 8, rg16f) uniform image2D prevMoments;
+layout(set = 0, binding = 9, rgba16f) uniform image2D illumination;
+
+
+// new depth reprojection uniforms (after binding=7)
+layout(push_constant ) uniform PushConstant { PushConstantReproj pc; } PC;
+
+const float reprojEps = 1e-4;
 
 float gAlpha = 0.2;
 float gMomentsAlpha = 0.2;
 
-void main(){
+
+bool isReprjValid(
+    ivec2 coord,
+    double Z,
+    double Zprev,
+    float fwidthZ,
+    vec3 normal,
+    vec3 normalPrev, 
+    float fwidthNormal
+) {
+    vec2 imageDim = PC.pc.imageSize;
+
+    // 1) check whether reprojected pixel is inside the screen (with 1px border)
+    // if ( any(lessThan(coord, ivec2(1,1))) ||
+    //      any(greaterThan(coord, imageDim - ivec2(1,1))) )
+    // {
+    //     return false;
+    // }
     
+
+    // // 2) check if deviation of depths is acceptable
+    // if ( abs(Zprev - Z) / (fwidthZ + 1e-2) > 3.0 )
+    //     return false;
+
+    // 3) normals compatibility
+    if ( distance(normal, normalPrev) / (fwidthNormal + 1e-2) > 16.0 )
+        return false;
+
+    return true;
+}
+
+
+
+
+bool loadPrevData(
+    vec2 posH,
+    ivec2 ipos,
+    out vec4 prevIllum,
+    out vec2 pMoments,
+    out float historyLength
+) {
+    vec2 imageDim = PC.pc.imageSize;
+
+    // fetch current depth, normal & fwidth
+    double currentDepth = texelFetch(depth, ivec2(ipos),0).r;
+    double linearDepth = LinearizeDepth(currentDepth);
+
+    vec4 normalFWidthZWidth = imageLoad(NormalFWidthZWidth, ivec2(ipos));
+    vec3 currentNormal = oct_to_ndir_unorm(normalFWidthZWidth.xy);
+
+
+    float normalFwidth = normalFWidthZWidth.z;
+    float zWidth = normalFWidthZWidth.w;
+    // compute previous pixel via reprojection
+    vec2 pixelCenter = posH;
+    dvec3 worldPos = reconstructWorldPosition(
+        currentDepth, ipos, imageDim,
+        PC.pc.projInverse, PC.pc.viewInverse
+    );
+    // imageStore(color, ipos, vec4(worldPos,1.0));
+
+    vec4 prevClip = PC.pc.oldViewProj * vec4(worldPos, 1.0);
+    vec3 prevNDC  = prevClip.xyz / prevClip.w;
+    vec2 prevUV   = prevNDC.xy * 0.5 + 0.5;
+    vec2 posPrev  = prevUV * imageDim;
+    ivec2 iposPrev = ivec2(floor(posPrev));  // base for bilinear taps
+
+    double prevD = texelFetch(prevDepth, iposPrev,0).r;
+    prevD = LinearizeDepth(prevD);
+    // imageStore(color, ipos, vec4( abs(prevD - linearDepth) / (zWidth + 1e-3)));
+    // return false;
+    prevIllum   = vec4(0.0);
+    pMoments = vec2(0.0);
+
+    // bilinear taps
+    ivec2 offsets[4] = ivec2[4](
+        ivec2(0,0), ivec2(1,0),
+        ivec2(0,1), ivec2(1,1)
+    ); 
+    bool v[4];
+    bool valid = false;
+
+    // 1) test validity at each tap
+    for (int i = 0; i < 4; ++i) {
+        ivec2 loc = iposPrev + offsets[i];
+        if (any(lessThan(loc, ivec2(0))) || any(greaterThanEqual(loc, imageDim))) { 
+            v[i] = false;
+        } else {
+            vec4 normfwidthzwidth = imageLoad(prevNormalFWidthZWidth, loc);
+
+            double prevD = texelFetch(prevDepth, loc,0).r;
+            prevD = LinearizeDepth(prevD);
+            vec3 nP   = normalize(oct_to_ndir_snorm(normfwidthzwidth.xy));
+            v[i] = isReprjValid(iposPrev, linearDepth, prevD, zWidth, currentNormal, nP, normalFwidth);
+        }
+        valid = valid || v[i];
+    }
+
+    
+    // // 2) if any valid, do bilinear interp
+    // if (valid) {
+    //     float fx = fract(posPrev.x), fy = fract(posPrev.y);
+    //     float w[4] = float[4](
+    //         (1.-fx)*(1.-fy),
+    //          fx *(1.-fy),
+    //         (1.-fx)* fy,
+    //          fx * fy
+    //     );
+    //     float sumw = 0.0;
+    //     for (int i = 0; i < 4; ++i) {
+    //         ivec2 loc = iposPrev + offsets[i];
+    //         if (v[i]) {
+    //             prevIllum   += w[i] * imageLoad(prevIlluminationImage, loc);
+    //             pMoments += w[i] * imageLoad(prevMoments, loc).xy ;
+    //             sumw        += w[i];
+    //         }
+    //     }
+    //     if (sumw < 0.01) {
+    //         prevIllum   = vec4(0.0);
+    //         pMoments = vec2(0.0);
+    //         valid       = false;
+    //     } else {
+    //         prevIllum   /= sumw;
+    //         pMoments /= sumw;
+    //     }
+    // }
+
+
+
+    // 3) fallback cross‐bilateral if still invalid
+    // if (!valid) {
+    //     float nValid = 0.0;
+    //     for (int yy = -1; yy <= 1; ++yy) {
+    //         for (int xx = -1; xx <= 1; ++xx) {
+    //             ivec2 p = iposPrev + ivec2(xx, yy);
+    //             if (any(lessThan(p, ivec2(0))) || any(greaterThanEqual(p, imageDim))) continue;
+
+    //             vec4 normfwidthzwidth = imageLoad(prevNormalFWidthZWidth, p);
+
+    //             double prevD = texelFetch(prevDepth, p,0).r;
+    //             prevD = LinearizeDepth(prevD);
+
+    //             vec3 nP   = oct_to_ndir_snorm(normfwidthzwidth.xy);
+
+
+    //             if (isReprjValid(iposPrev, linearDepth, prevD, zWidth, currentNormal, nP, normalFwidth)) {
+    //                 prevIllum   += imageLoad(prevIlluminationImage, p);
+    //                 pMoments += imageLoad(prevMoments, p).xy;
+    //                 nValid      += 1.0;
+    //             }
+    //         }
+    //     }
+    //     if (nValid > 0.0) {
+    //         prevIllum   /= nValid;
+    //         pMoments /= nValid;
+    //         valid        = true;
+    //     }
+    // }
+    imageStore(color, ipos, vec4(valid ? 0.8 : 0.0));
+
+    // 4) write out history length if valid
+    if (valid) {
+        historyLength = imageLoad(prevHistoryLengthImage, iposPrev).x;
+    } else {
+        prevIllum     = vec4(0.0);
+        pMoments   = vec2(0.0);
+        historyLength = 0.0;
+    }
+
+    return valid;
+}
+
+
+
+vec3 demodulate(vec3 c, vec3 albedo)
+{
+    return c / max(albedo, vec3(0.001, 0.001, 0.001)); 
+}
+
+
+float luminance(vec3 color)
+{
+    return dot(color, vec3(0.299, 0.587, 0.114));
+}
+
+// helper: bounds‐check uv in [0,size)
+bool CheckUv(vec2 uv, vec2 size){
+    return all(greaterThanEqual(uv, vec2(0.0))) && all(lessThan(uv, size));
+}
+layout (local_size_x = 16, local_size_y = 16) in;
+
+
+void main(){
+    const ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
+
+    const vec2 pixelCenter = vec2(gl_GlobalInvocationID.xy) + vec2(0.5);
+    const vec2 inUV        = pixelCenter / PC.pc.imageSize;
+
+    vec4 albedoColor = imageLoad(albedo, coord);
+    vec4 imageColor = imageLoad(color, coord);
+
+    vec3 illum = demodulate(imageColor.xyz, albedoColor.xyz);
+
+    if (any(isnan(illum))){
+        illum = vec3(0,0,0);
+    }
+
+    // reprojection temp storage
+    vec4 prevIllum = vec4(0.0);
+    float historyLength = 0.0;
+    vec2 pMoments;
+    bool success = loadPrevData(pixelCenter, coord, prevIllum, pMoments, historyLength);
+    historyLength = min(32.0f, success ? historyLength + 1.0f : 1.0f);
+
+
+    const float alpha = success ? max(gAlpha, 1.0 / historyLength) : 1.0;
+    const float alphaMoments = success ? max(gMomentsAlpha, 1.0 / historyLength) : 1.0;
+
+    // compute first two moments of luminance
+    vec2 moments;
+    moments.r = luminance(illum);
+    moments.g = moments.r * moments.r;
+
+    vec2 pm = moments;
+
+    // temporal integration of the moments
+    moments = mix(pMoments, moments, alphaMoments);
+
+    float variance = max(0.f, moments.g - moments.r * moments.r);
+
+
+
+    imageStore(prevMoments,coord, vec4(moments, 1.0,1.0));
+    imageStore(prevHistoryLengthImage,coord, ivec4(success ? 40 : 0, 0,0,0));
+    imageStore(illumination,coord, vec4(illum, variance));
+
+
+    
+
+
+
+    // // 1) reconstruct world pos from current depth
+    // float rawDepth = imageLoad(depth, coord).r;
+    // vec2 pixelCenter = vec2(coord) + vec2(0.5);
+    // vec2 vpSize      = vec2(imageSize(depth));
+    // dvec3 worldPos   = reconstructWorldPosition(
+    //     rawDepth, pixelCenter, vpSize,
+    //     PC.pc.projInverse, PC.pc.viewInverse);               // updated
+
+    // // 2) project into previous clip
+    // vec4 reprojPos = PC.pc.oldViewProj * vec4(worldPos, 1.0); // updated
+    // vec3 reprojNDC = reprojPos.xyz / reprojPos.w;
+    // vec2 reprojUV  = reprojNDC.xy * 0.5 + 0.5;
+    // ivec2 reprojPx = ivec2(reprojUV * vec2(imageSize(prevDepth)));
+
+    // // 3) validate uv & depth match
+    // if (CheckUv(vec2(reprojPx), vec2(imageSize(prevDepth))) &&
+    //     abs(imageLoad(prevDepth, reprojPx).r - reprojNDC.z) < reprojEps)
+    // {
+    //     prevIllum      = imageLoad(prevIlluminationImage, reprojPx);
+    //     historyLength  = imageLoad(prevHistoryLengthImage, reprojPx).r;
+    // }
+
+    // ...existing code that follows using prevIllum & historyLength...
 }
