@@ -77,6 +77,17 @@ struct PushConstantReproj
     glm::mat4 oldViewProj;
     glm::ivec2 imageSize;
 };
+struct PushConstantAtrous {
+    glm::ivec2 imageSize;
+    int stepSize;
+    float phiColor;
+    float phiNormal;
+};
+
+struct PushConstantImageSize
+{
+    glm::ivec2 imageSize;
+};
 enum LightType {
     Point = 0,
     Directional = 1

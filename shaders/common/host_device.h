@@ -95,7 +95,10 @@ struct hitPayload
   uint seed;
   int rayBudget;
 };
-
+struct PushConstantImageSize
+{
+    ivec2 imageSize;
+};
 struct GLTFMaterialData{   
 	vec4 colorFactors;
 	vec4 metal_rough_factors;

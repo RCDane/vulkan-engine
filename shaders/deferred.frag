@@ -100,14 +100,14 @@ void main()
     // Normalize input normal
     vec3 N = normalize(inNormal);
 
-    // if (materialData.normalIdx != 2){
-    //     mat3 TBN = calculate_TBN(normalize(inNormal), inUV);
-    //     vec3 textureNormal = texture(textureSamplers[materialData.normalIdx], inUV).xyz;  
+    if (materialData.normalIdx != 2){
+        mat3 TBN = calculate_TBN(normalize(inNormal), inUV);
+        vec3 textureNormal = texture(textureSamplers[materialData.normalIdx], inUV).xyz;  
 
-    //     textureNormal = normalize(textureNormal * 2.0 - 1.0);
-    //     N = normalize(TBN * textureNormal);
+        textureNormal = normalize(textureNormal * 2.0 - 1.0);
+        N = normalize(TBN * textureNormal);
 
-    // }
+    }
     double outViewZ = -vPos.z;
     outViewZ = LinearizeDepth(outViewZ);
     float viewZ = float(outViewZ);

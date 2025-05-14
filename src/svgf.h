@@ -35,14 +35,36 @@ private:
     VkPipeline m_reprojectionPipeline;
     VkPipelineLayout m_reprojPipelineLayout;
 
+    VkPipeline m_momentsFilterPipeline;
+    VkPipelineLayout m_momentsFilterPipelineLayout;
+
+    VkPipeline m_atrousPipeline;
+    VkPipelineLayout m_atrousPipelineLayout;
+
+    VkPipeline m_modulatePipeline;
+    VkPipelineLayout m_modulatePipelineLayout;
+
     VkDescriptorSet m_reprojDscSet;
     VkDescriptorSetLayout m_reprojDscSetLayout;
+
+    VkDescriptorSet m_momentsFilterDscSet;
+    VkDescriptorSetLayout m_momentsFilterDscSetLayout;
+
+    VkDescriptorSet m_atrousDscSet;
+    VkDescriptorSetLayout m_atrousDscSetLayout;
+
+    VkDescriptorSet m_modulateDscSet;
+    VkDescriptorSetLayout m_modulateDscSetLayout;
 
     //void PackNormalDepth(VkCommandBuffer cmd);
 
     void create_frame_buffers(VulkanEngine* engine);
 
     void create_reprojection_pipeline(VulkanEngine* engine);
+	void create_moments_filter_pipeline(VulkanEngine* engine);
+	void create_wavelet_filter_pipeline(VulkanEngine* engine);
+    void create_modulate_pipeline(VulkanEngine* engine);
+
     void create_descriptors(VulkanEngine* engine);
 
     /// <summary>
@@ -53,9 +75,12 @@ private:
 
     void Reprojection(VkCommandBuffer cmd, VulkanEngine* engine);
 
-    void FilterMoments(VkCommandBuffer cmd);
+    void FilterMoments(VkCommandBuffer cmd, VulkanEngine* engine);
 
-    void WaveletFilter(VkCommandBuffer cmd);
+    void WaveletFilter(VkCommandBuffer cmd, VulkanEngine* engine);
+
+    void Modulate(VkCommandBuffer cmd, VulkanEngine* engine);
+
 };
 
 #endif // !SVGF_H
