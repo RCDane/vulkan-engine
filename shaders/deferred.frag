@@ -14,7 +14,9 @@ layout (location = 0) in vec3 inNormal;
 layout (location = 1) in vec3 inColor;
 layout (location = 2) in vec2 inUV;
 layout (location = 3) in vec3 vPos;
-layout (location = 5) in mat3 inTBN;
+layout (location = 4) in mat3 inTBN;
+layout (location = 7) in float depth;
+
 
 layout (location = 0) out vec4 outAlbedo;
 layout (location = 1) out vec4 outNormal;
@@ -108,11 +110,11 @@ void main()
         N = normalize(TBN * textureNormal);
 
     }
-    double outViewZ = -vPos.z;
-    outViewZ = LinearizeDepth(outViewZ);
-    float viewZ = float(outViewZ);
-    float dz = fwidth(viewZ);
-    outNormal = vec4(ndir_to_oct_unorm(N), length(fwidth(N)), dz);        
+    // double outViewZ = (-vPos.z);
+    // double far = zFar;
+    double outViewZ = LinearizeDepth(depth);
+    double dz = fwidth(outViewZ);
+    outNormal = vec4(ndir_to_oct_unorm(N), length(fwidth(N)), outViewZ);        
 
 
 

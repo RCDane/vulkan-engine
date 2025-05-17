@@ -127,5 +127,5 @@ void main(){
     vec4 filteredIllumination = vec4(sumIllumination / vec4(sumWIllumination.xxx, sumWIllumination * sumWIllumination));
 
     imageStore(outIllumination, coord, filteredIllumination);
-    imageStore(color, coord, filteredIllumination);
+    // imageStore(color, coord, filteredIllumination);
 }

@@ -21,7 +21,7 @@ void main()
     const vec4 albedo = imageLoad(albedoTexture, coord);
 
     // Demodulate the illumination
-    const vec3 demodulatedIllumination = illumination.rgb / (albedo.rgb + 1e-8);
+    const vec3 demodulatedIllumination = illumination.rgb * (albedo.rgb + 1e-8);
 
     // Store the demodulated illumination in the output texture
     imageStore(color, coord, vec4(demodulatedIllumination, 1.0));

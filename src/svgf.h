@@ -30,7 +30,10 @@ private:
     AllocatedImage historyLength;
     AllocatedImage prevHistoryLength;
     AllocatedImage prevMoments;
-    
+	AllocatedImage packedDepthNormal;
+
+    VkPipeline m_packNormalDepthPipeline;
+    VkPipelineLayout m_NormalDepthPipelineLayout;
 
     VkPipeline m_reprojectionPipeline;
     VkPipelineLayout m_reprojPipelineLayout;
@@ -56,7 +59,11 @@ private:
     VkDescriptorSet m_modulateDscSet;
     VkDescriptorSetLayout m_modulateDscSetLayout;
 
-    //void PackNormalDepth(VkCommandBuffer cmd);
+
+    VkDescriptorSet m_packNormalDepthDscSet;
+    VkDescriptorSetLayout m_packNormalDepthDscSetLayout;
+
+    void PackNormalDepth(VkCommandBuffer cmd, VulkanEngine* engine);
 
     void create_frame_buffers(VulkanEngine* engine);
 
@@ -64,6 +71,8 @@ private:
 	void create_moments_filter_pipeline(VulkanEngine* engine);
 	void create_wavelet_filter_pipeline(VulkanEngine* engine);
     void create_modulate_pipeline(VulkanEngine* engine);
+    void create_packing_pipeline(VulkanEngine* engine);
+
 
     void create_descriptors(VulkanEngine* engine);
 

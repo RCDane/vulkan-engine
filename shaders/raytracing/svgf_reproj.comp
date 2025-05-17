@@ -32,6 +32,7 @@ layout(set = 0, binding = 6, rgba16f) uniform image2D prevNormalFWidthZWidth;
 layout(set = 0, binding = 7, r8ui) uniform uimage2D prevHistoryLengthImage;
 layout(set = 0, binding = 8, rg16f) uniform image2D prevMoments;
 layout(set = 0, binding = 9, rgba16f) uniform image2D illumination;
+layout(set = 0, binding = 10, rgba16f) uniform image2D packedNormalDepth;
 
 
 // new depth reprojection uniforms (after binding=7)
@@ -62,7 +63,7 @@ bool isReprjValid(
     
 
     // 2) check if deviation of depths is acceptable
-    if ( abs(Zprev - Z) / (fwidthZ + 1e-2) > 2.0 )
+    if ( abs(Zprev - Z) / (fwidthZ + 1e-8) > 1.0 )
         return false;
 
     // 3) normals compatibility
@@ -108,11 +109,10 @@ bool loadPrevData(
     vec2 posPrev  = prevUV * imageDim + (vec2(1.0) / imageDim);
     ivec2 iposPrev = ivec2(floor(posPrev));  // base for bilinear taps
 
-    // imageStore(color, ipos, vec4(iposPrev, 1.0,1.0) / 10.0);
 
-    // double prevD = texelFetch(prevDepth, iposPrev,0).r;
-    // prevD = LinearizeDepth(prevD);
-    // imageStore(color, ipos, vec4( abs(prevD - linearDepth) / (zWidth + 1e-3)));
+    double prevD = texelFetch(prevDepth, iposPrev,0).r;
+    prevD = LinearizeDepth(prevD);
+    // imageStore(color, ipos, vec4(prevD, linearDepth, zWidth,abs(prevD - linearDepth) / (zWidth + 1e-7)));
     // return false;
     prevIllum   = vec4(0.0);
     pMoments = vec2(0.0);
@@ -124,6 +124,8 @@ bool loadPrevData(
     ); 
     bool v[4];
     bool valid = false;
+
+    // vec4 validity = vec4(0.0);
 
     // 1) test validity at each tap
     for (int i = 0; i < 4; ++i) {
@@ -141,7 +143,7 @@ bool loadPrevData(
         valid = valid || v[i];
     }
 
-    
+    // validity += valid ? vec4(1.0,0,0,0) : vec4(0);
     // // 2) if any valid, do bilinear interp
     if (valid) {
         float fx = fract(posPrev.x), fy = fract(posPrev.y);
@@ -168,7 +170,9 @@ bool loadPrevData(
             prevIllum   /= sumw;
             pMoments /= sumw;
         }
+
     }
+    // validity += valid ? vec4(0,1,0,0) : vec4(0);
 
 
 
@@ -201,6 +205,9 @@ bool loadPrevData(
             valid        = true;
         }
     }
+    // validity += valid ? vec4(0,0,1,0) : vec4(0);
+
+    // imageStore(color, ipos, validity);
 
     // vec4 normfwidthzwidth = imageLoad(prevNormalFWidthZWidth, iposPrev);
 

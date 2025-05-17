@@ -224,17 +224,16 @@ LightSample ProcessLight(vec3 hitPoint, inout uint seed, LightSource Ls){
     }
     return ls;
 }
-float zNear = 0.1;
-float zFar = 300.0;
+double zNear = 0.1;
+double zFar = 300.0;
 
 
 
 double LinearizeDepth(double depth) {
     // Step 1: remap [0,1] → NDC [-1,1]
-    double z_ndc = depth;
     // Step 2: invert the perspective projection
-    return (zNear * zFar)
-         / (zFar - z_ndc * (zFar - zNear));
+    return (zNear * zFar) / (zFar - depth * (zFar - zNear));
+
 }
 
 bool isInsideScreen(ivec2 coord, ivec2 imageDim){

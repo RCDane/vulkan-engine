@@ -1,0 +1,34 @@
+#version 450
+
+#extension GL_GOOGLE_include_directive : require
+#extension GL_EXT_buffer_reference : require
+#extension GL_NV_compute_shader_derivatives : require
+
+#include "../common/PBR_functions.glsl"
+
+#include "../input_structures.glsl"
+#include "../common/host_device.h"
+#include "../common/util.glsl"
+
+layout(set = 0, binding = 0, rgba16f) uniform image2D packedNormalDepth;
+layout(set = 0, binding = 1, rgba16f) uniform image2D NormalFWidthZWidth;
+
+layout(set = 0, binding = 2) uniform sampler2D  depth;
+
+layout (local_size_x = 16, local_size_y = 16) in;
+
+void main(){
+    ivec2 pixelCoord = ivec2(gl_GlobalInvocationID.xy);
+
+    vec4 normalFwidthZwidth = imageLoad(NormalFWidthZWidth, pixelCoord);
+    vec2 packedNormal = normalFwidthZwidth.xy;
+    float depthFwidth = normalFwidthZwidth.w;
+
+    double nonLinearDepth = texelFetch(depth, pixelCoord, 0).r;
+    double linearDepth = double(LinearizeDepth(nonLinearDepth)*10);
+
+    double fWidth = fwidth(linearDepth);
+
+    vec4 packed = vec4(linearDepth, depthFwidth, packedNormal.x, packedNormal.y);
+    imageStore(packedNormalDepth, pixelCoord, packed);
+}

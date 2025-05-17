@@ -310,6 +310,6 @@ void main()
   }
   imageStore(colorHistory,
             ivec2(gl_LaunchIDEXT.xy),
-            vec4(accumulatedColor,1.0)); // store the color in the history buffer
+            vec4(combined,1.0)); // store the color in the history buffer
 
 }
