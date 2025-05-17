@@ -284,15 +284,15 @@ void main()
         PBR_result res =  CalculatePBRResult(N,V,L,albedoColor.xyz, Ls.color, float(Ls.intensity), F0, metalness, roughness);
         directIllumination += ((res.color * Ls.attenuation)) / Ls.pdf; // divide by the pdf of the light sample
 
-      }  
-  vec3 combined =  indirectIllumination + directIllumination ; // combine direct and indirect illumination
+      }   
+  vec3 combined = indirectIllumination+  directIllumination ; // combine direct and indirect illumination
 
   float currentRayCount =  float(uni.raytracingSettings.currentRayCount);
   float rayBudget =  float(uni.raytracingSettings.rayBudget); 
   float invNext = rayBudget / (currentRayCount + rayBudget);  
 
-
-  vec3 currentColor = imageLoad(colorHistory, ivec2(gl_LaunchIDEXT.xy)).rgb;
+ 
+  vec3 currentColor = imageLoad(colorHistory, ivec2(gl_LaunchIDEXT.xy)).rgb; 
 
 
   vec3 accumulatedColor = currentColor.rgb 

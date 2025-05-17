@@ -10,13 +10,26 @@
 #include "../common/host_device.h"
 #include "../common/util.glsl"
 
-layout(set = 0, binding = 0, rgba16f) uniform image2D packedNormalDepth;
+layout(set = 0, binding = 0, rgba32f) uniform image2D packedNormalDepth;
 layout(set = 0, binding = 1, rgba16f) uniform image2D NormalFWidthZWidth;
 
 layout(set = 0, binding = 2) uniform sampler2D  depth;
 
 layout (local_size_x = 16, local_size_y = 16) in;
+layout(derivative_group_quadsNV) in;
 
+
+float manualFwidth(sampler2D depth, ivec2 coord) {
+    float center = float(LinearizeDepth(texelFetch(depth, coord, 0).r));
+    float right  = float(LinearizeDepth(texelFetch(depth, coord + ivec2(1, 0), 0).r));
+    float left   = float(LinearizeDepth(texelFetch(depth, coord + ivec2(-1, 0), 0).r));
+    float up     = float(LinearizeDepth(texelFetch(depth, coord + ivec2(0, 1), 0).r));
+    float down   = float(LinearizeDepth(texelFetch(depth, coord + ivec2(0, -1), 0).r));
+
+    float dx = abs(right - left) * 0.5;
+    float dy = abs(up - down) * 0.5;
+    return dx + dy;
+}
 void main(){
     ivec2 pixelCoord = ivec2(gl_GlobalInvocationID.xy);
 
@@ -24,11 +37,14 @@ void main(){
     vec2 packedNormal = normalFwidthZwidth.xy;
     float depthFwidth = normalFwidthZwidth.w;
 
-    double nonLinearDepth = texelFetch(depth, pixelCoord, 0).r;
-    double linearDepth = double(LinearizeDepth(nonLinearDepth)*10);
+    float nonLinearDepth = texelFetch(depth, pixelCoord, 0).r;
+    float linearDepth = float(LinearizeDepth(nonLinearDepth)); 
 
-    double fWidth = fwidth(linearDepth);
+    // linearDepth = linearDepth * 100.0;
+    // linearDepth = linearDepth / 100.0;
 
-    vec4 packed = vec4(linearDepth, depthFwidth, packedNormal.x, packedNormal.y);
+    float f =  fwidth(linearDepth);
+
+    highp vec4 packed = vec4(linearDepth, f, packedNormal.x, packedNormal.y);
     imageStore(packedNormalDepth, pixelCoord, packed);
 }

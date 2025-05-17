@@ -163,7 +163,7 @@ void VulkanEngine::init()
 		if (scene->camera) {
 			mainCamera = scene->camera;
 			mainCamera->zNear = 0.1f;
-			mainCamera->zFar = 300.0f;
+			mainCamera->zFar = 300.0;
 		}
 		if (scene->lightSources.size() > 0) {
 			lightSources.insert(lightSources.end(),
@@ -562,8 +562,6 @@ void VulkanEngine::draw()
 		vkutil::transition_image(cmd, _depthImage.image, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_DEPTH_BIT);
 
 		vkutil::transition_image(cmd, _colorHistory.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
-
-		vkutil::transition_image(cmd, _depthHistory.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_DEPTH_BIT);
 		WaitAll(cmd);
 
 		_raytracingHandler.raytrace(cmd, this);
@@ -572,11 +570,7 @@ void VulkanEngine::draw()
 
 		_svgfHandler.Execute(cmd, this);
 
-		vkutil::transition_image(cmd, _depthImage.image, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_ASPECT_DEPTH_BIT);
 
-		vkutil::transition_image(cmd, _depthHistory.image, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_ASPECT_DEPTH_BIT);
-		
-		vkutil::copy_image_to_image_depth(cmd, _depthImage.image, _depthHistory.image, _swapchainExtent, _swapchainExtent);
 		//RemoveMarker(cmd);
 
 
@@ -1388,9 +1382,12 @@ void VulkanEngine::init_vulkan()
 	deviceFeatures.shaderInt64 = true;
 	deviceFeatures.shaderFloat64 = true;
 
+
 	VkPhysicalDeviceRayQueryFeaturesKHR rayQueryFeatures{ .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR };
 	rayQueryFeatures.rayQuery = true;
-	
+	VkPhysicalDeviceComputeShaderDerivativesFeaturesKHR derivativesFeatures = {};
+	derivativesFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COMPUTE_SHADER_DERIVATIVES_FEATURES_KHR;
+	derivativesFeatures.computeDerivativeGroupQuads = VK_TRUE;
 
     //use vkbootstrap to select a gpu. 
 	//We want a gpu that can write to the SDL surface and supports vulkan 1.3 with the correct features
@@ -1410,9 +1407,13 @@ void VulkanEngine::init_vulkan()
 		.add_required_extension_features(localreadfeatures)
 		.add_required_extension_features(accelerationStructureFeatures)
 		.add_required_extension_features(shaderClockFeatures)
+		.add_required_extension_features(derivativesFeatures)
+
 		.add_required_extension_features(rtPipelineFeatures)
 		.add_required_extension("VK_EXT_descriptor_buffer")
 		.add_required_extension("VK_NV_ray_tracing_validation")
+		.add_required_extension("VK_NV_compute_shader_derivatives")
+
 		.add_required_extension("VK_KHR_dynamic_rendering_local_read")
 		.add_required_extension_features(rtValidationFeatures)
 		.add_required_extension("VK_KHR_ray_tracing_pipeline")

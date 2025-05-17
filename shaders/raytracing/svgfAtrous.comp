@@ -13,12 +13,11 @@ layout (local_size_x = 16, local_size_y = 16) in;
 
 layout(set = 0, binding = 0, rgba16f) uniform image2D illuminationTexture;
 layout(set = 0, binding = 1, r8ui) uniform uimage2D prevHistoryLengthImage;
-layout(set = 0, binding = 2, rgba16f) uniform image2D NormalFWidthZWidth;
+layout(set = 0, binding = 2, rgba32f) uniform image2D packedNormalDepth;
 layout(set = 0, binding = 3, rgba16f) uniform image2D albedoTexture;
-layout(set = 0, binding = 4) uniform sampler2D  depthTexture;
-layout(set = 0, binding = 5, rgba16f) uniform image2D outIllumination;
-layout(set = 0, binding = 6, rgba32f) uniform image2D color;
-
+layout(set = 0, binding = 4, rgba16f) uniform image2D outIllumination;
+layout(set = 0, binding = 5, rgba32f) uniform image2D color;
+ 
 
 struct PushConstantAtrous {
     ivec2 imageSize;
@@ -65,20 +64,20 @@ void main(){
     const float variance = computeVarianceCenter(coord);
 
     const float historyLength = float(imageLoad(prevHistoryLengthImage, coord).x);
-    const float depth = float(LinearizeDepth(texture(depthTexture, coord).x));
-    const float zWidth = imageLoad(NormalFWidthZWidth, coord).w;
-    if (depth < 0.0){
+    const vec4 packedND = imageLoad(packedNormalDepth, coord);
+
+    const float zWidth = packedND.y;
+    if (packedND.x < 0.0){
         imageStore(outIllumination, coord, illuminationCenter);
         return;
     }
 
-    const vec4 normalFZwidth = imageLoad(NormalFWidthZWidth, coord);
 
-    const vec3 normalCenter = oct_to_ndir_unorm(normalFZwidth.xy);
+    const vec3 normalCenter = oct_to_ndir_unorm(packedND.zw);
 
 
     const float phiLIllumination = PC.pc.phiColor * sqrt(max(0.0, epsV + variance));
-    const float phiDepth = max(depth, 1e-8) * PC.pc.stepSize;
+    const float phiDepth = max(packedND.x, 1e-8) * PC.pc.stepSize;
 
     float sumWIllumination = 1.0;
     vec4 sumIllumination = illuminationCenter;
@@ -97,13 +96,14 @@ void main(){
             {
                 const vec4 illuminationP = imageLoad(illuminationTexture, p);
                 const float lIlluminationP = luminance(illuminationP.rgb);
-                const float zP =  float(LinearizeDepth(texture(depthTexture, p).x));
-                const vec4 n = imageLoad(NormalFWidthZWidth, p);
-                const vec3 nP = oct_to_ndir_unorm(n.xy);
+                const vec4 n = imageLoad(packedNormalDepth, p);
+                const float zP = n.x;
+
+                const vec3 nP = oct_to_ndir_unorm(n.zw);
 
                 // compute the edge-stopping functions
                 const float w = computeWeight(
-                    depth,
+                    packedND.x,
                     zP,
                     phiDepth * length(vec2(xx, yy)),
                     normalCenter,

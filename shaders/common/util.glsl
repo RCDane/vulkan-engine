@@ -236,6 +236,12 @@ double LinearizeDepth(double depth) {
 
 }
 
+double invLinearizeDepth(double linearDepth) {
+    // zNear, zFar are declared above as globals
+    return (float(zFar) * (linearDepth - float(zNear)))
+         / (linearDepth * (float(zFar) - float(zNear)));
+}
+
 bool isInsideScreen(ivec2 coord, ivec2 imageDim){
     if ( any(lessThan(coord, ivec2(1,1))) ||
          any(greaterThan(coord, imageDim - ivec2(1,1))) )

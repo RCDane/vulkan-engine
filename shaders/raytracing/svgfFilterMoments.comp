@@ -10,13 +10,12 @@
 
 layout(set = 0, binding = 0, rgba16f) uniform image2D illuminationTexture;
 layout(set = 0, binding = 1, r8ui) uniform uimage2D prevHistoryLengthImage;
-layout(set = 0, binding = 2, rgba16f) uniform image2D NormalFWidthZWidth;
+layout(set = 0, binding = 2, rgba32f) uniform image2D packedNormalDepth;
 layout(set = 0, binding = 3, rg16f) uniform image2D Moments;
-layout(set = 0, binding = 4) uniform sampler2D  depthTexture;
-layout(set = 0, binding = 5, rgba32f) uniform image2D color;
+layout(set = 0, binding = 4, rgba32f) uniform image2D color;
 
 
-
+ 
 layout (local_size_x = 16, local_size_y = 16) in;
 
 float gPhiColor = 0.2;
@@ -39,16 +38,16 @@ void main(){
         const vec4 illuminationCenter = imageLoad(illuminationTexture, coord);
         const float lIlluminationCenter = luminance(illuminationCenter.rgb);
 
-        const vec4 normalFZwidth = imageLoad(NormalFWidthZWidth, coord);
+        const vec4 normalFZwidth = imageLoad(packedNormalDepth, coord);
         
-        float depth = float(LinearizeDepth(texture(depthTexture, coord).x));
-        float zWidth = normalFZwidth.w;
+        float depth = normalFZwidth.x;
+        float zWidth = normalFZwidth.y;
 
         if (depth < 0.0){
             return;
         }
 
-        const vec3 normalCenter = oct_to_ndir_unorm(normalFZwidth.xy);
+        const vec3 normalCenter = oct_to_ndir_unorm(normalFZwidth.zw);
         const float phiDepth = float(max(LinearizeDepth(depth), 1e-8)*3.0);
 
         const int radius = 3;
@@ -66,8 +65,9 @@ void main(){
                     const vec3 illuminationP = imageLoad(illuminationTexture, p).rgb;
                     const vec2 momentsP = imageLoad(Moments, p).xy;
                     const float lIlluminationP = luminance(illuminationP.rgb);
-                    const float zP = float(LinearizeDepth(texture(depthTexture, p).x));
-                    const vec3 nP = oct_to_ndir_unorm(imageLoad(NormalFWidthZWidth, coord).xy);
+                    const vec4 packedNormal = imageLoad(packedNormalDepth, p);
+                    const float zP = packedNormal.x;
+                    const vec3 nP = oct_to_ndir_unorm(packedNormal.zw);
 
                     const float w = computeWeight(
                         depth,
@@ -100,9 +100,6 @@ void main(){
         variance *= 4.0 / h;
 
         imageStore(illuminationTexture, coord, vec4(sumIllumination, variance.r));
-    }
-    else {
-
     }
     
 

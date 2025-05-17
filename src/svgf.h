@@ -25,12 +25,16 @@ private:
 
     AllocatedImage illumination;
     AllocatedImage prevIllumination;
+    AllocatedImage illuminationBlend;
+
     AllocatedImage normalFWidthZWidth;
     AllocatedImage prevNormalFWidthZWidth;
     AllocatedImage historyLength;
     AllocatedImage prevHistoryLength;
     AllocatedImage prevMoments;
 	AllocatedImage packedDepthNormal;
+    AllocatedImage prevPackedDepthNormal;
+
 
     VkPipeline m_packNormalDepthPipeline;
     VkPipelineLayout m_NormalDepthPipelineLayout;

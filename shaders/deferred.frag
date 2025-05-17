@@ -112,9 +112,7 @@ void main()
     }
     // double outViewZ = (-vPos.z);
     // double far = zFar;
-    double outViewZ = LinearizeDepth(depth);
-    double dz = fwidth(outViewZ);
-    outNormal = vec4(ndir_to_oct_unorm(N), length(fwidth(N)), outViewZ);        
+    outNormal = vec4(ndir_to_oct_unorm(N), length(fwidth(N)), 0.0);        
 
 
 
