@@ -30,6 +30,9 @@ layout(set = 0, binding = 4, rgba32f) uniform image2D prevPackedNormalDepth;
 layout(set = 0, binding = 5, r8ui) uniform uimage2D prevHistoryLengthImage;
 layout(set = 0, binding = 6, rg16f) uniform image2D prevMoments;
 layout(set = 0, binding = 7, rgba16f) uniform image2D illumination;
+layout(set = 0, binding = 8, rgba16f) uniform image2D metalRoughnessTexture;
+layout(set = 0, binding = 9, rgba16f) uniform image2D prevMetalRoughnessTexture;
+
 
 
 // new depth reprojection uniforms (after binding=7)
@@ -37,7 +40,7 @@ layout(push_constant ) uniform PushConstant { PushConstantReproj pc; } PC;
 
 const float reprojEps = 1e-4;
 
-float gAlpha = 0.2;
+float gAlpha = 0.1;
 float gMomentsAlpha = 0.2;
   
 
@@ -48,7 +51,9 @@ bool isReprjValid(
     double fwidthZ,
     vec3 normal,
     vec3 normalPrev, 
-    float fwidthNormal
+    float fwidthNormal,
+    vec2 metalRoughness,
+    vec2 metalRoughnessPrev
 ) {
     ivec2 imageDim = PC.pc.imageSize;
 
@@ -66,6 +71,12 @@ bool isReprjValid(
     // 3) normals compatibility
     if ( dot(normal, normalPrev) < 0.95 )
         return false;
+
+    vec2 diff = abs(metalRoughness-metalRoughnessPrev);
+
+    if (diff.x > 0.1 || diff.y > 0.1 ){
+        return false;
+    }
 
     return true;
 }
@@ -113,8 +124,9 @@ bool loadPrevData(
     vec4 tmpPND = imageLoad(prevPackedNormalDepth, ipos);
     double tmpPrevD = LinearizeDepth(tmpPND.r);
     
-    imageStore(color, ipos, vec4(linearDepth, tmpPrevD, abs(tmpPrevD - linearDepth) / (zWidth + 1e-3), 1.0));
+    // imageStore(color, ipos, vec4(linearDepth, tmpPrevD, abs(tmpPrevD - linearDepth) / (zWidth + 1e-3), 1.0));
 
+    vec2 metalRoughness = imageLoad(metalRoughnessTexture, ipos).xy;
     // imageStore(color, ipos, vec4(prevD, linearDepth, zWidth,abs(prevD - linearDepth) / (zWidth + 1e-7)));
     // return false;
     prevIllum   = vec4(0.0);
@@ -135,10 +147,11 @@ bool loadPrevData(
             v[i] = false;
         } else { 
             vec4 PND = imageLoad(prevPackedNormalDepth, loc);
+            vec2 prevMetalRoughness = imageLoad(metalRoughnessTexture, loc).xy;
 
             double prevD = LinearizeDepth(PND.r);
             vec3 nP   = normalize(oct_to_ndir_unorm(PND.zw));
-            v[i] = isReprjValid(iposPrev, linearDepth, prevD, zWidth, currentNormal, nP, normalFwidth);
+            v[i] = isReprjValid(iposPrev, linearDepth, prevD, zWidth, currentNormal, nP, normalFwidth, metalRoughness, prevMetalRoughness);
         }
         valid = valid || v[i];
     }
@@ -187,11 +200,12 @@ bool loadPrevData(
                 vec4 PND = imageLoad(prevPackedNormalDepth, p);
 
                 double prevD = LinearizeDepth(PND.r);
+                vec2 prevMetalRoughness = imageLoad(metalRoughnessTexture, p).xy;
 
                 vec3 nP   = oct_to_ndir_unorm(PND.zw);
 
 
-                if (isReprjValid(iposPrev, linearDepth, prevD, zWidth, currentNormal, nP, normalFwidth)) {
+                if (isReprjValid(iposPrev, linearDepth, prevD, zWidth, currentNormal, nP, normalFwidth,metalRoughness, prevMetalRoughness)) {
                     prevIllum   += imageLoad(prevIlluminationImage, p);
                     pMoments += imageLoad(prevMoments, p).xy;
                     nValid      += 1.0;

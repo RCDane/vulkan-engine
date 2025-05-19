@@ -89,7 +89,7 @@ void VulkanEngine::init()
 	immediate_submit([&](VkCommandBuffer cmd) {
 		vkutil::transition_image_relaxed(cmd, _gBuffer_albedo.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_ASPECT_COLOR_BIT);
 		vkutil::transition_image_relaxed(cmd, _gBuffer_normal.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
-		vkutil::transition_image_relaxed(cmd, _gBuffer_metallicRougnes.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
+		vkutil::transition_image_relaxed(cmd, _gBuffer_metallicRoughnes.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
 		vkutil::transition_image_relaxed(cmd, _gBuffer_Emissive.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
 		vkutil::transition_image_relaxed(cmd, _depthImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_DEPTH_BIT);
 		vkutil::transition_image_relaxed(cmd, _depthHistory.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_DEPTH_BIT);
@@ -521,7 +521,7 @@ void VulkanEngine::draw()
 	std::vector<VkImage> gBufferImages = {
 		_gBuffer_albedo.image,
 		_gBuffer_normal.image,
-		_gBuffer_metallicRougnes.image,
+		_gBuffer_metallicRoughnes.image,
 		_gBuffer_Emissive.image
 		};
 	vkutil::transition_gbuffer_images(
@@ -1040,7 +1040,7 @@ void VulkanEngine::draw_deferred(VkCommandBuffer cmd)
 	VkRenderingAttachmentInfo albedoAttachment = vkinit::attachment_info(_gBuffer_albedo.imageView, &clearValue, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, load_op);
 	VkRenderingAttachmentInfo normalAttachment = vkinit::attachment_info(_gBuffer_normal.imageView, &clearValue, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, load_op);
 	VkRenderingAttachmentInfo emissiveAttachment = vkinit::attachment_info(_gBuffer_Emissive.imageView, &clearValue, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, load_op);
-	VkRenderingAttachmentInfo metalRougnessAttachment = vkinit::attachment_info(_gBuffer_metallicRougnes.imageView, &clearValue, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, load_op);
+	VkRenderingAttachmentInfo metalRougnessAttachment = vkinit::attachment_info(_gBuffer_metallicRoughnes.imageView, &clearValue, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, load_op);
 
 	mColorAttachments = {
 		albedoAttachment,
@@ -1658,13 +1658,13 @@ void VulkanEngine::init_swapchain()
 	materialImageUsages |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 	materialImageUsages |= VK_IMAGE_USAGE_SAMPLED_BIT;
 
-	_gBuffer_metallicRougnes.imageFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
-	_gBuffer_metallicRougnes.imageExtent = drawImageExtent;
+	_gBuffer_metallicRoughnes.imageFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
+	_gBuffer_metallicRoughnes.imageExtent = drawImageExtent;
 
-	create_render_buffer(_gBuffer_metallicRougnes, materialImageUsages, VK_IMAGE_ASPECT_COLOR_BIT);
-	_gBuffer_metallicRougnes.name = "G-buffer-MetalRougness";
-	NameImage(_device, _gBuffer_metallicRougnes.image, "G-buffer-MetalRougness");
-	NameImageView(_device, _gBuffer_metallicRougnes.imageView, "G-buffer-MetalRougness View");
+	create_render_buffer(_gBuffer_metallicRoughnes, materialImageUsages, VK_IMAGE_ASPECT_COLOR_BIT);
+	_gBuffer_metallicRoughnes.name = "G-buffer-MetalRougness";
+	NameImage(_device, _gBuffer_metallicRoughnes.image, "G-buffer-MetalRougness");
+	NameImageView(_device, _gBuffer_metallicRoughnes.imageView, "G-buffer-MetalRougness View");
 
 
 	// emissive buffer
@@ -1938,7 +1938,7 @@ void VulkanEngine::init_deferred_pipeline() {
 	std::vector<VkFormat> color_formats = {
 		_gBuffer_albedo.imageFormat,
 		_gBuffer_normal.imageFormat,
-		_gBuffer_metallicRougnes.imageFormat,
+		_gBuffer_metallicRoughnes.imageFormat,
 		_gBuffer_Emissive.imageFormat,
 
 	};

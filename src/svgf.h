@@ -35,6 +35,8 @@ private:
 	AllocatedImage packedDepthNormal;
     AllocatedImage prevPackedDepthNormal;
 
+    AllocatedImage prevMetalRougness;
+
 
     VkPipeline m_packNormalDepthPipeline;
     VkPipelineLayout m_NormalDepthPipelineLayout;

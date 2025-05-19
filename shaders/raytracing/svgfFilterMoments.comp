@@ -40,7 +40,7 @@ void main(){
 
         const vec4 normalFZwidth = imageLoad(packedNormalDepth, coord);
         
-        float depth = normalFZwidth.x;
+        float depth = float(LinearizeDepth(normalFZwidth.x));
         float zWidth = normalFZwidth.y;
 
         if (depth < 0.0){

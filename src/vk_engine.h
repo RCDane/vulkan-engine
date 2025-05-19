@@ -254,7 +254,7 @@ public:
 	AllocatedImage _depthImage;
 	AllocatedImage _gBuffer_normal;
 	AllocatedImage _gBuffer_albedo;
-	AllocatedImage _gBuffer_metallicRougnes;
+	AllocatedImage _gBuffer_metallicRoughnes;
 	AllocatedImage _gBuffer_Emissive;
 
 

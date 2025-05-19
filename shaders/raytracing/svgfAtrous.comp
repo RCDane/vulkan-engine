@@ -17,7 +17,8 @@ layout(set = 0, binding = 2, rgba32f) uniform image2D packedNormalDepth;
 layout(set = 0, binding = 3, rgba16f) uniform image2D albedoTexture;
 layout(set = 0, binding = 4, rgba16f) uniform image2D outIllumination;
 layout(set = 0, binding = 5, rgba32f) uniform image2D color;
- 
+layout(set = 0, binding = 6, rgba16f) uniform image2D metalRoughnessTexture;
+layout(set = 0, binding = 7, rgba16f) uniform image2D prevMetalRoughnessTexture;
 
 struct PushConstantAtrous {
     ivec2 imageSize;
@@ -55,7 +56,7 @@ void main(){
     
     const ivec2 screenSize = PC.pc.imageSize;
 
-    const float epsV = 1e-6;
+    const float epsV = 1e-10;
     const float kernelWeights[3] = { 1.0, 2.0 / 3.0, 1.0 / 6.0 };
 
     const vec4 illuminationCenter = imageLoad(illuminationTexture, coord);
@@ -65,6 +66,7 @@ void main(){
 
     const float historyLength = float(imageLoad(prevHistoryLengthImage, coord).x);
     const vec4 packedND = imageLoad(packedNormalDepth, coord);
+
 
     const float zWidth = packedND.y;
     if (packedND.x < 0.0){
@@ -77,7 +79,11 @@ void main(){
 
 
     const float phiLIllumination = PC.pc.phiColor * sqrt(max(0.0, epsV + variance));
-    const float phiDepth = max(packedND.x, 1e-8) * PC.pc.stepSize;
+    const float phiDepth = float(max(LinearizeDepth(packedND.x), 1e-8) * PC.pc.stepSize);
+    const vec2 MRCenter = imageLoad(metalRoughnessTexture, coord).xy;
+
+    const float depthCenter = float(LinearizeDepth(packedND.x));
+    float phiMR = 10.0;
 
     float sumWIllumination = 1.0;
     vec4 sumIllumination = illuminationCenter;
@@ -95,6 +101,8 @@ void main(){
             if (inside && (xx != 0 || yy != 0)) // ignore center
             {
                 const vec4 illuminationP = imageLoad(illuminationTexture, p);
+                const vec2 MRP = imageLoad(prevMetalRoughnessTexture, p).xy;
+
                 const float lIlluminationP = luminance(illuminationP.rgb);
                 const vec4 n = imageLoad(packedNormalDepth, p);
                 const float zP = float(LinearizeDepth(n.x));
@@ -103,7 +111,7 @@ void main(){
 
                 // compute the edge-stopping functions
                 const float w = computeWeight(
-                    packedND.x,
+                    depthCenter,
                     zP,
                     phiDepth * length(vec2(xx, yy)),
                     normalCenter,
@@ -111,7 +119,10 @@ void main(){
                     PC.pc.phiNormal,
                     lIlluminationCenter,
                     lIlluminationP,
-                    phiLIllumination
+                    phiLIllumination,
+                    MRCenter,
+                    MRP,
+                    phiMR
                 );
 
                 const float wIllumination = w * kernel;
@@ -127,5 +138,5 @@ void main(){
     vec4 filteredIllumination = vec4(sumIllumination / vec4(sumWIllumination.xxx, sumWIllumination * sumWIllumination));
 
     imageStore(outIllumination, coord, filteredIllumination);
-    imageStore(color, coord, filteredIllumination);
+    imageStore(color, coord, vec4(variance));
 }
