@@ -232,23 +232,7 @@ void main()
 
 
 	indirectIllumination += result.color * invPdf;
-  // if(prd.depth > 1 || prd.done == 1) // If I increase depth to 2, then something breaks. 
-  //   break;
-  //   rayOrigin = prd.rayOrigin + V*e;
-  //   hitNormal = prd.normal;
-  //   createCoordinateSystem(hitNormal, tangent, bitangent);
 
-  //   // rayDirection = samplingHemisphere(prd.seed, tangent, bitangent, hitNormal);
-  //   rayDirection = sampleGGXDirection(
-  //       prd.normal,
-  //       -prd.rayDir,
-  //       roughness,
-  //       tangent,
-  //       bitangent,
-  //       seed,
-  //       pdf
-  //   );
-  // }
 
   // Next event estimation for direct lighting
   vec3 directIllumination = vec3(0.0); 

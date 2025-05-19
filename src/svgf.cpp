@@ -502,24 +502,27 @@ void SVGFHandler::WaveletFilter(VkCommandBuffer cmd, VulkanEngine* engine) {
 	vkutil::transition_image(cmd, engine->_gBuffer_albedo.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
 	vkutil::transition_image(cmd, engine->_colorHistory.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
 	vkutil::transition_image(cmd, prevIllumination.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
-	VkDescriptorSet globalDescriptor = engine->get_current_frame()._frameDescriptors.allocate(engine->_device, m_atrousDscSetLayout);
 
-	DescriptorWriter writer;
-	writer.write_image(0, illumination.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
-	writer.write_image(1, prevHistoryLength.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
-	writer.write_image(2, packedDepthNormal.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
-	writer.write_image(3, engine->_gBuffer_albedo.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
-	writer.write_image(4, prevIllumination.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
-	writer.write_image(5, engine->_colorHistory.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+	AllocatedImage illuminationIn = illumination;
+	AllocatedImage illuminationOut = prevIllumination;
 
-	writer.update_set(engine->_device, globalDescriptor);
 	for (int i = 0; i < 4; i++) {
 
+		VkDescriptorSet globalDescriptor = engine->get_current_frame()._frameDescriptors.allocate(engine->_device, m_atrousDscSetLayout);
 
-		
+
+		DescriptorWriter writer;
+		writer.write_image(0, illuminationIn.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+		writer.write_image(1, prevHistoryLength.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+		writer.write_image(2, packedDepthNormal.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+		writer.write_image(3, engine->_gBuffer_albedo.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+		writer.write_image(4, illuminationOut.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+		writer.write_image(5, engine->_colorHistory.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+
+		writer.update_set(engine->_device, globalDescriptor);
 
 
-		
+		std::swap(illuminationIn, illuminationOut);
 
 		vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_atrousPipeline);
 
@@ -530,14 +533,14 @@ void SVGFHandler::WaveletFilter(VkCommandBuffer cmd, VulkanEngine* engine) {
 		settings.imageSize = glm::ivec2(engine->_windowExtent.width, engine->_windowExtent.height);
 		settings.phiColor = 0.2;
 		settings.phiNormal = 0.2;
-		settings.stepSize = i*2+1;
+		settings.stepSize = 1 << i;
 
 
 
 		vkCmdPushConstants(cmd, m_reprojPipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(PushConstantAtrous), &settings);
 
 		vkCmdDispatch(cmd, std::ceil(engine->_windowExtent.width / 16.0), std::ceil(engine->_windowExtent.height / 16.0), 1);
-		if (i == 1) {
+		if (i == 0) {
 
 			vkutil::transition_image(cmd, illumination.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_ASPECT_COLOR_BIT);
 
@@ -547,11 +550,14 @@ void SVGFHandler::WaveletFilter(VkCommandBuffer cmd, VulkanEngine* engine) {
 
 
 		}
-		vkutil::transition_image(cmd, illumination.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
+		vkutil::transition_image(cmd, illuminationIn.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
+		vkutil::transition_image(cmd, illuminationOut.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
 
 
 	}
 
+	illumination = illuminationIn;
+	prevIllumination = illuminationOut;
 }
 
 

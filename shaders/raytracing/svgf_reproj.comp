@@ -37,8 +37,8 @@ layout(push_constant ) uniform PushConstant { PushConstantReproj pc; } PC;
 
 const float reprojEps = 1e-4;
 
-float gAlpha = 0.1;
-float gMomentsAlpha = 0.1;
+float gAlpha = 0.2;
+float gMomentsAlpha = 0.2;
   
 
 bool isReprjValid(

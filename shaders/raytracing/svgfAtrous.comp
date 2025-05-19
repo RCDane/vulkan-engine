@@ -55,7 +55,7 @@ void main(){
     
     const ivec2 screenSize = PC.pc.imageSize;
 
-    const float epsV = 1e-10;
+    const float epsV = 1e-6;
     const float kernelWeights[3] = { 1.0, 2.0 / 3.0, 1.0 / 6.0 };
 
     const vec4 illuminationCenter = imageLoad(illuminationTexture, coord);
@@ -97,7 +97,7 @@ void main(){
                 const vec4 illuminationP = imageLoad(illuminationTexture, p);
                 const float lIlluminationP = luminance(illuminationP.rgb);
                 const vec4 n = imageLoad(packedNormalDepth, p);
-                const float zP = n.x;
+                const float zP = float(LinearizeDepth(n.x));
 
                 const vec3 nP = oct_to_ndir_unorm(n.zw);
 
@@ -127,5 +127,5 @@ void main(){
     vec4 filteredIllumination = vec4(sumIllumination / vec4(sumWIllumination.xxx, sumWIllumination * sumWIllumination));
 
     imageStore(outIllumination, coord, filteredIllumination);
-    // imageStore(color, coord, filteredIllumination);
+    imageStore(color, coord, filteredIllumination);
 }
