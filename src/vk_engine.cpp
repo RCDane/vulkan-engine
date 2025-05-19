@@ -44,7 +44,7 @@
 //#include <windows.h>
 //#include <tchar.h>
 
-constexpr bool bUseValidationLayers = true;
+constexpr bool bUseValidationLayers = false;
 
 
 VulkanEngine* loadedEngine = nullptr;

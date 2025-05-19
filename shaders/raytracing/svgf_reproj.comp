@@ -37,8 +37,8 @@ layout(push_constant ) uniform PushConstant { PushConstantReproj pc; } PC;
 
 const float reprojEps = 1e-4;
 
-float gAlpha = 0.05;
-float gMomentsAlpha = 0.05;
+float gAlpha = 0.1;
+float gMomentsAlpha = 0.1;
   
 
 bool isReprjValid(
@@ -60,11 +60,11 @@ bool isReprjValid(
     
 
     // 2) check if deviation of depths is acceptable
-    if ( abs(Zprev - Z) / (fwidthZ + 1e-3) > 1.0 )
+    if ( abs(Zprev - Z) / (fwidthZ + 1e-2) > 0.01 )
         return false;
 
     // 3) normals compatibility
-    if ( dot(normal, normalPrev) < 0.97 )
+    if ( dot(normal, normalPrev) < 0.95 )
         return false;
 
     return true;
@@ -85,7 +85,7 @@ bool loadPrevData(
     // fetch current depth, normal & fwidth
 
     vec4 pNormalDepth = imageLoad(packedNormalDepth, ivec2(ipos));
-    double linearDepth = pNormalDepth.x;
+    double linearDepth = LinearizeDepth(double(pNormalDepth.x));
 
     vec3 currentNormal = oct_to_ndir_unorm(pNormalDepth.zw);
 
@@ -98,7 +98,7 @@ bool loadPrevData(
     // compute previous pixel via reprojection
     // vec2 pixelCenter = posH + vec2(0.5);
     dvec3 worldPos = reconstructWorldPosition(
-        depth, ipos, imageDim,
+        pNormalDepth.x, ipos, imageDim,
         PC.pc.projInverse, PC.pc.viewInverse
     );
     // imageStore(color, ipos, vec4(worldPos,1.0));
@@ -109,7 +109,11 @@ bool loadPrevData(
     vec2 posPrev  = prevUV * imageDim + (vec2(1.0) / imageDim);
     ivec2 iposPrev = ivec2(floor(posPrev));  // base for bilinear taps
 
+
+    vec4 tmpPND = imageLoad(prevPackedNormalDepth, ipos);
+    double tmpPrevD = LinearizeDepth(tmpPND.r);
     
+    imageStore(color, ipos, vec4(linearDepth, tmpPrevD, abs(tmpPrevD - linearDepth) / (zWidth + 1e-3), 1.0));
 
     // imageStore(color, ipos, vec4(prevD, linearDepth, zWidth,abs(prevD - linearDepth) / (zWidth + 1e-7)));
     // return false;
@@ -132,7 +136,7 @@ bool loadPrevData(
         } else { 
             vec4 PND = imageLoad(prevPackedNormalDepth, loc);
 
-            double prevD = PND.r;
+            double prevD = LinearizeDepth(PND.r);
             vec3 nP   = normalize(oct_to_ndir_unorm(PND.zw));
             v[i] = isReprjValid(iposPrev, linearDepth, prevD, zWidth, currentNormal, nP, normalFwidth);
         }
@@ -182,7 +186,7 @@ bool loadPrevData(
 
                 vec4 PND = imageLoad(prevPackedNormalDepth, p);
 
-                double prevD = PND.r;
+                double prevD = LinearizeDepth(PND.r);
 
                 vec3 nP   = oct_to_ndir_unorm(PND.zw);
 
@@ -216,7 +220,7 @@ bool loadPrevData(
     
     vec4 imageColor = imageLoad(color, ipos);
     double error = abs(prevD - linearDepth) / (zWidth + 1e-4);
-    imageStore(color, ipos, valid ? vec4(imageColor.xyz,error ) : vec4(1.0,0.0,1.0,error));
+    // imageStore(color, ipos, valid ? vec4(imageColor.xyz,error ) : vec4(1.0,0.0,1.0,error));
 
     // imageStore(color, ipos, vec4(valid ? 1.0 : 0.0));
 

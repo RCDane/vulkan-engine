@@ -28,7 +28,7 @@ float manualFwidth(sampler2D depth, ivec2 coord) {
 
     float dx = abs(right - left) * 0.5;
     float dy = abs(up - down) * 0.5;
-    return dx + dy;
+    return dy + dx;
 }
 void main(){
     ivec2 pixelCoord = ivec2(gl_GlobalInvocationID.xy);
@@ -38,13 +38,11 @@ void main(){
     float depthFwidth = normalFwidthZwidth.w;
 
     float nonLinearDepth = texelFetch(depth, pixelCoord, 0).r;
-    float linearDepth = float(LinearizeDepth(nonLinearDepth)); 
-
     // linearDepth = linearDepth * 100.0;
     // linearDepth = linearDepth / 100.0;
 
-    float f =  fwidth(linearDepth);
+    float f =  manualFwidth(depth, pixelCoord);
 
-    highp vec4 packed = vec4(linearDepth, f, packedNormal.x, packedNormal.y);
+    highp vec4 packed = vec4(nonLinearDepth, f, packedNormal.x, packedNormal.y);
     imageStore(packedNormalDepth, pixelCoord, packed);
 }

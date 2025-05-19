@@ -29,8 +29,7 @@ layout(set = 2, binding = 6, r32f) readonly uniform image2D depthHistory;
 layout(set = 3, binding = 0, std430) readonly buffer LightSources {LightSource l[]; } lights;
 
 layout(push_constant) uniform _PushConstantRay { PushConstantRay pcRay; };
-// clang-format on
- 
+
 
 
 
