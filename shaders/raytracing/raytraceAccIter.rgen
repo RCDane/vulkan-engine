@@ -233,7 +233,8 @@ void main()
 
   // Next event estimation for direct lighting
   vec3 directIllumination = vec3(0.0); 
-  int iterations = 1;
+  int iterations = 10;
+  int count = 0;
   for (int i = 0; i < iterations; i++){
     LightSample Ls = sampleLightsPdf(vec3(worldPos), seed, uni.raytracingSettings.lightCount);
     
@@ -267,11 +268,13 @@ void main()
       if (!isShadowed) { 
           PBR_result res =  CalculatePBRResult(N,V,L,albedoColor.xyz, Ls.color, float(Ls.intensity), F0, metalness, roughness);
           directIllumination += ((res.color * Ls.attenuation)) / Ls.pdf; // divide by the pdf of the light sample
-
+          count++;
         }   
   }
-
-  vec3 combined = indirectIllumination+  directIllumination/float(iterations) ; // combine direct and indirect illumination
+  if (count > 0) {
+    directIllumination /= float(count);
+  }
+  vec3 combined = indirectIllumination+  directIllumination ; // combine direct and indirect illumination
 
   float currentRayCount =  float(uni.raytracingSettings.currentRayCount);
   float rayBudget =  float(uni.raytracingSettings.rayBudget); 
