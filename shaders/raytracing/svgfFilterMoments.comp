@@ -13,7 +13,8 @@ layout(set = 0, binding = 1, r8ui) uniform uimage2D prevHistoryLengthImage;
 layout(set = 0, binding = 2, rgba32f) uniform image2D packedNormalDepth;
 layout(set = 0, binding = 3, rg16f) uniform image2D Moments;
 layout(set = 0, binding = 4, rgba32f) uniform image2D color;
-
+layout(set = 0, binding = 5, rgba16f) uniform image2D metalRoughnessTexture;
+layout(set = 0, binding = 6, rgba16f) uniform image2D prevMetalRoughnessTexture;
 
  
 layout (local_size_x = 16, local_size_y = 16) in;
@@ -39,6 +40,7 @@ void main(){
         const float lIlluminationCenter = luminance(illuminationCenter.rgb);
 
         const vec4 normalFZwidth = imageLoad(packedNormalDepth, coord);
+        const vec2 MRCenter = imageLoad(metalRoughnessTexture, coord).xy;
         
         float depth = float(LinearizeDepth(normalFZwidth.x));
         float zWidth = normalFZwidth.y;
@@ -46,11 +48,12 @@ void main(){
         if (depth < 0.0){
             return;
         }
+        float phiMR = 0.2; 
 
         const vec3 normalCenter = oct_to_ndir_unorm(normalFZwidth.zw);
         const float phiDepth = float(max(LinearizeDepth(depth), 1e-8)*3.0);
 
-        const int radius = 3;
+        const int radius = 3; 
         for (int yy = -radius; yy <= radius; yy++)
         {
             for (int xx = -radius; xx <= radius; xx++)
@@ -63,6 +66,8 @@ void main(){
                 if (inside)
                 {
                     const vec3 illuminationP = imageLoad(illuminationTexture, p).rgb;
+                    const vec2 MRP = imageLoad(prevMetalRoughnessTexture, p).xy;
+
                     const vec2 momentsP = imageLoad(Moments, p).xy;
                     const float lIlluminationP = luminance(illuminationP.rgb);
                     const vec4 packedNormal = imageLoad(packedNormalDepth, p);
@@ -78,7 +83,10 @@ void main(){
                         gPhiNormal,
                         lIlluminationCenter,
                         lIlluminationP,
-                        gPhiColor
+                        gPhiColor,
+                        MRCenter,
+                        MRP,
+                        phiMR
                     );
 
                     sumWIllumination += w;

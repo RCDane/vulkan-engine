@@ -549,8 +549,8 @@ void SVGFHandler::WaveletFilter(VkCommandBuffer cmd, VulkanEngine* engine) {
 
 		PushConstantAtrous settings;
 		settings.imageSize = glm::ivec2(engine->_windowExtent.width, engine->_windowExtent.height);
-		settings.phiColor =10.0;
-		settings.phiNormal = 20.0;
+		settings.phiColor =2;
+		settings.phiNormal = 128.0;
 		settings.stepSize = 1 << i;
 
 

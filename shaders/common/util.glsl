@@ -271,15 +271,18 @@ float computeWeight(
     float phiMR
 )
 {
-    const float weightNormal = pow(clamp(dot(normalCenter, normalP), 0.0, 1.0), phiNormal);
+
     const vec2 diffMR = abs(metalRoughness - metalRoughnessP) / phiMR;
+    const float weightMR = length(diffMR);
+
+    const float weightNormal = pow(clamp(dot(normalCenter, normalP), 0.0, 1.0), phiNormal);
     
     const float weightZ = (phiDepth == 0) ? 0.0f : abs(depthCenter - depthP) / phiDepth;
     const float weightLillum = abs(luminanceIllumCenter - luminanceIllumP) / phiIllum;
-    const float weightMR = diffMR.x + diffMR.y;
 
 
-    const float weightIllum = exp(0.0 - max(weightLillum, 0.0) - max(weightZ, 0.0) - max(weightMR,0.0)) * weightNormal;
+
+    const float weightIllum = exp(0.0 - max(weightLillum, 0.0) - max(weightZ, 0.0) ) * weightNormal;
 
 
 

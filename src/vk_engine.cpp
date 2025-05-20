@@ -1132,6 +1132,8 @@ void VulkanEngine::draw_deferred(VkCommandBuffer cmd)
 	MaterialInstance* lastMaterial = nullptr;
 	VkBuffer lastIndexBuffer = VK_NULL_HANDLE;
 
+	int objID = 1;
+
 	auto draw = [&](const RenderObject& r) {
 		if (r.material != lastMaterial) {
 			vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, _deferredPipeline);
@@ -1174,6 +1176,7 @@ void VulkanEngine::draw_deferred(VkCommandBuffer cmd)
 		push_constants.vertexBuffer = r.vertexBufferAddress;
 		push_constants.hasTangents = r.hasTangents ? 1 : 0;
 		push_constants.usePCF = usePCF ? 1 : 0;
+		push_constants.objectId = objID++;
 		vkCmdPushConstants(
 			cmd,
 			_deferredPipelineLayout,

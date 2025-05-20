@@ -42,6 +42,7 @@ layout( push_constant,scalar ) uniform constants
 	VertexBuffer vertexBuffer;
 	int hasTangent;
     int useCPF;
+    int objectID;
 } PushConstants;
  #define EPSILON 0.00001
 
@@ -153,7 +154,7 @@ void main()
         metallic *= metalRough.y;
     }   
 
-    outMaterial = vec4(roughness,metallic, 1.0,1.0);
+    outMaterial = vec4(roughness,metallic, float(PushConstants.objectID) ,1.0);
      if (outAlbedo.a < 0.5){
             discard;
         }

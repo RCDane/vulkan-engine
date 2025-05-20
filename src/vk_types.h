@@ -164,6 +164,7 @@ struct GPUDrawPushConstants {
     VkDeviceAddress vertexBuffer;
     int hasTangents;
     int usePCF;
+    int objectId;
 };
 
 enum class MaterialPass :uint8_t {

@@ -62,7 +62,7 @@ void main(){
     const vec4 illuminationCenter = imageLoad(illuminationTexture, coord);
     const float lIlluminationCenter = luminance(illuminationCenter.rgb);
 
-    const float variance = computeVarianceCenter(coord);
+    const float variance = computeVarianceCenter(coord); 
 
     const float historyLength = float(imageLoad(prevHistoryLengthImage, coord).x);
     const vec4 packedND = imageLoad(packedNormalDepth, coord);
@@ -79,9 +79,12 @@ void main(){
 
 
     const float phiLIllumination = PC.pc.phiColor * sqrt(max(0.0, epsV + variance));
-    const float phiDepth = float(max(LinearizeDepth(packedND.x), 1e-8) * PC.pc.stepSize);
-    const vec2 MRCenter = imageLoad(metalRoughnessTexture, coord).xy;
-
+    // const float phiDepth = float(max(LinearizeDepth(packedND.x), 1e-8) * PC.pc.stepSize) * 0.1;
+    const float phiDepth = float(max(LinearizeDepth(packedND.x), 1e-8) * PC.pc.stepSize) * 0.1;
+    
+    const vec3 MR = imageLoad(metalRoughnessTexture, coord).xyz;
+    const vec2 MRCenter = MR.xy;
+    int ObjID = int(MR.z);
     const float depthCenter = float(LinearizeDepth(packedND.x));
     float phiMR = 10.0;
 
@@ -100,36 +103,41 @@ void main(){
 
             if (inside && (xx != 0 || yy != 0)) // ignore center
             {
-                const vec4 illuminationP = imageLoad(illuminationTexture, p);
-                const vec2 MRP = imageLoad(prevMetalRoughnessTexture, p).xy;
+                const vec3 MRP = imageLoad(prevMetalRoughnessTexture, p).xyz;
 
-                const float lIlluminationP = luminance(illuminationP.rgb);
-                const vec4 n = imageLoad(packedNormalDepth, p);
-                const float zP = float(LinearizeDepth(n.x));
+                if (ObjID == int(MRP.z)){
 
-                const vec3 nP = oct_to_ndir_unorm(n.zw);
+                    const vec4 illuminationP = imageLoad(illuminationTexture, p);
 
-                // compute the edge-stopping functions
-                const float w = computeWeight(
-                    depthCenter,
-                    zP,
-                    phiDepth * length(vec2(xx, yy)),
-                    normalCenter,
-                    nP,
-                    PC.pc.phiNormal,
-                    lIlluminationCenter,
-                    lIlluminationP,
-                    phiLIllumination,
-                    MRCenter,
-                    MRP,
-                    phiMR
-                );
+                    const float lIlluminationP = luminance(illuminationP.rgb);
+                    const vec4 n = imageLoad(packedNormalDepth, p);
+                    const float zP = float(LinearizeDepth(n.x));
 
-                const float wIllumination = w * kernel;
+                    const vec3 nP = oct_to_ndir_unorm(n.zw);
 
-                // alpha channel contains the variance, therefore the weights need to be squared, see paper for the formula
-                sumWIllumination += wIllumination;
-                sumIllumination += vec4(wIllumination.xxx, wIllumination * wIllumination) * illuminationP;
+                    // compute the edge-stopping functions
+                    const float w = computeWeight( 
+                        depthCenter,
+                        zP,
+                        phiDepth * length(vec2(xx, yy)),
+                        normalCenter,
+                        nP,
+                        PC.pc.phiNormal,
+                        lIlluminationCenter,
+                        lIlluminationP,
+                        phiLIllumination,
+                        MRCenter,
+                        MRP.xy,
+                        phiMR
+                    );
+
+                    const float wIllumination = w * kernel;
+
+                    // alpha channel contains the variance, therefore the weights need to be squared, see paper for the formula
+                    sumWIllumination += wIllumination;
+                    sumIllumination += vec4(wIllumination.xxx, wIllumination * wIllumination) * illuminationP;
+                }
+            
             }
         }
     }
