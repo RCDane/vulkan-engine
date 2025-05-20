@@ -92,28 +92,15 @@ float computeWeightVariance(
     vec3 normalCenter,
     vec3 normalP,
     float phiNormal
-    // float luminanceIllumCenter,
-    // float luminanceIllumP,
-    // float phiIllum,
-    // vec2 metalRoughness,
-    // vec2 metalRoughnessP,
-    // float phiMR
 )
 {
 
-    // const vec2 diffMR = abs(metalRoughness - metalRoughnessP) / phiMR;
-    // const float weightMR = length(diffMR);
 
     const float weightNormal = pow(clamp(dot(normalCenter, normalP), 0.0, 1.0), phiNormal);
     
     const float weightZ = (phiDepth == 0) ? 0.0f : abs(depthCenter - depthP) / phiDepth;
-    // const float weightLillum = abs(luminanceIllumCenter - luminanceIllumP) / phiIllum;
-
-
 
     const float weightIllum = exp(0.0 - max(weightZ, 0.0) ) * weightNormal;
-
-
 
 
     return weightIllum;
@@ -123,21 +110,18 @@ vec3 calculateIlluminationExpectation(ivec2 ipos, vec3 illumCenter){
     float sumWIllumination = 0.0;
         vec3 sumIllumination = vec3(0.0, 0.0, 0.0);
 
-
-
-
         const vec4 normalFZwidth = imageLoad(prevPackedNormalDepth, ipos);
         const vec2 MRCenter = imageLoad(prevMetalRoughnessTexture, ipos).xy;
 
         float depth = float(LinearizeDepth(normalFZwidth.x));
         float zWidth = normalFZwidth.y;
-        float phiMR = 0.2; 
-        const float gPhiColor = 0.2;
+        float phiMR = 10.0; 
+        const float gPhiColor = 10.0;
         const vec3 normalCenter = oct_to_ndir_unorm(normalFZwidth.zw);
         const float phiDepth = float(max(LinearizeDepth(depth), 1e-8)*3.0);
 
-        const float gPhiNormal = 0.2;
-        const int radius = 3;
+        const float gPhiNormal = 128.0;
+        const int radius = 1;
 
 
         vec3 sqIllumDifference = vec3(0.0);
@@ -175,22 +159,53 @@ vec3 calculateIlluminationExpectation(ivec2 ipos, vec3 illumCenter){
                         MRP,
                         phiMR
                     );
-                    sqIllumDifference += ((illumCenter - illumP.rgb)*(illumCenter - illumP.rgb));
+                    float l = luminance(illumP.rgb);
+                    sqIllumDifference += ((illumCenter-l)*(illumCenter-l)) * w;
 
                     sumWIllumination += w;
                     count++;
                 }
             } 
         }
-        
-    sqIllumDifference = sqIllumDifference / float(count);
 
-
-        // compute variance using the first and second moments
-
-    return sqIllumDifference / sumWIllumination;
+    sqIllumDifference = sqIllumDifference / sumWIllumination;
+    return sqIllumDifference ;
 }
+vec3 computeSigmaY2(ivec2 ipos) {
+    const int radius = 2;
+    int count = 0;
+    vec3 sumY  = vec3(0.0);
+    vec3 sumY2 = vec3(0.0);
 
+    // Loop over 3×3 neighbourhood
+    for (int yy = -radius; yy <= radius; ++yy) {
+        for (int xx = -radius; xx <= radius; ++xx) {
+            ivec2 p = ipos + ivec2(xx, yy);
+            // bounds‐check
+            if (any(lessThan(p, ivec2(0))) || any(greaterThanEqual(p, PC.pc.imageSize))) {
+                continue;
+            }
+
+            // fetch current-frame color + albedo → demodulate to get Y
+            vec3  c    = imageLoad(color,  p).rgb;
+            vec3  alb  = imageLoad(albedo, p).rgb;
+            vec3  Y    = demodulate(c, alb);
+
+            sumY  += Y;
+            sumY2 += Y * Y;
+            count++;
+        }
+    }
+
+    // if nothing valid (shouldn’t really happen), avoid div0
+    float invN = (count > 0) ? (1.0 / float(count)) : 0.0;
+
+    vec3 E_Y   = sumY  * invN;
+    vec3 E_Y2  = sumY2 * invN;
+
+    // σ² = E[Y²] – (E[Y])², clamp ≥0
+    return max(vec3(0.0), E_Y2 - E_Y * E_Y);
+}
 
 
 vec2 calculateMoments(ivec2 ipos){
@@ -208,11 +223,11 @@ vec2 calculateMoments(ivec2 ipos){
 
         float depth = float(LinearizeDepth(normalFZwidth.x));
         float zWidth = normalFZwidth.y;
-        float phiMR = 0.2; 
-        const float gPhiColor = 0.2;
+        float phiMR = 5.0; 
+        const float gPhiColor = 10.0;
         const vec3 normalCenter = oct_to_ndir_unorm(normalFZwidth.zw);
         const float phiDepth = float(max(LinearizeDepth(depth), 1e-8)*3.0);
-        const float gPhiNormal = 0.2;
+        const float gPhiNormal = 128.0;
         const int radius = 1;
 
         float y2 = 0.0;
@@ -293,7 +308,7 @@ vec2 calculateMoments(ivec2 ipos){
 
 vec3 calculateAverageIlluminance(ivec2 ipos){
     
-    int radius = 2; // updated radius to 2
+    int radius = 1; // updated radius to 2
     vec3 illumSum = vec3(0);
 
     const float kernel[3][3] = {
@@ -333,7 +348,7 @@ vec3 calculateAverageIlluminance(ivec2 ipos){
                 128.0
             );
 
-            illumSum += illum;
+            illumSum += illum  * k;
             weightSum += weight;
         }
 
@@ -343,7 +358,37 @@ vec3 calculateAverageIlluminance(ivec2 ipos){
     return illumSum / weightSum;
 }
 
+float computeMSD(ivec2 ipos, vec3 X) {
+    const int radius = 2;
+    int    count = 0;
+    float  sum   = 0.0;
+    // luminance weights for Y → scalar metric
+    const vec3  Lw = vec3(0.2126, 0.7152, 0.0722);
 
+    for (int yy = -radius; yy <= radius; ++yy) {
+        for (int xx = -radius; xx <= radius; ++xx) {
+            ivec2 p = ipos + ivec2(xx, yy);
+            // bounds‐check
+            if (any(lessThan(p, ivec2(0))) ||
+                any(greaterThanEqual(p, PC.pc.imageSize))) {
+                continue;
+            }
+
+            // fetch current‐frame illumination Y
+            vec3  c   = imageLoad(color,  p).rgb;
+            vec3  alb = imageLoad(albedo, p).rgb;
+            vec3  Y   = demodulate(c, alb);
+
+            // accumulate (Y - X)^2 in luminance
+            vec3  d2  = (Y - X) * (Y - X);
+            sum      += dot(d2, Lw);
+
+            count++;
+        }
+    }
+
+    return (count > 0) ? (sum / float(count)) : 0.0;
+}
 
 
 bool loadPrevData(
@@ -357,7 +402,6 @@ bool loadPrevData(
 ) {
     vec2 imageDim = PC.pc.imageSize;
 
-    // fetch current depth, normal & fwidth
 
     vec4 pNormalDepth = imageLoad(packedNormalDepth, ivec2(ipos));
     double linearDepth = LinearizeDepth(double(pNormalDepth.x));
@@ -370,13 +414,10 @@ bool loadPrevData(
     double zWidth = pNormalDepth.y;
 
     double depth = invLinearizeDepth(linearDepth);
-    // compute previous pixel via reprojection
-    // vec2 pixelCenter = posH + vec2(0.5);
     dvec3 worldPos = reconstructWorldPosition(
         pNormalDepth.x, ipos, imageDim,
         PC.pc.projInverse, PC.pc.viewInverse
     );
-    // imageStore(color, ipos, vec4(worldPos,1.0));
 
     vec4 prevClip = PC.pc.oldViewProj * vec4(worldPos, 1.0); 
     vec3 prevNDC  = prevClip.xyz / prevClip.w; 
@@ -385,16 +426,11 @@ bool loadPrevData(
     ivec2 iposPrev = ivec2(floor(posPrev));  // base for bilinear taps
 
 
-    vec4 tmpPND = imageLoad(prevPackedNormalDepth, ipos);
-    double tmpPrevD = LinearizeDepth(tmpPND.r);
-    
-    // imageStore(color, ipos, vec4(linearDepth, tmpPrevD, abs(tmpPrevD - linearDepth) / (zWidth + 1e-3), 1.0));
 
     vec3 MRTex = imageLoad(metalRoughnessTexture, ipos).xyz;
     vec2 metalRoughness = MRTex.xy;
     int objID = int(MRTex.z);
-    // imageStore(color, ipos, vec4(prevD, linearDepth, zWidth,abs(prevD - linearDepth) / (zWidth + 1e-7)));
-    // return false;
+
     prevIllum   = vec4(0.0);
     pMoments = vec2(0.0);
 
@@ -412,7 +448,7 @@ bool loadPrevData(
         if (any(lessThan(loc, ivec2(0))) || any(greaterThanEqual(loc, imageDim))) { 
             v[i] = false;
         } else { 
-            vec3 prevMetalRoughness = imageLoad(metalRoughnessTexture, loc).xyz;
+            vec3 prevMetalRoughness = imageLoad(prevMetalRoughnessTexture, loc).xyz;
             if (int(prevMetalRoughness.z) != objID)
             {
                 v[i] = false;
@@ -422,14 +458,13 @@ bool loadPrevData(
 
                 double prevD = LinearizeDepth(PND.r);
                 vec3 nP   = normalize(oct_to_ndir_unorm(PND.zw));
-                v[i] = isReprjValid(iposPrev, linearDepth, prevD, zWidth, currentNormal, nP, normalFwidth, metalRoughness, prevMetalRoughness.xy);
+                v[i] = isReprjValid(loc, linearDepth, prevD, zWidth, currentNormal, nP, normalFwidth, metalRoughness, prevMetalRoughness.xy);
             }
 
         }
         valid = valid || v[i];
     }
 
-    // validity += valid ? vec4(1.0,0,0,0) : vec4(0);
     // // 2) if any valid, do bilinear interp
     if (valid) {
         float fx = fract(posPrev.x), fy = fract(posPrev.y);
@@ -458,9 +493,6 @@ bool loadPrevData(
         }
 
     }
-    // validity += valid ? vec4(0,1,0,0) : vec4(0);
-
-
 
     // 3) fallback cross‐bilateral if still invalid
     if (!valid) {
@@ -470,7 +502,7 @@ bool loadPrevData(
                 ivec2 p = iposPrev + ivec2(xx, yy);
                 if (any(lessThan(p, ivec2(0))) || any(greaterThanEqual(p, imageDim))) continue;
                 
-                vec3 prevMetalRoughness = imageLoad(metalRoughnessTexture, p).xyz;
+                vec3 prevMetalRoughness = imageLoad(prevMetalRoughnessTexture, p).xyz;
                 if (int(prevMetalRoughness.z) == objID){
                     vec4 PND = imageLoad(prevPackedNormalDepth, p);
 
@@ -479,7 +511,7 @@ bool loadPrevData(
                     vec3 nP   = oct_to_ndir_unorm(PND.zw);
 
 
-                    if (isReprjValid(iposPrev, linearDepth, prevD, zWidth, currentNormal, nP, normalFwidth,metalRoughness, prevMetalRoughness.xy)) {
+                    if (isReprjValid(p, linearDepth, prevD, zWidth, currentNormal, nP, normalFwidth,metalRoughness, prevMetalRoughness.xy)) {
                         prevIllum   += imageLoad(prevIlluminationImage, p);
                         pMoments += imageLoad(prevMoments, p).xy;
                         nValid      += 1.0;
@@ -494,31 +526,24 @@ bool loadPrevData(
             valid        = true;
         }
     }
-    // validity += valid ? vec4(0,0,1,0) : vec4(0);
 
-    // imageStore(color, ipos, validity);
-
-    // vec4 normfwidthzwidth = imageLoad(prevNormalFWidthZWidth, iposPrev);
-
-    // double prevD = texelFetch(prevDepth, iposPrev,0).r;
-    // prevD = LinearizeDepth(prevD);
-    // vec3 nP   = normalize(oct_to_ndir_unorm(normfwidthzwidth.xy)); abs(Zprev - Z) / (fwidthZ + 1e-6) > 50.0
-    // valid = isReprjValid(iposPrev, linearDepth, prevD, zWidth, currentNormal, nP, normalFwidth);
-    
     if (valid){
         // Luminance weights for perceptual averaging
         const vec3 luminanceWeights = vec3(0.2126, 0.7152, 0.0722);
 
         // Variance estimates
-        vec3 estimatedCurrentIllum = calculateIlluminationExpectation(ipos, newIllum); // σ²_Y
+        vec3 estimatedCurrentIllum = calculateIlluminationExpectation(ipos, prevIllum.rgb); // σ²_Y
 
-        vec2 illumVariance = calculateMoments(ipos);
+        vec3 illumVariance = computeSigmaY2(ipos);
         float sigmaX2 = prevIllum.a;               // σ²_X (stored in RGB)
 
+        float msdXY = computeMSD(ipos, prevIllum.rgb); // MSD(X, Y)
         // Convert variances to scalar using luminance weighting
         vec3 sigmaY2 = estimatedCurrentIllum;
         // float sigmaX2 = dot(prevVariance, luminanceWeights);
 
+        const vec3 Lw  = vec3(0.2126, 0.7152, 0.0722);
+        float num      = dot(sigmaY2, Lw);
         // Estimate bias^2 as (X - Y)^2 using previous and current radiance estimates
         vec3 currentIllum = newIllum; // You may already have this
         vec3 previousIllum = prevIllum.xyz; // From history buffer
@@ -526,23 +551,16 @@ bool loadPrevData(
         float bias2 = dot(illumDiff * illumDiff, luminanceWeights);
 
         // Final alpha (blending factor)
-        float alpha3 = 1.0 - (illumVariance.g / luminance(estimatedCurrentIllum));
-        float alpha = alpha3;
-        imageStore(color, ipos, vec4(illumVariance,1.0,1.0));
+        float alpha3 = 1.0 - ((luminance(illumVariance)) / luminance(estimatedCurrentIllum));
+        alpha          = clamp(1.0 - num/msdXY, 0.0, 1.0);
+        imageStore(color, ipos, vec4(estimatedCurrentIllum, alpha));
     }
     else {
         alpha = 1.0;
     }
 
 
-    // vec4 prevPack = imageLoad(prevPackedNormalDepth, iposPrev);
-    // double prevD = prevPack.x;
-    
-    // vec4 imageColor = imageLoad(color, ipos);
-    // double error = abs(prevD - linearDepth) / (zWidth + 1e-4);
-    // imageStore(color, ipos, valid ? vec4(imageColor.xyz,error ) : vec4(1.0,0.0,1.0,error));
 
-    // imageStore(color, ipos, vec4(valid ? 1.0 : 0.0));
 
     // 4) write out history length if valid
     if (valid) {

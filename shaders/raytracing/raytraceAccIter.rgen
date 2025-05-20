@@ -233,7 +233,7 @@ void main()
 
   // Next event estimation for direct lighting
   vec3 directIllumination = vec3(0.0); 
-  int iterations = 4;
+  int iterations = 1;
   for (int i = 0; i < iterations; i++){
     LightSample Ls = sampleLightsPdf(vec3(worldPos), seed, uni.raytracingSettings.lightCount);
     
