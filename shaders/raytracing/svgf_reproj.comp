@@ -80,6 +80,268 @@ bool isReprjValid(
 
     return true;
 }
+vec3 demodulate(vec3 c, vec3 albedo)
+{
+    return c / max(albedo, vec3(0.001, 0.001, 0.001)); 
+}
+
+float computeWeightVariance(
+    float depthCenter,
+    float depthP,
+    float phiDepth,
+    vec3 normalCenter,
+    vec3 normalP,
+    float phiNormal
+    // float luminanceIllumCenter,
+    // float luminanceIllumP,
+    // float phiIllum,
+    // vec2 metalRoughness,
+    // vec2 metalRoughnessP,
+    // float phiMR
+)
+{
+
+    // const vec2 diffMR = abs(metalRoughness - metalRoughnessP) / phiMR;
+    // const float weightMR = length(diffMR);
+
+    const float weightNormal = pow(clamp(dot(normalCenter, normalP), 0.0, 1.0), phiNormal);
+    
+    const float weightZ = (phiDepth == 0) ? 0.0f : abs(depthCenter - depthP) / phiDepth;
+    // const float weightLillum = abs(luminanceIllumCenter - luminanceIllumP) / phiIllum;
+
+
+
+    const float weightIllum = exp(0.0 - max(weightZ, 0.0) ) * weightNormal;
+
+
+
+
+    return weightIllum;
+}
+
+vec3 calculateIlluminationExpectation(ivec2 ipos, vec3 illumCenter){
+    float sumWIllumination = 0.0;
+        vec3 sumIllumination = vec3(0.0, 0.0, 0.0);
+
+
+
+
+        const vec4 normalFZwidth = imageLoad(prevPackedNormalDepth, ipos);
+        const vec2 MRCenter = imageLoad(prevMetalRoughnessTexture, ipos).xy;
+
+        float depth = float(LinearizeDepth(normalFZwidth.x));
+        float zWidth = normalFZwidth.y;
+        float phiMR = 0.2; 
+        const float gPhiColor = 0.2;
+        const vec3 normalCenter = oct_to_ndir_unorm(normalFZwidth.zw);
+        const float phiDepth = float(max(LinearizeDepth(depth), 1e-8)*3.0);
+
+        const float gPhiNormal = 0.2;
+        const int radius = 3;
+
+
+        vec3 sqIllumDifference = vec3(0.0);
+        int count = 0;
+        for (int yy = -radius; yy <= radius; yy++)
+        {
+            for (int xx = -radius; xx <= radius; xx++)
+            {
+                const ivec2 p = ipos + ivec2(xx, yy);
+                const bool inside = isInsideScreen(p, PC.pc.imageSize);
+                const bool samePixel = (xx == 0 && yy == 0);
+                const float kernel = 1.0;
+
+                if (inside)
+                {
+                    vec4 illumP = imageLoad(prevIlluminationImage, p);
+                    const vec2 MRP = imageLoad(prevMetalRoughnessTexture, p).xy;
+
+                    const float lIlluminationP = luminance(illumP.rgb);
+                    const vec4 packedNormal = imageLoad(prevPackedNormalDepth, p);
+                    const float zP = float(LinearizeDepth(packedNormal.x));
+                    const vec3 nP = oct_to_ndir_unorm(packedNormal.zw);
+
+                    const float w = computeWeight(
+                        depth,
+                        zP,
+                        phiDepth * length(vec2(xx, yy)),
+                        normalCenter,
+                        nP,
+                        gPhiNormal,
+                        luminance(illumCenter),
+                        lIlluminationP,
+                        gPhiColor,
+                        MRCenter,
+                        MRP,
+                        phiMR
+                    );
+                    sqIllumDifference += ((illumCenter - illumP.rgb)*(illumCenter - illumP.rgb));
+
+                    sumWIllumination += w;
+                    count++;
+                }
+            } 
+        }
+        
+    sqIllumDifference = sqIllumDifference / float(count);
+
+
+        // compute variance using the first and second moments
+
+    return sqIllumDifference / sumWIllumination;
+}
+
+
+
+vec2 calculateMoments(ivec2 ipos){
+        float sumWIllumination = 0.0;
+        vec3 sumIllumination = vec3(0.0, 0.0, 0.0);
+        vec2 sumMoments = vec2(0.0, 0.0);
+
+        vec4 albedoColor = imageLoad(albedo, ipos);
+        vec4 imageColor = imageLoad(color, ipos);
+            
+        vec3 illumCenter = demodulate(imageColor.xyz, albedoColor.xyz);
+
+        const vec4 normalFZwidth = imageLoad(packedNormalDepth, ipos);
+        const vec2 MRCenter = imageLoad(metalRoughnessTexture, ipos).xy;
+
+        float depth = float(LinearizeDepth(normalFZwidth.x));
+        float zWidth = normalFZwidth.y;
+        float phiMR = 0.2; 
+        const float gPhiColor = 0.2;
+        const vec3 normalCenter = oct_to_ndir_unorm(normalFZwidth.zw);
+        const float phiDepth = float(max(LinearizeDepth(depth), 1e-8)*3.0);
+        const float gPhiNormal = 0.2;
+        const int radius = 1;
+
+        float y2 = 0.0;
+        float y1 = 0.0;
+        int count = 0;
+        for (int yy = -radius; yy <= radius; yy++)
+        {
+            for (int xx = -radius; xx <= radius; xx++)
+            {
+                const ivec2 p = ipos + ivec2(xx, yy);
+                const bool inside = isInsideScreen(p, PC.pc.imageSize);
+                const bool samePixel = (xx == 0 && yy == 0);
+                const float kernel = 1.0;
+
+                if (inside && !samePixel)
+                {
+                    vec4 albedoColor = imageLoad(albedo, p);
+                    vec4 imageColor = imageLoad(color, p);
+            
+                    vec3 illumP = demodulate(imageColor.xyz, albedoColor.xyz);
+                    const vec2 MRP = imageLoad(prevMetalRoughnessTexture, p).xy;
+
+                    vec2 momentsP;
+                    momentsP.r = luminance(illumP);
+                    momentsP.g = momentsP.r * momentsP.r;
+
+
+
+
+                    const float lIlluminationP = luminance(illumP.rgb);
+                    const vec4 packedNormal = imageLoad(packedNormalDepth, p);
+                    const float zP = float(LinearizeDepth(packedNormal.x));
+                    const vec3 nP = oct_to_ndir_unorm(packedNormal.zw);
+
+                    const float w = computeWeight(
+                        depth,
+                        zP,
+                        phiDepth * length(vec2(xx, yy)),
+                        normalCenter,
+                        nP,
+                        gPhiNormal,
+                        luminance(illumCenter),
+                        lIlluminationP,
+                        gPhiColor,
+                        MRCenter,
+                        MRP,
+                        phiMR
+                    );
+                    y1 += momentsP.r * w;
+                    y2 += momentsP.g * w;
+
+                    sumWIllumination += w;
+                    // sumIllumination += illumP * w;
+                    count++;
+                }
+            } 
+        }
+
+        sumWIllumination = max(sumWIllumination, 1e-6f);
+
+        sumIllumination /= sumWIllumination;
+        y1 = y1 / sumWIllumination;
+        y2 = y2 / sumWIllumination;
+        y1 = y1*y1;
+
+        float variance = max(0.f, y2 - y1);
+
+        sumWIllumination = max(sumWIllumination, 1e-6f);
+
+        sumIllumination /= sumWIllumination;
+
+        // compute variance using the first and second moments
+
+    return vec2(y1, y2);
+
+}
+
+
+vec3 calculateAverageIlluminance(ivec2 ipos){
+    
+    int radius = 2; // updated radius to 2
+    vec3 illumSum = vec3(0);
+
+    const float kernel[3][3] = {
+        { 1.0/4.0,    1.0/8.0,    1.0/16.0 },
+        { 1.0/8.0,    1.0/16.0,   1.0/32.0 },
+        { 1.0/16.0,   1.0/32.0,   1.0/64.0 }
+    };
+    const vec4 nd = imageLoad(packedNormalDepth, ipos);
+    const float z = float(LinearizeDepth(nd.x));
+
+    const vec3 n = oct_to_ndir_unorm(nd.zw);
+    float weightSum = 1.0;
+
+    for (int yy = -radius; yy <= radius; yy++){
+        for  (int xx = -radius; xx <= radius; xx++){
+            const ivec2 p = ipos + ivec2(xx, yy);
+            const bool inside = isInsideScreen(p,  PC.pc.imageSize);
+
+        if (inside && (xx != 0 || yy != 0)) 
+        {
+
+            vec4 albedoColor = imageLoad(albedo, p);
+            vec4 imageColor = imageLoad(color, p);
+            
+            const float k = kernel[abs(xx)][abs(yy)];
+            vec3 illum = demodulate(imageColor.xyz, albedoColor.xyz);
+            const vec4 np = imageLoad(packedNormalDepth, p);
+            const float zP = float(LinearizeDepth(np.x));
+
+            const vec3 nP = oct_to_ndir_unorm(np.zw);
+            float weight = computeWeightVariance(
+                z,
+                zP,
+                10.0,
+                n,
+                nP,
+                128.0
+            );
+
+            illumSum += illum;
+            weightSum += weight;
+        }
+
+        }
+    }
+
+    return illumSum / weightSum;
+}
 
 
 
@@ -87,9 +349,11 @@ bool isReprjValid(
 bool loadPrevData(
     vec2 posH,
     ivec2 ipos,
+    vec3 newIllum,
     out vec4 prevIllum,
     out vec2 pMoments,
-    out uint historyLength
+    out uint historyLength,
+    out float alpha
 ) {
     vec2 imageDim = PC.pc.imageSize;
 
@@ -149,18 +413,17 @@ bool loadPrevData(
             v[i] = false;
         } else { 
             vec3 prevMetalRoughness = imageLoad(metalRoughnessTexture, loc).xyz;
-            // if (int(prevMetalRoughness.z) != objID)
-            // {
+            if (int(prevMetalRoughness.z) != objID)
+            {
                 v[i] = false;
-            // }
-            // else {
-
+            }
+            else {
                 vec4 PND = imageLoad(prevPackedNormalDepth, loc);
 
                 double prevD = LinearizeDepth(PND.r);
                 vec3 nP   = normalize(oct_to_ndir_unorm(PND.zw));
                 v[i] = isReprjValid(iposPrev, linearDepth, prevD, zWidth, currentNormal, nP, normalFwidth, metalRoughness, prevMetalRoughness.xy);
-            // }
+            }
 
         }
         valid = valid || v[i];
@@ -242,11 +505,41 @@ bool loadPrevData(
     // vec3 nP   = normalize(oct_to_ndir_unorm(normfwidthzwidth.xy)); abs(Zprev - Z) / (fwidthZ + 1e-6) > 50.0
     // valid = isReprjValid(iposPrev, linearDepth, prevD, zWidth, currentNormal, nP, normalFwidth);
     
-    vec4 prevPack = imageLoad(prevPackedNormalDepth, iposPrev);
-    double prevD = prevPack.x;
+    if (valid){
+        // Luminance weights for perceptual averaging
+        const vec3 luminanceWeights = vec3(0.2126, 0.7152, 0.0722);
+
+        // Variance estimates
+        vec3 estimatedCurrentIllum = calculateIlluminationExpectation(ipos, newIllum); // σ²_Y
+
+        vec2 illumVariance = calculateMoments(ipos);
+        float sigmaX2 = prevIllum.a;               // σ²_X (stored in RGB)
+
+        // Convert variances to scalar using luminance weighting
+        vec3 sigmaY2 = estimatedCurrentIllum;
+        // float sigmaX2 = dot(prevVariance, luminanceWeights);
+
+        // Estimate bias^2 as (X - Y)^2 using previous and current radiance estimates
+        vec3 currentIllum = newIllum; // You may already have this
+        vec3 previousIllum = prevIllum.xyz; // From history buffer
+        vec3 illumDiff = estimatedCurrentIllum - previousIllum;
+        float bias2 = dot(illumDiff * illumDiff, luminanceWeights);
+
+        // Final alpha (blending factor)
+        float alpha3 = 1.0 - (illumVariance.g / luminance(estimatedCurrentIllum));
+        float alpha = alpha3;
+        imageStore(color, ipos, vec4(illumVariance,1.0,1.0));
+    }
+    else {
+        alpha = 1.0;
+    }
+
+
+    // vec4 prevPack = imageLoad(prevPackedNormalDepth, iposPrev);
+    // double prevD = prevPack.x;
     
-    vec4 imageColor = imageLoad(color, ipos);
-    double error = abs(prevD - linearDepth) / (zWidth + 1e-4);
+    // vec4 imageColor = imageLoad(color, ipos);
+    // double error = abs(prevD - linearDepth) / (zWidth + 1e-4);
     // imageStore(color, ipos, valid ? vec4(imageColor.xyz,error ) : vec4(1.0,0.0,1.0,error));
 
     // imageStore(color, ipos, vec4(valid ? 1.0 : 0.0));
@@ -265,10 +558,7 @@ bool loadPrevData(
 
 
 
-vec3 demodulate(vec3 c, vec3 albedo)
-{
-    return c / max(albedo, vec3(0.001, 0.001, 0.001)); 
-}
+
 
 
 
@@ -278,6 +568,8 @@ bool CheckUv(vec2 uv, vec2 size){
     return all(greaterThanEqual(uv, vec2(0.0))) && all(lessThan(uv, size));
 }
 layout (local_size_x = 16, local_size_y = 16) in;
+
+
 
 
 void main(){
@@ -299,14 +591,15 @@ void main(){
     vec4 prevIllum = vec4(0.0);
     uint historyLength = 0;
     vec2 pMoments;
-    bool success = loadPrevData(pixelCenter, coord, prevIllum, pMoments, historyLength);
+    float alpha = 0.0;
+    bool success = loadPrevData(pixelCenter, coord, illum,prevIllum, pMoments, historyLength, alpha);
 
     // imageStore(color, coord, success ? vec4(imageColor) : vec4(1.0,0.0,1.0,1.0));
 
     historyLength = min(32, success ? historyLength + 1 : 1);
 
 
-    const float alpha = success ? max(gAlpha, 1.0 / historyLength) : 1.0;
+    // const float alpha = success ? max(gAlpha, 1.0 / historyLength) : 1.0;
     const float alphaMoments = success ? max(gMomentsAlpha, 1.0 / historyLength) : 1.0;
 
     // compute first two moments of luminance

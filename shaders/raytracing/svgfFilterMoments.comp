@@ -48,12 +48,12 @@ void main(){
         if (depth < 0.0){
             return;
         }
-        float phiMR = 0.2; 
+        float phiMR = 0.2;
 
         const vec3 normalCenter = oct_to_ndir_unorm(normalFZwidth.zw);
         const float phiDepth = float(max(LinearizeDepth(depth), 1e-8)*3.0);
 
-        const int radius = 3; 
+        const int radius = 3;
         for (int yy = -radius; yy <= radius; yy++)
         {
             for (int xx = -radius; xx <= radius; xx++)

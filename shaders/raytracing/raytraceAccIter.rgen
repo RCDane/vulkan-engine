@@ -165,10 +165,7 @@ void main()
 
   // direction = -direction;
   vec3 V = normalize(origin.xyz- vec3(worldPos));
-  LightSample Ls = sampleLightsPdf(vec3(worldPos), seed, uni.raytracingSettings.lightCount);
-  
 
-  float light_pdf = Ls.pdf; // pdf of the light sample
 
 
   int rayDepth = 0;
@@ -236,39 +233,45 @@ void main()
 
   // Next event estimation for direct lighting
   vec3 directIllumination = vec3(0.0); 
+  int iterations = 4;
+  for (int i = 0; i < iterations; i++){
+    LightSample Ls = sampleLightsPdf(vec3(worldPos), seed, uni.raytracingSettings.lightCount);
+    
 
-  vec3 L = normalize(Ls.direction); 
-  isShadowed   = true; 
+    vec3 L = normalize(Ls.direction); 
+    isShadowed   = true; 
 
-    if(dot(N, L) > 0) 
-    {
-      
-      tMin   = 0.01;
-      tMax   = Ls.distance; 
-      rayOrigin = vec3(worldPos); // offset the ray origin to avoid self-intersection
-      rayDir = L; 
-      flags  = gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsOpaqueEXT | gl_RayFlagsSkipClosestHitShaderEXT;
-      traceRayEXT(topLevelAS,  // acceleration structure
-            flags,       // rayFlags
-            0xFF,        // cullMask
-            0,           // sbtRecordOffsetw 
-            0,           // sbtRecordStride
-            1,           // missIndex
-            rayOrigin,      // ray origin
-            tMin,        // ray min range
-            Ls.direction,      // ray direction
-            tMax,        // ray max range
-            1            // payload is isShadowed
-      );
- 
-      
-    }
-    if (!isShadowed) { 
-        PBR_result res =  CalculatePBRResult(N,V,L,albedoColor.xyz, Ls.color, float(Ls.intensity), F0, metalness, roughness);
-        directIllumination += ((res.color * Ls.attenuation)) / Ls.pdf; // divide by the pdf of the light sample
+      if(dot(N, L) > 0) 
+      {
+        
+        tMin   = 0.01;
+        tMax   = Ls.distance; 
+        rayOrigin = vec3(worldPos); // offset the ray origin to avoid self-intersection
+        rayDir = L; 
+        flags  = gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsOpaqueEXT | gl_RayFlagsSkipClosestHitShaderEXT;
+        traceRayEXT(topLevelAS,  // acceleration structure
+              flags,       // rayFlags
+              0xFF,        // cullMask
+              0,           // sbtRecordOffsetw 
+              0,           // sbtRecordStride
+              1,           // missIndex
+              rayOrigin,      // ray origin
+              tMin,        // ray min range
+              Ls.direction,      // ray direction
+              tMax,        // ray max range
+              1            // payload is isShadowed
+        );
+  
+        
+      }
+      if (!isShadowed) { 
+          PBR_result res =  CalculatePBRResult(N,V,L,albedoColor.xyz, Ls.color, float(Ls.intensity), F0, metalness, roughness);
+          directIllumination += ((res.color * Ls.attenuation)) / Ls.pdf; // divide by the pdf of the light sample
 
-      }   
-  vec3 combined = indirectIllumination+  directIllumination ; // combine direct and indirect illumination
+        }   
+  }
+
+  vec3 combined = indirectIllumination+  directIllumination/float(iterations) ; // combine direct and indirect illumination
 
   float currentRayCount =  float(uni.raytracingSettings.currentRayCount);
   float rayBudget =  float(uni.raytracingSettings.rayBudget); 
