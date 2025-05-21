@@ -23,6 +23,7 @@
 // Motion not needed
 layout(set = 0, binding = 0, rgba32f) uniform image2D packedNormalDepth;
 layout(set = 0, binding = 1, rgba32f) uniform image2D color;
+
 layout(set = 0, binding = 2, rgba16f) uniform image2D albedo;
 // rename to avoid shadowing below
 layout(set = 0, binding = 3, rgba16f) uniform image2D prevIlluminationImage;
@@ -32,6 +33,7 @@ layout(set = 0, binding = 6, rg16f) uniform image2D prevMoments;
 layout(set = 0, binding = 7, rgba16f) uniform image2D illumination;
 layout(set = 0, binding = 8, rgba16f) uniform image2D metalRoughnessTexture;
 layout(set = 0, binding = 9, rgba16f) uniform image2D prevMetalRoughnessTexture;
+layout(set = 0, binding = 10, rgba32f) uniform image2D demodulatedColor;
 
 
 
@@ -42,7 +44,8 @@ const float reprojEps = 1e-4;
 
 float gAlpha = 0.1;
 float gMomentsAlpha = 0.2;
-  
+
+
 
 bool isReprjValid(
     ivec2 coord,
@@ -80,10 +83,7 @@ bool isReprjValid(
 
     return true;
 }
-vec3 demodulate(vec3 c, vec3 albedo)
-{
-    return c / max(albedo, vec3(0.001, 0.001, 0.001)); 
-}
+
 
 float computeWeightVariance(
     float depthCenter,
@@ -91,7 +91,10 @@ float computeWeightVariance(
     float phiDepth,
     vec3 normalCenter,
     vec3 normalP,
-    float phiNormal
+    float phiNormal,
+    float luminanceIllumCenter,
+    float luminanceIllumP,
+    float phiIllum
 )
 {
 
@@ -99,8 +102,13 @@ float computeWeightVariance(
     const float weightNormal = pow(clamp(dot(normalCenter, normalP), 0.0, 1.0), phiNormal);
     
     const float weightZ = (phiDepth == 0) ? 0.0f : abs(depthCenter - depthP) / phiDepth;
+    const float weightLillum = abs(luminanceIllumCenter - luminanceIllumP) / phiIllum;
 
-    const float weightIllum = exp(0.0 - max(weightZ, 0.0) ) * weightNormal;
+
+
+    const float weightIllum = exp(0.0 - max(weightLillum, 0.0) - max(weightZ, 0.0) ) * weightNormal;
+
+
 
 
     return weightIllum;
@@ -187,9 +195,7 @@ vec3 computeSigmaY2(ivec2 ipos) {
             }
 
             // fetch current-frame color + albedo → demodulate to get Y
-            vec3  c    = imageLoad(color,  p).rgb;
-            vec3  alb  = imageLoad(albedo, p).rgb;
-            vec3  Y    = demodulate(c, alb);
+            vec3  Y    = imageLoad(demodulatedColor,  p).rgb;
 
             sumY  += Y;
             sumY2 += Y * Y;
@@ -216,7 +222,7 @@ vec2 calculateMoments(ivec2 ipos){
         vec4 albedoColor = imageLoad(albedo, ipos);
         vec4 imageColor = imageLoad(color, ipos);
             
-        vec3 illumCenter = demodulate(imageColor.xyz, albedoColor.xyz);
+        vec3 illumCenter = imageColor.xyz;
 
         const vec4 normalFZwidth = imageLoad(packedNormalDepth, ipos);
         const vec2 MRCenter = imageLoad(metalRoughnessTexture, ipos).xy;
@@ -244,10 +250,8 @@ vec2 calculateMoments(ivec2 ipos){
 
                 if (inside && !samePixel)
                 {
-                    vec4 albedoColor = imageLoad(albedo, p);
-                    vec4 imageColor = imageLoad(color, p);
+                    vec3 illumP = imageLoad(albedo, p).xyz;
             
-                    vec3 illumP = demodulate(imageColor.xyz, albedoColor.xyz);
                     const vec2 MRP = imageLoad(prevMetalRoughnessTexture, p).xy;
 
                     vec2 momentsP;
@@ -317,6 +321,8 @@ vec3 calculateAverageIlluminance(ivec2 ipos){
         { 1.0/16.0,   1.0/32.0,   1.0/64.0 }
     };
     const vec4 nd = imageLoad(packedNormalDepth, ipos);
+    float illumCenter = luminance(imageLoad(demodulatedColor, ipos).xyz);
+
     const float z = float(LinearizeDepth(nd.x));
 
     const vec3 n = oct_to_ndir_unorm(nd.zw);
@@ -330,11 +336,9 @@ vec3 calculateAverageIlluminance(ivec2 ipos){
         if (inside && (xx != 0 || yy != 0)) 
         {
 
-            vec4 albedoColor = imageLoad(albedo, p);
-            vec4 imageColor = imageLoad(color, p);
+            float illum = luminance(imageLoad(demodulatedColor, p).xyz);
             
             const float k = kernel[abs(xx)][abs(yy)];
-            vec3 illum = demodulate(imageColor.xyz, albedoColor.xyz);
             const vec4 np = imageLoad(packedNormalDepth, p);
             const float zP = float(LinearizeDepth(np.x));
 
@@ -342,10 +346,13 @@ vec3 calculateAverageIlluminance(ivec2 ipos){
             float weight = computeWeightVariance(
                 z,
                 zP,
-                10.0,
+                1.0,
                 n,
                 nP,
-                128.0
+                128.0,
+                illumCenter,
+                illum,
+                5.0
             );
 
             illumSum += illum  * k;
@@ -362,8 +369,20 @@ float computeMSD(ivec2 ipos, vec3 X) {
     const int radius = 2;
     int    count = 0;
     float  sum   = 0.0;
+    const vec4 nd = imageLoad(packedNormalDepth, ipos);
+    const float z = float(LinearizeDepth(nd.x));
+    const vec3 n = oct_to_ndir_unorm(nd.zw);
+    float illumCenter = luminance(imageLoad(demodulatedColor, ipos).xyz);
+            
+    const float kernel[3][3] = {
+        { 1.0/4.0,    1.0/8.0,    1.0/16.0 },
+        { 1.0/8.0,    1.0/16.0,   1.0/32.0 },
+        { 1.0/16.0,   1.0/32.0,   1.0/64.0 }
+    };
+
     // luminance weights for Y → scalar metric
-    const vec3  Lw = vec3(0.2126, 0.7152, 0.0722);
+
+    float summedWeight = 0.002;
 
     for (int yy = -radius; yy <= radius; ++yy) {
         for (int xx = -radius; xx <= radius; ++xx) {
@@ -375,19 +394,34 @@ float computeMSD(ivec2 ipos, vec3 X) {
             }
 
             // fetch current‐frame illumination Y
-            vec3  c   = imageLoad(color,  p).rgb;
-            vec3  alb = imageLoad(albedo, p).rgb;
-            vec3  Y   = demodulate(c, alb);
+            vec3  Y   = imageLoad(demodulatedColor,  p).rgb;
+
+            const float k = kernel[abs(xx)][abs(yy)];
+            const vec4 np = imageLoad(packedNormalDepth, p);
+            const float zP = float(LinearizeDepth(np.x));
+
+            const vec3 nP = oct_to_ndir_unorm(np.zw);
+            float weight = computeWeightVariance(
+                z,
+                zP,
+                1.0,
+                n,
+                nP,
+                128.0,
+                illumCenter,
+                luminance(Y),
+                5.0
+            );
 
             // accumulate (Y - X)^2 in luminance
             vec3  d2  = (Y - X) * (Y - X);
-            sum      += dot(d2, Lw);
-
+            sum      += luminance(d2)*weight*k;
+            summedWeight += weight * k;
             count++;
         }
     }
 
-    return (count > 0) ? (sum / float(count)) : 0.0;
+    return (count > 0) ? (sum / summedWeight) : 0.0;
 }
 
 
@@ -532,28 +566,27 @@ bool loadPrevData(
         const vec3 luminanceWeights = vec3(0.2126, 0.7152, 0.0722);
 
         // Variance estimates
-        vec3 estimatedCurrentIllum = calculateIlluminationExpectation(ipos, prevIllum.rgb); // σ²_Y
+        // vec3 estimatedCurrentIllum = calculateIlluminationExpectation(ipos, prevIllum.rgb); // σ²_Y
 
         vec3 illumVariance = computeSigmaY2(ipos);
         float sigmaX2 = prevIllum.a;               // σ²_X (stored in RGB)
 
         float msdXY = computeMSD(ipos, prevIllum.rgb); // MSD(X, Y)
         // Convert variances to scalar using luminance weighting
-        vec3 sigmaY2 = estimatedCurrentIllum;
+        // vec3 sigmaY2 = estimatedCurrentIllum;
         // float sigmaX2 = dot(prevVariance, luminanceWeights);
 
-        const vec3 Lw  = vec3(0.2126, 0.7152, 0.0722);
-        float num      = dot(sigmaY2, Lw);
+        // float num      = dot(sigmaY2, Lw);
         // Estimate bias^2 as (X - Y)^2 using previous and current radiance estimates
-        vec3 currentIllum = newIllum; // You may already have this
-        vec3 previousIllum = prevIllum.xyz; // From history buffer
-        vec3 illumDiff = estimatedCurrentIllum - previousIllum;
-        float bias2 = dot(illumDiff * illumDiff, luminanceWeights);
+        // vec3 currentIllum = newIllum; // You may already have this
+        // vec3 previousIllum = prevIllum.xyz; // From history buffer
+        // vec3 illumDiff = estimatedCurrentIllum - previousIllum;
+        // float bias2 = dot(illumDiff * illumDiff, luminanceWeights);
 
         // Final alpha (blending factor)
-        float alpha3 = 1.0 - ((luminance(illumVariance)) / luminance(estimatedCurrentIllum));
-        alpha          = clamp(1.0 - num/msdXY, 0.0, 1.0);
-        imageStore(color, ipos, vec4(estimatedCurrentIllum, alpha));
+        // float alpha3 = 1.0 - ((luminance(illumVariance)) / msdXY);
+        alpha          = clamp(1.0 - luminance(illumVariance)/msdXY, 0.0, 1.0);
+        // imageStore(color, ipos, vec4(estimatedCurrentIllum, alpha));
     }
     else {
         alpha = 1.0;
@@ -597,9 +630,9 @@ void main(){
     const vec2 inUV        = pixelCenter / PC.pc.imageSize;
 
     vec4 albedoColor = imageLoad(albedo, coord);
-    vec4 imageColor = imageLoad(color, coord);
+    vec4 imageColor = imageLoad(demodulatedColor, coord);
 
-    vec3 illum = demodulate(imageColor.xyz, albedoColor.xyz);
+    vec3 illum = imageColor.xyz;
 
     if (any(isnan(illum))){
         illum = vec3(0,0,0);

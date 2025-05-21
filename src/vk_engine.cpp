@@ -41,8 +41,6 @@
 
 #include <svgf.h>
 
-//#include <windows.h>
-//#include <tchar.h>
 
 constexpr bool bUseValidationLayers = false;
 
@@ -734,7 +732,7 @@ void VulkanEngine::prepare_lighting_data() {
 			shaderLight.intensity = light->intensity;
 
 			float area = light->radius * light->radius * (4.0f * glm::pi<float>());
-			shaderLight.pdf = 1.0f / area;
+			shaderLight.pdf = (1.0f / area)/lightCount;
 		}
 		else {
 			shaderLight.pdf = 1.0f / lightCount;

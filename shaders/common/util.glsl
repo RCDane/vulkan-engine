@@ -168,14 +168,21 @@ struct LightSample {
 	float pdf;
 };
 
-LightSample ProcessLight(vec3 hitPoint, inout uint seed, LightSource Ls){
+LightSample ProcessLight(vec3 hitPoint, inout uint seed, LightSource Ls, bool sharp){
     LightSample ls;
     ls.color = Ls.color.xyz;           // base color of the light
     ls.intensity = Ls.intensity;   // scalar intensity
 
     if (Ls.type == 0) {
 
-        vec3 samplePos = sampleSphere(Ls.position.xyz, Ls.radius, seed);
+        vec3 samplePos = vec3(0.0);
+        if (sharp)
+        {
+            samplePos = Ls.position.xyz;
+        }
+        else {
+            samplePos = sampleSphere(Ls.position.xyz, Ls.radius, seed);
+        }
 
         vec3 toLight   = samplePos - hitPoint;
         float dist     = length(toLight);
@@ -256,6 +263,11 @@ float luminance(vec3 color)
     return dot(color, vec3(0.299, 0.587, 0.114));
 }
 
+vec3 demodulate(vec3 c, vec3 albedo)
+{
+    return c / max(albedo, vec3(0.001, 0.001, 0.001)); 
+}
+
 float computeWeight(
     float depthCenter,
     float depthP,
@@ -282,7 +294,7 @@ float computeWeight(
 
 
 
-    const float weightIllum = exp(0.0 - max(weightLillum, 0.0) - max(weightZ, 0.0) ) * weightNormal;
+    const float weightIllum = exp(0.0 - max(weightLillum, 0.0) - max(weightZ, 0.0) - max(weightMR, 0.0) ) * weightNormal;
 
 
 

@@ -42,7 +42,7 @@ LightSample sampleLightsPdf(vec3 hitPoint, inout uint seed,  int lightCount) {
 
     LightSource Ls = lights.l[i];
 
-    LightSample s = ProcessLight(hitPoint, seed, Ls); // Sample the light source
+    LightSample s = ProcessLight(hitPoint, seed, Ls, false); // Sample the light source
     // s.pdf /= lightCount ; // Scale the pdf by the light source pdf 
     return s; 
 }
@@ -233,7 +233,7 @@ void main()
 
   // Next event estimation for direct lighting
   vec3 directIllumination = vec3(0.0); 
-  int iterations = 10;
+  int iterations = 2;
   int count = 0;
   for (int i = 0; i < iterations; i++){
     LightSample Ls = sampleLightsPdf(vec3(worldPos), seed, uni.raytracingSettings.lightCount);
@@ -271,10 +271,10 @@ void main()
           count++;
         }   
   }
-  if (count > 0) {
-    directIllumination /= float(count);
-  }
-  vec3 combined = indirectIllumination+  directIllumination ; // combine direct and indirect illumination
+
+  directIllumination = directIllumination / float(iterations);
+
+  vec3 combined =directIllumination ; // combine direct and indirect illumination
 
   float currentRayCount =  float(uni.raytracingSettings.currentRayCount);
   float rayBudget =  float(uni.raytracingSettings.rayBudget); 

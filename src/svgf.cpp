@@ -242,6 +242,49 @@ void SVGFHandler::create_modulate_pipeline(VulkanEngine* engine) {
 		});
 }
 
+void SVGFHandler::create_demodulate_pipeline(VulkanEngine* engine) {
+	VkPipelineLayoutCreateInfo computeLayout{};
+	computeLayout.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+	computeLayout.pNext = nullptr;
+	computeLayout.pSetLayouts = &m_demodulateDscSetLayout;
+	computeLayout.setLayoutCount = 1;
+
+	computeLayout.pushConstantRangeCount = 0;
+
+	VK_CHECK(vkCreatePipelineLayout(engine->_device, &computeLayout, nullptr, &m_demodulatePipelineLayout));
+
+
+	VkShaderModule demodulateShader;
+	if (!vkutil::load_shader_module("../shaders/spv/demodulate.comp.spv", engine->_device, &demodulateShader)) {
+		fmt::print("Error when building the compute shader \n");
+	}
+
+
+
+	VkPipelineShaderStageCreateInfo stageinfo{};
+	stageinfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	stageinfo.pNext = nullptr;
+	stageinfo.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+	stageinfo.module = demodulateShader;
+	stageinfo.pName = "main";
+
+	VkComputePipelineCreateInfo computePipelineCreateInfo{};
+	computePipelineCreateInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+	computePipelineCreateInfo.pNext = nullptr;
+	computePipelineCreateInfo.layout = m_demodulatePipelineLayout;
+	computePipelineCreateInfo.stage = stageinfo;
+
+	VK_CHECK(vkCreateComputePipelines(engine->_device, VK_NULL_HANDLE, 1, &computePipelineCreateInfo, nullptr, &m_demodulatePipeline));
+
+
+	//destroy structures properly
+	vkDestroyShaderModule(engine->_device, demodulateShader, nullptr);
+	engine->_mainDeletionQueue.push_function([=]() {
+		vkDestroyPipelineLayout(engine->_device, m_demodulatePipelineLayout, nullptr);
+		vkDestroyPipeline(engine->_device, m_demodulatePipeline, nullptr);
+		});
+}
+
 void SVGFHandler::create_frame_buffers(VulkanEngine* engine) {
 	VkImageUsageFlags reprojectionUsages{};
 	reprojectionUsages |= VK_IMAGE_USAGE_STORAGE_BIT;
@@ -276,6 +319,13 @@ void SVGFHandler::create_frame_buffers(VulkanEngine* engine) {
 
 
 	engine->create_render_buffer(illuminationBlend, transferUsages, VK_IMAGE_ASPECT_COLOR_BIT);
+
+	demodulatedIllumination.imageFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
+	demodulatedIllumination.imageExtent = extent;
+
+
+
+	engine->create_render_buffer(demodulatedIllumination, transferUsages, VK_IMAGE_ASPECT_COLOR_BIT);
 
 
 	prevHistoryLength.imageFormat = VK_FORMAT_R8_UINT;
@@ -326,6 +376,7 @@ void SVGFHandler::create_descriptors(VulkanEngine* engine) {
 	builder.add_binding(7, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE); // illumination
 	builder.add_binding(8, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE); // metalRougnness
 	builder.add_binding(9, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE); // prevMetalRougness
+	builder.add_binding(10, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE); // demodulatedIllumination
 
 
     m_reprojDscSetLayout = builder.build(engine->_device, VK_SHADER_STAGE_COMPUTE_BIT, NULL);
@@ -359,14 +410,25 @@ void SVGFHandler::create_descriptors(VulkanEngine* engine) {
 
 	// modulate
 	builder.add_binding(0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE); // Illumination
-	builder.add_binding(1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE); // history
-	builder.add_binding(2, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE); // normalFwidthZWidth
+	builder.add_binding(1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE); // albedo
+	builder.add_binding(2, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE); // color
 
 
 
 	m_modulateDscSetLayout = builder.build(engine->_device, VK_SHADER_STAGE_COMPUTE_BIT, NULL);
 	
-	
+	builder.clear();
+
+	// demodulate
+	builder.add_binding(0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE); // Illumination
+	builder.add_binding(1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE); // albedo
+	builder.add_binding(2, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE); // color
+
+
+
+	m_demodulateDscSetLayout = builder.build(engine->_device, VK_SHADER_STAGE_COMPUTE_BIT, NULL);
+
+
 	engine->_mainDeletionQueue.push_function([=]() {
 		vkDestroyDescriptorSetLayout(engine->_device, m_reprojDscSetLayout, nullptr);
 		vkDestroyDescriptorSetLayout(engine->_device, m_momentsFilterDscSetLayout, nullptr);
@@ -382,6 +444,7 @@ void SVGFHandler::init(VulkanEngine* engine, VkExtent2D extent) {
 	create_moments_filter_pipeline(engine);
 	create_wavelet_filter_pipeline(engine);
 	create_modulate_pipeline(engine);
+	create_demodulate_pipeline(engine);
 	create_packing_pipeline(engine);
 }
 
@@ -403,6 +466,7 @@ void SVGFHandler::Reprojection(VkCommandBuffer cmd, VulkanEngine* engine) {
 	vkutil::transition_image(cmd, prevPackedDepthNormal.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
 	vkutil::transition_image(cmd, prevMetalRougness.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
 	vkutil::transition_image(cmd, engine->_gBuffer_metallicRoughnes.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
+	vkutil::transition_image(cmd, demodulatedIllumination.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
 
 
 	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_reprojectionPipeline);
@@ -426,6 +490,7 @@ void SVGFHandler::Reprojection(VkCommandBuffer cmd, VulkanEngine* engine) {
 	writer.write_image(7, illumination.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 	writer.write_image(8, prevMetalRougness.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 	writer.write_image(9, engine->_gBuffer_metallicRoughnes.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+	writer.write_image(10, demodulatedIllumination.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 
 
 
@@ -607,6 +672,30 @@ void SVGFHandler::Modulate(VkCommandBuffer cmd, VulkanEngine* engine) {
 
 }
 
+void SVGFHandler::Demodulate(VkCommandBuffer cmd, VulkanEngine* engine) {
+	vkutil::transition_image(cmd, demodulatedIllumination.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
+	vkutil::transition_image(cmd, engine->_gBuffer_albedo.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
+	vkutil::transition_image(cmd, engine->_colorHistory.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
+
+
+	VkDescriptorSet globalDescriptor = engine->get_current_frame()._frameDescriptors.allocate(engine->_device, m_demodulateDscSetLayout);
+
+	DescriptorWriter writer;
+	writer.write_image(0, demodulatedIllumination.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+	writer.write_image(1, engine->_gBuffer_albedo.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+	writer.write_image(2, engine->_colorHistory.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+
+	writer.update_set(engine->_device, globalDescriptor);
+
+	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_demodulatePipeline);
+
+	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_demodulatePipelineLayout, 0, 1, &globalDescriptor, 0, nullptr);
+
+
+	vkCmdDispatch(cmd, std::ceil(engine->_windowExtent.width / 16.0), std::ceil(engine->_windowExtent.height / 16.0), 1);
+
+}
+
 // Add function to execute the packing pass
 void SVGFHandler::PackNormalDepth(VkCommandBuffer cmd, VulkanEngine* engine) {
     // Transition output image to general layout
@@ -628,6 +717,7 @@ void SVGFHandler::PackNormalDepth(VkCommandBuffer cmd, VulkanEngine* engine) {
 }
 
 void SVGFHandler::Execute(VkCommandBuffer cmd, VulkanEngine *engine) {
+	Demodulate(cmd, engine);
 	PackNormalDepth(cmd, engine);
 	Reprojection(cmd, engine);
 	FilterMoments(cmd,engine);

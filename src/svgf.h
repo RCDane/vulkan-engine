@@ -26,6 +26,8 @@ private:
     AllocatedImage illumination;
     AllocatedImage prevIllumination;
     AllocatedImage illuminationBlend;
+    AllocatedImage demodulatedIllumination;
+
 
     AllocatedImage normalFWidthZWidth;
     AllocatedImage prevNormalFWidthZWidth;
@@ -40,6 +42,9 @@ private:
 
     VkPipeline m_packNormalDepthPipeline;
     VkPipelineLayout m_NormalDepthPipelineLayout;
+
+    VkPipeline m_demodulatePipeline;
+    VkPipelineLayout m_demodulatePipelineLayout;
 
     VkPipeline m_reprojectionPipeline;
     VkPipelineLayout m_reprojPipelineLayout;
@@ -69,6 +74,9 @@ private:
     VkDescriptorSet m_packNormalDepthDscSet;
     VkDescriptorSetLayout m_packNormalDepthDscSetLayout;
 
+
+    VkDescriptorSet m_demodulateDscSet;
+    VkDescriptorSetLayout m_demodulateDscSetLayout;
     void PackNormalDepth(VkCommandBuffer cmd, VulkanEngine* engine);
 
     void create_frame_buffers(VulkanEngine* engine);
@@ -78,7 +86,7 @@ private:
 	void create_wavelet_filter_pipeline(VulkanEngine* engine);
     void create_modulate_pipeline(VulkanEngine* engine);
     void create_packing_pipeline(VulkanEngine* engine);
-
+    void create_demodulate_pipeline(VulkanEngine* engine);
 
     void create_descriptors(VulkanEngine* engine);
 
@@ -95,6 +103,8 @@ private:
     void WaveletFilter(VkCommandBuffer cmd, VulkanEngine* engine);
 
     void Modulate(VkCommandBuffer cmd, VulkanEngine* engine);
+
+    void Demodulate(VkCommandBuffer cmd, VulkanEngine* engine);
 
 };
 

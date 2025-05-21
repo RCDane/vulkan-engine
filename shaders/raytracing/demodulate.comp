@@ -10,19 +10,22 @@
 
 layout (local_size_x = 16, local_size_y = 16) in;
 
-layout(set = 0, binding = 0, rgba16f) uniform image2D illuminationTexture;
+layout(set = 0, binding = 0, rgba16f) uniform image2D outIllumination;
 layout(set = 0, binding = 1, rgba16f) uniform image2D albedoTexture;
 layout(set = 0, binding = 2, rgba32f) uniform image2D color;
+
+
+
 
 void main()
 {
     const ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
-    const vec4 illumination = imageLoad(illuminationTexture, coord);
+    const vec4 color = imageLoad(color, coord);
     const vec4 albedo = imageLoad(albedoTexture, coord);
 
     // Demodulate the illumination
-    const vec3 modulatedIllumination = illumination.rgb * (albedo.rgb + 1e-8);
+    const vec3 demodulatedIllumination = demodulate(color.rgb, albedo.rgb);
 
-    // Store the modulated illumination in the output texture
-    imageStore(color, coord, vec4(modulatedIllumination, 1.0));
+    // Store the demodulated illumination in the output texture
+    imageStore(outIllumination, coord, vec4(demodulatedIllumination, 1.0));
 }
