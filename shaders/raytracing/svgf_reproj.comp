@@ -149,18 +149,18 @@ bool loadPrevData(
             v[i] = false;
         } else { 
             vec3 prevMetalRoughness = imageLoad(metalRoughnessTexture, loc).xyz;
-            // if (int(prevMetalRoughness.z) != objID)
-            // {
+            if (int(prevMetalRoughness.z) != objID)
+            {
                 v[i] = false;
-            // }
-            // else {
+            }
+            else {
 
                 vec4 PND = imageLoad(prevPackedNormalDepth, loc);
 
                 double prevD = LinearizeDepth(PND.r);
                 vec3 nP   = normalize(oct_to_ndir_unorm(PND.zw));
-                v[i] = isReprjValid(iposPrev, linearDepth, prevD, zWidth, currentNormal, nP, normalFwidth, metalRoughness, prevMetalRoughness.xy);
-            // }
+                v[i] = isReprjValid(loc, linearDepth, prevD, zWidth, currentNormal, nP, normalFwidth, metalRoughness, prevMetalRoughness.xy);
+            }
 
         }
         valid = valid || v[i];
@@ -216,7 +216,7 @@ bool loadPrevData(
                     vec3 nP   = oct_to_ndir_unorm(PND.zw);
 
 
-                    if (isReprjValid(iposPrev, linearDepth, prevD, zWidth, currentNormal, nP, normalFwidth,metalRoughness, prevMetalRoughness.xy)) {
+                    if (isReprjValid(p, linearDepth, prevD, zWidth, currentNormal, nP, normalFwidth,metalRoughness, prevMetalRoughness.xy)) {
                         prevIllum   += imageLoad(prevIlluminationImage, p);
                         pMoments += imageLoad(prevMoments, p).xy;
                         nValid      += 1.0;

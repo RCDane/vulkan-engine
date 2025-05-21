@@ -71,7 +71,7 @@ void main(){
                     const vec2 momentsP = imageLoad(Moments, p).xy;
                     const float lIlluminationP = luminance(illuminationP.rgb);
                     const vec4 packedNormal = imageLoad(packedNormalDepth, p);
-                    const float zP = packedNormal.x;
+                    const float zP = float(LinearizeDepth(packedNormal.x));
                     const vec3 nP = oct_to_ndir_unorm(packedNormal.zw);
 
                     const float w = computeWeight(
