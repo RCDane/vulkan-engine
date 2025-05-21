@@ -224,7 +224,7 @@ LightSample ProcessLight(vec3 hitPoint, inout uint seed, LightSource Ls){
     }
     return ls;
 }
-float  zNear = 0.1;
+double zNear = 0.1;
 double zFar = 300.0;
 
 
@@ -232,7 +232,10 @@ double zFar = 300.0;
 double LinearizeDepth(double depth) {
     // Step 1: remap [0,1] → NDC [-1,1]
     // Step 2: invert the perspective projection
-    return (zNear * zFar) / (zFar - depth * (zFar - zNear));
+    double invFmn = 1.0 / (zNear - zFar);
+    double z_ndc = double(depth);
+    double linearDepth = (zNear * zFar) * invFmn / (zFar * invFmn - z_ndc);
+    return linearDepth;
 
 }
 

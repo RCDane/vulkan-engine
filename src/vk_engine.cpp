@@ -1406,7 +1406,6 @@ void VulkanEngine::init_vulkan()
 		.add_required_extension("VK_KHR_shader_clock")
 		.add_required_extension("VK_KHR_push_descriptor")
 		.add_required_extension("VK_KHR_ray_query")
-		.add_required_extension("VK_KHR_performance_query")
 
 		.add_required_extension_features(rayQueryFeatures)
 		.add_required_extension_features(localreadfeatures)
