@@ -224,7 +224,7 @@ LightSample ProcessLight(vec3 hitPoint, inout uint seed, LightSource Ls){
     }
     return ls;
 }
-double zNear = 0.1;
+float  zNear = 0.1;
 double zFar = 300.0;
 
 

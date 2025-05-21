@@ -36,6 +36,7 @@ float computeVarianceCenter(ivec2 ipos)
     };
 
     const int radius = 1;
+    #pragma optionNV (unroll all)
     for (int yy = -radius; yy <= radius; yy++)
     {
         for (int xx = -radius; xx <= radius; xx++)
@@ -48,6 +49,38 @@ float computeVarianceCenter(ivec2 ipos)
 
     return sum;
 }
+
+float computeVarianceCenterUnrolled(ivec2 ipos)
+{
+    float sum = 0.0;
+
+    const float kernel[2][2] = {
+        { 1.0 / 4.0, 1.0 / 8.0 },
+        { 1.0 / 8.0, 1.0 / 16.0 },
+    };
+
+    const int radius = 1;
+    #pragma optionNV (unroll all)
+    for (int yy = -radius; yy <= radius; ++yy)
+    {
+        int ay = abs(yy);
+        // xx = -1
+        ivec2 p0 = ipos + ivec2(-radius, yy);
+        float k0 = kernel[1 /*abs(-1)*/][ay];
+        sum += imageLoad(illuminationTexture, p0).a * k0;
+        // xx = 0
+        ivec2 p1 = ipos + ivec2(0, yy);
+        float k1 = kernel[0 /*abs(0)*/][ay];
+        sum += imageLoad(illuminationTexture, p1).a * k0;
+        // xx = +1
+        ivec2 p2 = ipos + ivec2(radius, yy);
+        float k2 = kernel[1 /*abs(1)*/][ay];
+        sum += imageLoad(illuminationTexture, p2).a * k0;
+    }
+
+    return sum;
+}
+
 
 layout(push_constant ) uniform PushConstant { PushConstantAtrous pc; } PC;
 
@@ -62,7 +95,7 @@ void main(){
     const vec4 illuminationCenter = imageLoad(illuminationTexture, coord);
     const float lIlluminationCenter = luminance(illuminationCenter.rgb);
 
-    const float variance = computeVarianceCenter(coord); 
+    const float variance = computeVarianceCenterUnrolled(coord); 
 
     const float historyLength = float(imageLoad(prevHistoryLengthImage, coord).x);
     const vec4 packedND = imageLoad(packedNormalDepth, coord);

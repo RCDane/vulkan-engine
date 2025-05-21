@@ -734,7 +734,7 @@ void VulkanEngine::prepare_lighting_data() {
 			shaderLight.intensity = light->intensity;
 
 			float area = light->radius * light->radius * (4.0f * glm::pi<float>());
-			shaderLight.pdf = 1.0f / area;
+			shaderLight.pdf = 1.0f / area / lightCount;
 		}
 		else {
 			shaderLight.pdf = 1.0f / lightCount;
@@ -1406,6 +1406,8 @@ void VulkanEngine::init_vulkan()
 		.add_required_extension("VK_KHR_shader_clock")
 		.add_required_extension("VK_KHR_push_descriptor")
 		.add_required_extension("VK_KHR_ray_query")
+		.add_required_extension("VK_KHR_performance_query")
+
 		.add_required_extension_features(rayQueryFeatures)
 		.add_required_extension_features(localreadfeatures)
 		.add_required_extension_features(accelerationStructureFeatures)
