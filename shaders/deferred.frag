@@ -20,7 +20,7 @@ layout (location = 7) in float depth;
 
 layout (location = 0) out vec4 outAlbedo;
 layout (location = 1) out vec4 outNormal;
-layout (location = 2) out vec4 outMaterial;
+layout (location = 2) out vec3 outMaterial;
 layout (location = 3) out vec4 outEmissive;
 
 
@@ -154,7 +154,7 @@ void main()
         metallic *= metalRough.y;
     }   
 
-    outMaterial = vec4(roughness,metallic, float(PushConstants.objectID) ,1.0);
+    outMaterial = vec3(roughness,metallic, float(PushConstants.objectID));
      if (outAlbedo.a < 0.5){
             discard;
         }

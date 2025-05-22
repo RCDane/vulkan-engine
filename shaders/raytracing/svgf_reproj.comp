@@ -22,7 +22,7 @@
 
 // Motion not needed
 layout(set = 0, binding = 0, rgba32f) uniform image2D packedNormalDepth;
-layout(set = 0, binding = 1, rgba32f) uniform image2D color;
+layout(set = 0, binding = 1, rgba16f) uniform image2D color;
 layout(set = 0, binding = 2, rgba16f) uniform image2D albedo;
 // rename to avoid shadowing below
 layout(set = 0, binding = 3, rgba16f) uniform image2D prevIlluminationImage;
@@ -30,15 +30,15 @@ layout(set = 0, binding = 4, rgba32f) uniform image2D prevPackedNormalDepth;
 layout(set = 0, binding = 5, r8ui) uniform uimage2D prevHistoryLengthImage;
 layout(set = 0, binding = 6, rg16f) uniform image2D prevMoments;
 layout(set = 0, binding = 7, rgba16f) uniform image2D illumination;
-layout(set = 0, binding = 8, rgba16f) uniform image2D metalRoughnessTexture;
-layout(set = 0, binding = 9, rgba16f) uniform image2D prevMetalRoughnessTexture;
-
+layout(set = 0, binding = 8, r11f_g11f_b10f) uniform image2D metalRoughnessTexture;
+layout(set = 0, binding = 9, r11f_g11f_b10f) uniform image2D prevMetalRoughnessTexture;
+layout(set = 0, binding = 10) uniform sampler2D depth;
 
 
 // new depth reprojection uniforms (after binding=7)
 layout(push_constant ) uniform PushConstant { PushConstantReproj pc; } PC;
 
-const float reprojEps = 1e-4;
+const float reprojEps = 1e-3;
 
 float gAlpha = 0.1;
 float gMomentsAlpha = 0.2;
@@ -46,14 +46,12 @@ float gMomentsAlpha = 0.2;
 
 bool isReprjValid(
     ivec2 coord,
-    double Z,
-    double Zprev,
-    double fwidthZ,
+    float Z,
+    float Zprev,
+    float fwidthZ,
     vec3 normal,
     vec3 normalPrev, 
-    float fwidthNormal,
-    vec2 metalRoughness,
-    vec2 metalRoughnessPrev
+    float fwidthNormal
 ) {
     ivec2 imageDim = PC.pc.imageSize;
 
@@ -65,24 +63,24 @@ bool isReprjValid(
     
 
     // 2) check if deviation of depths is acceptable
-    if ( abs(Zprev - Z) / (fwidthZ + 1e-2) > 0.01 )
+    if ( abs(Zprev - Z) / (fwidthZ + reprojEps) > 0.05 )
         return false;
 
     // 3) normals compatibility
     if ( dot(normal, normalPrev) < 0.95 )
         return false;
 
-    vec2 diff = abs(metalRoughness-metalRoughnessPrev);
-    float MRdiff = 0.2;
-    if (diff.x > MRdiff || diff.y > MRdiff ){
-        return false;
-    }
 
     return true;
 }
 
 
-
+float shiftDigitsRight(float value, int shift) {
+    float s = sign(value);
+    float v = abs(value);
+    float factor = pow(10.0, float(shift));
+    return s * (v / factor);
+}
 
 bool loadPrevData(
     vec2 posH,
@@ -96,23 +94,21 @@ bool loadPrevData(
     // fetch current depth, normal & fwidth
 
     vec4 pNormalDepth = imageLoad(packedNormalDepth, ivec2(ipos));
-    double linearDepth = LinearizeDepth(double(pNormalDepth.x));
+    float linearDepth = pNormalDepth.x;
 
     vec3 currentNormal = oct_to_ndir_unorm(pNormalDepth.zw);
 
 
-
     float normalFwidth = 0;
-    double zWidth = pNormalDepth.y;
+    float zWidth = pNormalDepth.y;
+    double tmpPND = texelFetch(depth, ipos, 0).r;
 
-    double depth = invLinearizeDepth(linearDepth);
     // compute previous pixel via reprojection
     // vec2 pixelCenter = posH + vec2(0.5);
     dvec3 worldPos = reconstructWorldPosition(
-        pNormalDepth.x, ipos, imageDim,
+        tmpPND, ipos, imageDim,
         PC.pc.projInverse, PC.pc.viewInverse
     );
-    // imageStore(color, ipos, vec4(worldPos,1.0));
 
     vec4 prevClip = PC.pc.oldViewProj * vec4(worldPos, 1.0); 
     vec3 prevNDC  = prevClip.xyz / prevClip.w; 
@@ -121,14 +117,12 @@ bool loadPrevData(
     ivec2 iposPrev = ivec2(floor(posPrev));  // base for bilinear taps
 
 
-    vec4 tmpPND = imageLoad(prevPackedNormalDepth, ipos);
-    double tmpPrevD = LinearizeDepth(tmpPND.r);
     
     // imageStore(color, ipos, vec4(linearDepth, tmpPrevD, abs(tmpPrevD - linearDepth) / (zWidth + 1e-3), 1.0));
 
     vec3 MRTex = imageLoad(metalRoughnessTexture, ipos).xyz;
     vec2 metalRoughness = MRTex.xy;
-    int objID = int(MRTex.z);
+    float objID = MRTex.z;
     // imageStore(color, ipos, vec4(prevD, linearDepth, zWidth,abs(prevD - linearDepth) / (zWidth + 1e-7)));
     // return false;
     prevIllum   = vec4(0.0);
@@ -141,32 +135,27 @@ bool loadPrevData(
     ); 
     bool v[4];
     bool valid = false;
-
+    vec4 validity = vec4(0.0);
+    // float failStep = 0.0;
     // 1) test validity at each tap
     for (int i = 0; i < 4; ++i) {
         ivec2 loc = iposPrev + offsets[i];
         if (any(lessThan(loc, ivec2(0))) || any(greaterThanEqual(loc, imageDim))) { 
             v[i] = false;
         } else { 
-            vec3 prevMetalRoughness = imageLoad(metalRoughnessTexture, loc).xyz;
-            if (int(prevMetalRoughness.z) != objID)
-            {
-                v[i] = false;
-            }
-            else {
 
                 vec4 PND = imageLoad(prevPackedNormalDepth, loc);
 
-                double prevD = LinearizeDepth(PND.r);
+                float prevD = PND.r;
                 vec3 nP   = normalize(oct_to_ndir_unorm(PND.zw));
-                v[i] = isReprjValid(loc, linearDepth, prevD, zWidth, currentNormal, nP, normalFwidth, metalRoughness, prevMetalRoughness.xy);
-            }
+                v[i] = isReprjValid(loc, linearDepth, prevD, zWidth, currentNormal, nP, normalFwidth);
+            
 
         }
         valid = valid || v[i];
     }
 
-    // validity += valid ? vec4(1.0,0,0,0) : vec4(0);
+    // validity += valid ? vec4(failStep,0,0,0) : vec4(0);
     // // 2) if any valid, do bilinear interp
     if (valid) {
         float fx = fract(posPrev.x), fy = fract(posPrev.y);
@@ -207,22 +196,20 @@ bool loadPrevData(
                 ivec2 p = iposPrev + ivec2(xx, yy);
                 if (any(lessThan(p, ivec2(0))) || any(greaterThanEqual(p, imageDim))) continue;
                 
-                vec3 prevMetalRoughness = imageLoad(metalRoughnessTexture, p).xyz;
-                if (int(prevMetalRoughness.z) == objID){
+
                     vec4 PND = imageLoad(prevPackedNormalDepth, p);
 
-                    double prevD = LinearizeDepth(PND.r);
+                    float prevD = PND.r;
 
                     vec3 nP   = oct_to_ndir_unorm(PND.zw);
 
 
-                    if (isReprjValid(p, linearDepth, prevD, zWidth, currentNormal, nP, normalFwidth,metalRoughness, prevMetalRoughness.xy)) {
+                    if (isReprjValid(p, linearDepth, prevD, zWidth, currentNormal, nP, normalFwidth)) {
                         prevIllum   += imageLoad(prevIlluminationImage, p);
                         pMoments += imageLoad(prevMoments, p).xy;
                         nValid      += 1.0;
                     }
-                }
-
+                // }
             }
         }
         if (nValid > 0.0) {
@@ -245,9 +232,10 @@ bool loadPrevData(
     vec4 prevPack = imageLoad(prevPackedNormalDepth, iposPrev);
     double prevD = prevPack.x;
     
-    vec4 imageColor = imageLoad(color, ipos);
-    double error = abs(prevD - linearDepth) / (zWidth + 1e-4);
-    // imageStore(color, ipos, valid ? vec4(imageColor.xyz,error ) : vec4(1.0,0.0,1.0,error));
+    double error = abs(prevD - linearDepth) / (zWidth + reprojEps);
+    imageStore(color, ipos, vec4(linearDepth, prevD, error, zWidth ));
+    // imageStore(color, ipos, vec4(ipos-iposPrev,0.0,0.0));
+    // imageStore(color, ipos, validity);
 
     // imageStore(color, ipos, vec4(valid ? 1.0 : 0.0));
 

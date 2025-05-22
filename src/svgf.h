@@ -96,6 +96,11 @@ private:
 
     void Modulate(VkCommandBuffer cmd, VulkanEngine* engine);
 
+
+    //void SetupTimings(VkComma)
+
+    uint32_t _reprojectionStart;
+    uint32_t _reprojectionEnd;
 };
 
 #endif // !SVGF_H

@@ -21,10 +21,10 @@ layout(set = 1, binding = 0) uniform _GlobalUniforms { GlobalUniforms uni; };
 
 layout(set = 2, binding = 0, rgba16f) readonly uniform image2D albedo; 
 layout(set = 2, binding = 1, rgba16f) readonly uniform image2D normal; 
-layout(set = 2, binding = 2, rgba16f) readonly uniform image2D material;
+layout(set = 2, binding = 2, r11f_g11f_b10f) readonly uniform image2D material;
 layout(set = 2, binding = 3, rgba32f) readonly uniform image2D emission; 
 layout(set = 2, binding = 4, r32f) readonly uniform image2D depth; 
-layout(set = 2, binding = 5, rgba32f) uniform image2D colorHistory; 
+layout(set = 2, binding = 5, rgba16f) uniform image2D colorHistory; 
 layout(set = 2, binding = 6, r32f) readonly uniform image2D depthHistory;
 layout(set = 3, binding = 0, std430) readonly buffer LightSources {LightSource l[]; } lights;
 
@@ -130,28 +130,6 @@ void main()
     vpSize, 
     uni.projInverse, 
     uni.viewInverse);
-
-
-  // Linearize currentDepth
-
-  // Reproject and get screen space position
-  // vec4 reprojectedPos = uni.oldViewProj * vec4(worldPos, 1.0);
-  // vec3 reprojNDC = reprojectedPos.xyz / reprojectedPos.w;      // NDC xyz
-  // vec2 reprojUV  = reprojNDC.xy * 0.5 + 0.5; 
-  // vec2 reprojPixel = reprojUV.xy * vec2(gl_LaunchSizeEXT.xy);
-  // bool reprojectionSuccessFull = false;
-  // if (CheckUv(vec2(reprojPixel), vec2(gl_LaunchSizeEXT.xy))) {
-  //   float oldRawDepth = imageLoad(depthHistory, ivec2(reprojPixel.xy)).r;    // reversed‐Z
-  //   float reprojDepth  = reprojNDC.z;                           // also reversed‐Z
-  //   // optional: linearize both depths to view‐space
-  //   float linOld  = zNear * zFar / (zFar + oldRawDepth * (zNear - zFar));;
-  //   float linNew  = zNear * zFar / (zFar + reprojDepth * (zNear - zFar));;
-  //   reprojectionSuccessFull = abs(linOld - linNew) > eps;
-  // }
-
-
-  // sample old depth and compare
-
 
  
 

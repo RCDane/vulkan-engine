@@ -18,6 +18,8 @@ namespace vkutil {
     TransferBuffer copy_image_to_cpu_buffer(VkDevice device, VmaAllocator allocator, VkCommandBuffer cmd, const AllocatedImage& src);
     void transition_gbuffer_image(VkCommandBuffer cmd, VkImage image, VkImageLayout oldLayout, VkImageLayout newLayout);
     void transition_gbuffer_images(VkCommandBuffer cmd, const std::vector<VkImage>& images, VkImageLayout oldLayout, VkImageLayout newLayout);
+    void transition_images_together(VkCommandBuffer cmd,const std::vector<VkImage>& images, const std::vector<VkImageLayout>& oldLayouts, const std::vector<VkImageLayout>& newLayouts
+    );
 
     void transition_main_color_image(VkCommandBuffer cmd, VkImage image, VkImageLayout oldLayout, VkImageLayout newLayout);
     void generate_mipmaps(VkCommandBuffer cmd, VkImage image, VkExtent2D imageSize);
