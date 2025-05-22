@@ -22,7 +22,7 @@
 
 // Motion not needed
 layout(set = 0, binding = 0, rgba32f) uniform image2D packedNormalDepth;
-layout(set = 0, binding = 1, rgba16f) uniform image2D color;
+layout(set = 0, binding = 1, rgba32f) uniform image2D color;
 layout(set = 0, binding = 2, rgba16f) uniform image2D albedo;
 // rename to avoid shadowing below
 layout(set = 0, binding = 3, rgba16f) uniform image2D prevIlluminationImage;
@@ -144,11 +144,11 @@ bool loadPrevData(
             v[i] = false;
         } else { 
 
-                vec4 PND = imageLoad(prevPackedNormalDepth, loc);
+            vec4 PND = imageLoad(prevPackedNormalDepth, loc);
 
-                float prevD = PND.r;
-                vec3 nP   = normalize(oct_to_ndir_unorm(PND.zw));
-                v[i] = isReprjValid(loc, linearDepth, prevD, zWidth, currentNormal, nP, normalFwidth);
+            float prevD = PND.r;
+            vec3 nP   = normalize(oct_to_ndir_unorm(PND.zw));
+            v[i] = isReprjValid(loc, linearDepth, prevD, zWidth, currentNormal, nP, normalFwidth);
             
 
         }

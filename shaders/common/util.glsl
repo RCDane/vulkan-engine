@@ -283,7 +283,7 @@ float computeWeight(
 
 
 
-    const float weightIllum = exp(0.0 - max(weightLillum, 0.0) - max(weightZ, 0.0) ) * weightNormal;
+    const float weightIllum = exp(0.0 - max(weightLillum, 0.0) - max(weightZ, 0.0) - max(weightMR, 0.0)) * weightNormal;
 
 
 

@@ -235,6 +235,9 @@ public:
 	DescriptorAllocatorGrowable updatingGlobalDescriptorAllocator;
 
 
+	bool useSVGF = true;
+	bool accumulate = false;
+
 	VkDescriptorSet _drawImageDescriptors;
 	VkDescriptorSetLayout _drawImageDescriptorLayout;
 
@@ -245,7 +248,7 @@ public:
 	std::vector<TransferBuffer> imagesBeingTransferred;
 
 	ImageWriteSet UIImageWriteSet;
-	char currentString[128];
+	char currentString[128] = "tmp";
 
 	ImageWriteSet currentImageWriteSet;
 

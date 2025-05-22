@@ -138,7 +138,7 @@ struct PushConstantRay
 	vec3  lightPosition;
 	float lightIntensity;
 	vec3 lightColor;
-	int   lightType;
+	int  useAccumulation;
 	vec4 ambientColor;
 };
 

@@ -152,7 +152,7 @@ void VulkanEngine::init()
 	//loadedScenes["helmet"]->rootTransform = glm::scale(glm::vec3(10.0f)) * loadedScenes["helmet"]->rootTransform;
 	//loadedScenes["helmet"]->rootTransform = glm::translate(glm::vec3(0.0f, 20.0f, 0.0f)) * loadedScenes["helmet"]->rootTransform;
 
-	std::string sponzaPath = { "../assets/sponza.glb" };
+	std::string sponzaPath = { "../assets/sphere test.glb" };
 	auto sponzaFile = loadGltf(this, sponzaPath);
 	assert(sponzaFile.has_value());
 	loadedScenes["sponza"] = *sponzaFile;
@@ -224,12 +224,6 @@ void VulkanEngine::init()
 	_directionalLighting.color = glm::vec4(lightSources[0]->color, 0);;
 	_directionalLighting.direction = lightSources[0]->direction;
 	_directionalLighting.intensity = 1.f;
-
-	_raytracePushConstant.clearColor = glm::vec4(0.1, 0.2, 0.4, 0.97);
-	_raytracePushConstant.lightColor = glm::vec4(1, 1, 1, 1);
-	_raytracePushConstant.lightPosition = sunDirection;
-	_raytracePushConstant.lightType = 1;
-	_raytracePushConstant.lightIntensity = 2.f;
 
 
 	DescriptorWriter writer;
@@ -447,39 +441,47 @@ void WaitAll(VkCommandBuffer cmd) {
 
 #include <stb_image_write.h>
 
+// Modify write_png_image to accept a bitDepth parameter (8 or 16)
 void write_png_image(
-	const float* src,          // ← now float*
-	VkExtent2D      size,
-	int             channelCount, // e.g. 4 for RGBA
-	const std::string& name
+	const float* src,           // now float*
+	VkExtent2D size,
+	int channelCount,           // e.g. 4 for RGBA
+	const std::string& name,
+	int bitDepth = 8            // new parameter: 8 or 16 bits per channel
 ) {
 	int width = size.width;
 	int height = size.height;
 	int numFloats = width * height * channelCount;
 
-	// Prepare a byte buffer the same total size:
-	std::vector<unsigned char> byteData(numFloats);
-
-	// Convert each float [0,1] → [0,255]
-	for (int i = 0; i < numFloats; i++) {
-		float f = std::clamp(src[i], 0.0f, 1.0f);
-		byteData[i] = static_cast<unsigned char>(std::round(f * 255.0f));
-	}
-
-	// Number of bytes per row = pixels * channels
-	int stride_in_bytes = width * channelCount;
-
 	std::string filePath = "./" + name + ".png";
-	if (!stbi_write_png(
-		filePath.c_str(),
-		width,
-		height,
-		channelCount,
-		byteData.data(),
-		stride_in_bytes
-	))
-	{
-		throw std::runtime_error("Failed to write PNG: " + filePath);
+
+	if (bitDepth == 8) {
+		// 8-bit conversion (original)
+		std::vector<unsigned char> byteData(numFloats);
+		for (int i = 0; i < numFloats; i++) {
+			float f = std::clamp(src[i], 0.0f, 1.0f);
+			byteData[i] = static_cast<unsigned char>(std::round(f * 255.0f));
+		}
+		int stride_in_bytes = width * channelCount;
+		if (!stbi_write_png(filePath.c_str(), width, height, channelCount, byteData.data(), stride_in_bytes)) {
+			throw std::runtime_error("Failed to write PNG: " + filePath);
+		}
+	}
+	else if (bitDepth == 16) {
+		// 16-bit conversion
+		std::vector<uint16_t> byteData(numFloats);
+		for (int i = 0; i < numFloats; i++) {
+			float f = std::clamp(src[i], 0.0f, 1.0f);
+			byteData[i] = static_cast<uint16_t>(std::round(f * 65535.0f));
+		}
+		int stride_in_bytes = width * channelCount * sizeof(uint16_t);
+		// Note: stbi_write_png must be set-up (or modified) to handle 16-bit data.
+		if (!stbi_write_png(filePath.c_str(), width, height, channelCount, byteData.data(), stride_in_bytes)) {
+			throw std::runtime_error("Failed to write PNG: " + filePath);
+		}
+	}
+	else {
+		throw std::runtime_error("Unsupported bit depth (must be 8 or 16)");
 	}
 }
 #include <fstream>
@@ -608,8 +610,14 @@ void VulkanEngine::draw()
 	currentFrame._modulateStart = currentFrame._queryStart + 8;
 	currentFrame._modulateEnd = currentFrame._queryStart + 9;
 
+	int query_count = 2;
+	if (useSVGF) {
+		query_count = 10;
+	}
+
+
 	// Reset query pool segment for the current frame
-	vkCmdResetQueryPool(cmd, _timestampQueryPool, currentFrame._queryStart, QUERIES_PER_FRAME);
+	vkCmdResetQueryPool(cmd, _timestampQueryPool, currentFrame._queryStart, query_count);
 
 
 
@@ -677,7 +685,8 @@ void VulkanEngine::draw()
 		
 		WaitAll(cmd);
 
-		_svgfHandler.Execute(cmd, this);
+		if (useSVGF)
+			_svgfHandler.Execute(cmd, this);
 
 
 		//RemoveMarker(cmd);
@@ -707,9 +716,13 @@ void VulkanEngine::draw()
 	}
 	WaitAll(cmd);
 	TransferBuffer buffer;
+
+	compute_tonemapping(cmd);
+	
+
 	if (currentImageWriteSet.ongoing) {
-		buffer = vkutil::copy_image_to_cpu_buffer(_device, _allocator, cmd, _colorHistory);
-		buffer.name = std::format("image_{}", currentImageWriteSet.currentCount);
+		buffer = vkutil::copy_image_to_cpu_buffer(_device, _allocator, cmd, _drawImage);
+		buffer.name = std::format("{}_{}", currentImageWriteSet.folder, currentImageWriteSet.currentCount);
 
 
 		currentImageWriteSet.currentCount++;
@@ -722,8 +735,7 @@ void VulkanEngine::draw()
 
 		imagesBeingTransferred.push_back(buffer);
 	}
-	compute_tonemapping(cmd);
-	
+
 	WaitAll(cmd);
 
 	vkutil::transition_image(cmd, _colorHistory.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
@@ -1356,14 +1368,46 @@ void VulkanEngine::run()
     // main loop
     while (!bQuit) {
         // Handle events on queue
+
+		// imgui new frame
+		ImGui_ImplVulkan_NewFrame();
+		ImGui_ImplSDL3_NewFrame();
+		ImGui::NewFrame();
+
+
+		ImGui::Begin("Main");
+		ImGui::Checkbox("Use SVGF", &useSVGF);
+		ImGui::Checkbox("Accumulate", &accumulate);
+
+		ImGui::Text("Stats:");
+		ImGui::Text("frametime %f ms", stats.frametime);
+		ImGui::Text("draw time %f ms", stats.mesh_draw_time);
+		ImGui::Text("reprojection time %f ms", stats.reprojection_time);
+		ImGui::Text("modulate time %f ms", stats.modulate_time);
+		ImGui::Text("filter time %f ms", stats.filter_time);
+		ImGui::Text("wavelet time %f ms", stats.wavelet_time);
+
+
+		ImGui::Text("update time %f ms", stats.scene_update_time);
+
+		ImGui::Text("Write image sequence");
+		ImGui::InputInt("Frame count", &UIImageWriteSet.count);
+		ImGui::InputText("Folder name", currentString, 127);
+		StartImageTransfer = ImGui::Button("Take Picture");
+		ImGui::End();
+
+
 		auto start = std::chrono::system_clock::now();
         while (SDL_PollEvent(&e) != 0) {
             // close the window when user alt-f4s or clicks the X button
             if (e.type == SDL_EVENT_QUIT)
                 bQuit = true;
-
-		    mainCamera->processSDLEvent(e);
 			
+			
+			ImGuiIO& io = ImGui::GetIO();
+			if (!io.WantCaptureKeyboard && !io.WantCaptureMouse) {
+				mainCamera->processSDLEvent(e);
+			}
 
 
                 if (e.window.type == SDL_EVENT_WINDOW_MINIMIZED) {
@@ -1387,49 +1431,13 @@ void VulkanEngine::run()
 			_raytracingHandler.updateRtDescriptorSet(this);
 		}
 
-		// imgui new frame
-		ImGui_ImplVulkan_NewFrame();
-		ImGui_ImplSDL3_NewFrame();
-		ImGui::NewFrame();
 
-
-		ImGui::Begin("Main");
-		//ImGui::Checkbox("Raytracing", &useRaytracing);
-		//ImGui::Checkbox("Use PCF", &usePCF);
-		//ImGui::Checkbox("Offline mode", &_raytracingHandler.offlineMode);
-		//ImGui::InputInt("Ray budget", &_raytracingHandler.rayBudget);
-
-
-
-		//ImGui::Text("Directional Light");
-		//GPUSceneData& tmpData = sceneData;
-		//ImGui::InputFloat4("Intensity", (float*)&   	tmpData.sunlightColor);
-		//ImGui::InputFloat4("Direction", (float*)&    	tmpData.sunlightDirection);
-		//ImGui::InputFloat4("Ambient Color", (float*)&	tmpData.ambientColor);
-		
-		
-		ImGui::Text("Stats:");
-        ImGui::Text("frametime %f ms", stats.frametime);
-        ImGui::Text("draw time %f ms", stats.mesh_draw_time);
-		ImGui::Text("reprojection time %f ms", stats.reprojection_time);
-		ImGui::Text("modulate time %f ms", stats.modulate_time);
-		ImGui::Text("filter time %f ms", stats.filter_time);
-		ImGui::Text("wavelet time %f ms", stats.wavelet_time);
-
-
-        ImGui::Text("update time %f ms", stats.scene_update_time);
-
-		ImGui::Text("Write image sequence");
-		ImGui::InputInt("Frame count", &UIImageWriteSet.count);
-		ImGui::InputText("Folder name", currentString, 128);
-		StartImageTransfer = ImGui::Button("Take Picture");
-		ImGui::End();
 
 
 
 		if (StartImageTransfer) {
 			currentImageWriteSet = UIImageWriteSet;
-			currentImageWriteSet.folder = std::string(currentString);
+			currentImageWriteSet.folder = currentString;
 			currentImageWriteSet.ongoing = true;
 			currentImageWriteSet.currentCount = 0;
 		}
@@ -1750,7 +1758,7 @@ void VulkanEngine::init_swapchain()
 	VkImageUsageFlags colorHistoryUsages{};
 	colorHistoryUsages |= VK_IMAGE_USAGE_STORAGE_BIT;
 
-	_colorHistory.imageFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
+	_colorHistory.imageFormat = VK_FORMAT_R32G32B32A32_SFLOAT;
 	_colorHistory.imageExtent = drawImageExtent;
 	create_render_buffer(_colorHistory, drawImageUsages, VK_IMAGE_ASPECT_COLOR_BIT);
 	NameImage(_device, _colorHistory.image, "Color history");
@@ -3277,12 +3285,16 @@ void VulkanEngine::retrieve_timestamp_results(uint32_t frameIndex)
 
 	uint64_t timestamps[10] = {};
 
+	int query_count = 2;
+	if (useSVGF)
+		query_count = 10;
+
 	VkResult result = vkGetQueryPoolResults(
 		_device,
 		_timestampQueryPool,
 		startQuery,
-		QUERIES_PER_FRAME,
-		sizeof(timestamps),
+		query_count,
+		sizeof(uint64_t)*query_count,
 		timestamps,
 		sizeof(uint64_t),
 		VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT

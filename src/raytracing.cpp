@@ -1391,6 +1391,12 @@ void RaytracingHandler::raytrace(VkCommandBuffer cmd, VulkanEngine* engine) {
 		throw std::runtime_error("Failed to map memory for global uniform buffer!");
 	}
 
+
+	if (lastState != engine->accumulate && engine->accumulate) {
+		engine->cameraMoved = true;
+	}
+	lastState = engine->accumulate;
+
 	bool clearScreen = false;
 	if (engine->cameraMoved) {
 		clearScreen = true;
@@ -1481,6 +1487,7 @@ void RaytracingHandler::raytrace(VkCommandBuffer cmd, VulkanEngine* engine) {
 	engine->_raytracePushConstant.lightIntensity = engine->_directionalLighting.intensity;
 	engine->_raytracePushConstant.lightPosition = engine->sceneData.sunlightDirection;
 	engine->_raytracePushConstant.ambientColor = engine->sceneData.ambientColor;
+	engine->_raytracePushConstant.useAccumulation = engine->accumulate && !engine->useSVGF;
 	// Push constants to the pipeline if necessary
 	vkCmdPushConstants(
 		cmd,

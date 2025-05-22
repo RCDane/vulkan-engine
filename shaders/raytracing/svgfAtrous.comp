@@ -102,7 +102,7 @@ void main(){
     const vec4 illuminationCenter = imageLoad(illuminationTexture, coord);
     const float lIlluminationCenter = luminance(illuminationCenter.rgb);
 
-    const float variance = computeVarianceCenterUnrolled(coord); 
+    const float variance = computeVarianceCenter(coord); 
 
     const float historyLength = float(imageLoad(prevHistoryLengthImage, coord).x);
     const vec4 packedND = imageLoad(packedNormalDepth, coord);
@@ -119,13 +119,13 @@ void main(){
 
 
     const float phiLIllumination = PC.pc.phiColor * sqrt(max(0.0, epsV + variance));
-    const float phiDepth = float(max(packedND.x, 1e-8) * PC.pc.stepSize);
+    const float phiDepth = float(max(packedND.x, 1e-8) * PC.pc.stepSize) * 3.0;
     
     const vec3 MR = imageLoad(metalRoughnessTexture, coord).xyz;
     const vec2 MRCenter = MR.xy;
     float ObjID = MR.z;
     const float depthCenter = packedND.x;
-    float phiMR = 10.0;
+    float phiMR = 2.0;
 
     float sumWIllumination = 1.0;
     vec4 sumIllumination = illuminationCenter;

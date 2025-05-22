@@ -75,7 +75,7 @@ struct PushConstantRay
 	glm::vec3  lightPosition;
 	float lightIntensity;
 	glm::vec3 lightColor;
-	int   lightType;
+	int  useAccumulation;
 	glm::vec4 ambientColor;
 	
 };
@@ -105,6 +105,7 @@ private:
 	VkDescriptorSet m_rtDescSet;
 	VkDescriptorSetLayout m_descSetLayout;
 
+	bool lastState;
 
 	AllocatedBuffer m_rtSBTBuffer;
 	VkStridedDeviceAddressRegionKHR m_rgenRegion{};

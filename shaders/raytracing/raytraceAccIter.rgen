@@ -259,18 +259,15 @@ void main()
   vec3 accumulatedColor = currentColor.rgb 
                         + (combined - currentColor.rgb) * invNext;
 
-  // if (isShadowed2) {
-  //   accumulatedColor = vec3(0.0); // If the pixel is shadowed, set the color to black
-  // }
-  // else {
-  //   accumulatedColor = vec3(1.0); // Invert the color if not shadowed
-  // }
-  if (any(isnan(combined)))
-  {
-    combined = vec3(1.0,0.0,1.0);
+
+
+  vec3 outColor = combined;
+  if (pcRay.useAccumulation == 1) {
+    outColor = accumulatedColor;
   }
+
   imageStore(colorHistory,
             ivec2(gl_LaunchIDEXT.xy),
-            vec4(combined,1.0)); // store the color in the history buffer
+            vec4(outColor,1.0)); // store the color in the history buffer
 
 }

@@ -1,5 +1,4 @@
 import numpy as np
-import matplotlib.pyplot as plt  # Added import for matplotlib
 
 def load_raw_buffer(path):
     with open(path, 'rb') as f:
@@ -8,25 +7,35 @@ def load_raw_buffer(path):
         h = np.fromfile(f, dtype=np.uint32, count=1)[0]
         c = np.fromfile(f, dtype=np.uint32, count=1)[0]
 
-        # now read w*h*c floats
-        data = np.fromfile(f, dtype=np.float32, count=w*h*c)
+        # now read w*h*c floats (16-bit)
+        data = np.fromfile(f, dtype=np.float16, count=w*h*c)
 
     # reshape into (H, W, C)
     return data.reshape((h, w, c)), (w, h, c)
 
-# example usage:
-img, (w, h, c) = load_raw_buffer('bin/test')
-print(f"Loaded image {w}×{h} with {c} channels; dtype={img.dtype}")
+# Function to calculate Mean Squared Error (MSE)
+def calculate_mse(image1, image2):
+    return np.mean((image1 - image2) ** 2)
 
-# Format and display the image using matplotlib
-if c == 1:  # Grayscale image
-    img = img[:, :, 0]  # Remove the channel dimension
-elif c == 3:  # RGB image
-    img = img[:, :, :3]  # Ensure only 3 channels are used
-elif c == 4:  # RGBA image
-    img = img[:, :, :4]  # Ensure only 4 channels are used
+# Read the ground truth image
+GT_image_path = "bin/image_0"
+GT_img, (w_gt, h_gt, c_gt) = load_raw_buffer(GT_image_path)
+GT_img = GT_img.astype(np.float32)
 
-plt.imshow(img, cmap='gray' if c == 1 else None)
-plt.title(f"Image {w}×{h} with {c} channels")
-plt.axis('off')
-plt.show()
+# Read and compare a set of images with the ground truth
+N = 4  # Change this to the desired number of images
+for i in range(1, N):
+    img, (w, h, c) = load_raw_buffer(f'bin/image_{i}')
+    print(f"Loaded image {w}×{h} with {c} channels; dtype={img.dtype}")
+
+    # Convert to float32 for compatibility
+    img = img.astype(np.float32)
+
+    # Ensure the dimensions match the ground truth
+    if (w, h, c) != (w_gt, h_gt, c_gt):
+        print(f"Image {i} dimensions do not match the ground truth. Skipping comparison.")
+        continue
+
+    # Calculate MSE
+    mse = calculate_mse(GT_img, img)
+    print(f"Image {i} MSE with ground truth: {mse}")

@@ -19,8 +19,8 @@ layout(set = 0, binding = 6, r11f_g11f_b10f) uniform image2D prevMetalRoughnessT
  
 layout (local_size_x = 16, local_size_y = 16) in;
 
-float gPhiColor = 0.2;
-float gPhiNormal = 0.2;
+float gPhiColor = 5;
+float gPhiNormal = 128.0;
 
 
 layout(push_constant ) uniform PushConstant { PushConstantImageSize pc; } PC;
@@ -48,7 +48,7 @@ void main(){
         if (depth < 0.0){
             return;
         }
-        float phiMR = 0.2; 
+        float phiMR = 0.01; 
 
         const vec3 normalCenter = oct_to_ndir_unorm(normalFZwidth.zw);
         const float phiDepth = float(max(depth, 1e-8)*3.0);
