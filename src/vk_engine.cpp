@@ -45,7 +45,7 @@
 //#include <windows.h>
 //#include <tchar.h>
 
-constexpr bool bUseValidationLayers = true;
+constexpr bool bUseValidationLayers = false;
 
 
 VulkanEngine* loadedEngine = nullptr;
@@ -116,7 +116,10 @@ void VulkanEngine::init()
 
 	//_tprintf(TEXT("Current priority class is 0x%x\n"), dwPriClass);
 
-
+	UIImageWriteSet.count = 1;
+	UIImageWriteSet.currentCount = 0;
+	UIImageWriteSet.ongoing = false;
+	UIImageWriteSet.folder = "images/";
 
 	_cubeMap = load_cube_map(this, "../assets/black_skybox");
 
@@ -163,7 +166,7 @@ void VulkanEngine::init()
 	for (auto const& [key, scene] : loadedScenes) {
 		if (scene->camera) {
 			mainCamera = scene->camera;
-			mainCamera->zNear = 0.01f;
+			mainCamera->zNear = 0.3f;
 			mainCamera->zFar = 300.0;
 		}
 		if (scene->lightSources.size() > 0) {

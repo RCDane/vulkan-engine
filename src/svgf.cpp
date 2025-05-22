@@ -298,11 +298,11 @@ void SVGFHandler::create_frame_buffers(VulkanEngine* engine) {
 
 	engine->create_render_buffer(prevMoments, transferUsages, VK_IMAGE_ASPECT_COLOR_BIT);
 
-	packedDepthNormal.imageFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
+	packedDepthNormal.imageFormat = VK_FORMAT_R32G32B32A32_SFLOAT;
 	packedDepthNormal.imageExtent = extent;
 
 	engine->create_render_buffer(packedDepthNormal, transferUsages, VK_IMAGE_ASPECT_COLOR_BIT);
-	prevPackedDepthNormal.imageFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
+	prevPackedDepthNormal.imageFormat = VK_FORMAT_R32G32B32A32_SFLOAT;
 	prevPackedDepthNormal.imageExtent = extent;
 
 	engine->create_render_buffer(prevPackedDepthNormal, transferUsages, VK_IMAGE_ASPECT_COLOR_BIT);
