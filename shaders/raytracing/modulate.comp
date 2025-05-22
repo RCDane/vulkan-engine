@@ -10,7 +10,7 @@
 
 layout (local_size_x = 16, local_size_y = 16) in;
 
-layout(set = 0, binding = 0, rgba16f) uniform image2D illuminationTexture;
+layout(set = 0, binding = 0, rgba32f) uniform image2D illuminationTexture;
 layout(set = 0, binding = 1, rgba16f) uniform image2D albedoTexture;
 layout(set = 0, binding = 2, rgba32f) uniform image2D color;
 

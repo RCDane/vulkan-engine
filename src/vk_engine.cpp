@@ -1378,6 +1378,7 @@ void VulkanEngine::run()
 		ImGui::Begin("Main");
 		ImGui::Checkbox("Use SVGF", &useSVGF);
 		ImGui::Checkbox("Accumulate", &accumulate);
+		ImGui::InputInt("directional light samples:", &_raytracePushConstant.directionalLightSamples);
 
 		ImGui::Text("Stats:");
 		ImGui::Text("frametime %f ms", stats.frametime);
@@ -1387,6 +1388,7 @@ void VulkanEngine::run()
 		ImGui::Text("filter time %f ms", stats.filter_time);
 		ImGui::Text("wavelet time %f ms", stats.wavelet_time);
 
+		
 
 		ImGui::Text("update time %f ms", stats.scene_update_time);
 
@@ -1394,6 +1396,8 @@ void VulkanEngine::run()
 		ImGui::InputInt("Frame count", &UIImageWriteSet.count);
 		ImGui::InputText("Folder name", currentString, 127);
 		StartImageTransfer = ImGui::Button("Take Picture");
+		_svgfHandler.draw_imgui();
+		
 		ImGui::End();
 
 

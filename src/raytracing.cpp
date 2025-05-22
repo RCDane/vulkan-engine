@@ -1410,6 +1410,8 @@ void RaytracingHandler::raytrace(VkCommandBuffer cmd, VulkanEngine* engine) {
 	m_uniformMappedPtr->raytracingSettings.lightCount = engine->lightSources.size();
 	m_uniformMappedPtr->clearScreen = clearScreen ? 1 : 0;
 	m_uniformMappedPtr->raytracingSettings.currentRayCount = currentRayCount;
+	
+
 	currentRayCount += rayBudget;
 	// Copy uniform data into the mapped memory
 	std::memcpy(mappedData, m_uniformMappedPtr, sizeof(GlobalUniforms));

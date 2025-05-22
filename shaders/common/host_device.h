@@ -140,6 +140,7 @@ struct PushConstantRay
 	vec3 lightColor;
 	int  useAccumulation;
 	vec4 ambientColor;
+	int directionalLightSamples;
 };
 
 // Push-constant block for SVGF reprojection

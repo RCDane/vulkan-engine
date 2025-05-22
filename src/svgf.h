@@ -2,6 +2,8 @@
 #ifndef SVGF_H
 #include <vk_engine.h>
 #include <vk_types.h>
+#include <vector>
+#include <string>
 
 struct SVGFSettings {
     float radius;
@@ -20,6 +22,9 @@ public:
     void init(VulkanEngine* engine, VkExtent2D extent);
 
     void Execute(VkCommandBuffer cmd, VulkanEngine* engine);
+
+    // ImGui statistics window
+    void draw_imgui();
 
 private:
 
@@ -80,6 +85,8 @@ private:
     void create_packing_pipeline(VulkanEngine* engine);
 
 
+    void calculate_memory_footprint(VulkanEngine* engine);
+
     void create_descriptors(VulkanEngine* engine);
 
     /// <summary>
@@ -101,6 +108,9 @@ private:
 
     uint32_t _reprojectionStart;
     uint32_t _reprojectionEnd;
+
+    // Store SVGF memory statistics for ImGui
+    std::vector<std::string> svgfStatsLines;
 };
 
 #endif // !SVGF_H

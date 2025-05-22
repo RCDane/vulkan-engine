@@ -11,11 +11,11 @@
 layout (local_size_x = 16, local_size_y = 16) in;
 
 
-layout(set = 0, binding = 0, rgba16f) uniform image2D illuminationTexture;
+layout(set = 0, binding = 0, rgba32f) uniform image2D illuminationTexture;
 layout(set = 0, binding = 1, r8ui) uniform uimage2D prevHistoryLengthImage;
 layout(set = 0, binding = 2, rgba32f) uniform image2D packedNormalDepth;
 layout(set = 0, binding = 3, rgba16f) uniform image2D albedoTexture;
-layout(set = 0, binding = 4, rgba16f) uniform image2D outIllumination;
+layout(set = 0, binding = 4, rgba32f) uniform image2D outIllumination;
 layout(set = 0, binding = 5, r11f_g11f_b10f) uniform image2D metalRoughnessTexture;
 layout(set = 0, binding = 6, r11f_g11f_b10f) uniform image2D prevMetalRoughnessTexture;
 
@@ -102,7 +102,7 @@ void main(){
     const vec4 illuminationCenter = imageLoad(illuminationTexture, coord);
     const float lIlluminationCenter = luminance(illuminationCenter.rgb);
 
-    const float variance = computeVarianceCenter(coord); 
+    const float variance = computeVarianceCenterUnrolled(coord); 
 
     const float historyLength = float(imageLoad(prevHistoryLengthImage, coord).x);
     const vec4 packedND = imageLoad(packedNormalDepth, coord);

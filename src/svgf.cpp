@@ -3,6 +3,9 @@
 #include <vk_pipelines.h>
 #include <vk_descriptors.h>
 #include <vk_images.h>
+#include <unordered_map>
+#include <imgui.h>
+
 void SVGFHandler::create_reprojection_pipeline(VulkanEngine* engine) {
 	VkPipelineLayoutCreateInfo computeLayout{};
 	computeLayout.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
@@ -263,7 +266,7 @@ void SVGFHandler::create_frame_buffers(VulkanEngine* engine) {
 
 	engine->create_render_buffer(prevNormalFWidthZWidth, transferUsages, VK_IMAGE_ASPECT_COLOR_BIT);
 
-	illumination.imageFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
+	illumination.imageFormat = VK_FORMAT_R32G32B32A32_SFLOAT;
 	illumination.imageExtent = extent;
 
 
@@ -287,7 +290,7 @@ void SVGFHandler::create_frame_buffers(VulkanEngine* engine) {
 	engine->create_render_buffer(prevHistoryLength, reprojectionUsages, VK_IMAGE_ASPECT_COLOR_BIT);
 
 
-	prevIllumination.imageFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
+	prevIllumination.imageFormat = VK_FORMAT_R32G32B32A32_SFLOAT;
 	prevIllumination.imageExtent = extent;
 
 	engine->create_render_buffer(prevIllumination, transferUsages, VK_IMAGE_ASPECT_COLOR_BIT);
@@ -386,6 +389,8 @@ void SVGFHandler::init(VulkanEngine* engine, VkExtent2D extent) {
 	create_wavelet_filter_pipeline(engine);
 	create_modulate_pipeline(engine);
 	create_packing_pipeline(engine);
+
+	calculate_memory_footprint(engine);
 }
 
 SVGFHandler::SVGFHandler(VulkanEngine* engine, VkExtent2D extent) {
@@ -594,7 +599,7 @@ void SVGFHandler::WaveletFilter(VkCommandBuffer cmd, VulkanEngine* engine) {
 
 		PushConstantAtrous settings;
 		settings.imageSize = glm::ivec2(engine->_windowExtent.width, engine->_windowExtent.height);
-		settings.phiColor = 5;
+		settings.phiColor = 1;
 		settings.phiNormal = 128.0;
 		settings.stepSize = 1 << i;
 
@@ -631,6 +636,67 @@ void SVGFHandler::WaveletFilter(VkCommandBuffer cmd, VulkanEngine* engine) {
 	prevIllumination = illuminationOut;
 }
 
+
+// Helper function to get bytes per pixel for a VkFormat
+static size_t get_bytes_per_pixel(VkFormat format) {
+    switch (format) {
+        case VK_FORMAT_R32G32B32A32_SFLOAT: return 16;
+        case VK_FORMAT_R16G16B16A16_SFLOAT: return 8;
+        case VK_FORMAT_R8_UINT: return 1;
+        case VK_FORMAT_R16G16_SFLOAT: return 4;
+        case VK_FORMAT_B10G11R11_UFLOAT_PACK32: return 4;
+        // Add more formats as needed
+        default: return 0; // Unknown/unsupported format
+    }
+}
+
+void SVGFHandler::calculate_memory_footprint(VulkanEngine* engine) {
+    struct ImageInfo {
+        const char* name;
+        const AllocatedImage* img;
+    };
+    std::vector<ImageInfo> images = {
+        {"illumination", &illumination},
+        {"prevIllumination", &prevIllumination},
+        {"illuminationBlend", &illuminationBlend},
+        {"normalFWidthZWidth", &normalFWidthZWidth},
+        {"prevNormalFWidthZWidth", &prevNormalFWidthZWidth},
+        {"prevHistoryLength", &prevHistoryLength},
+        {"prevMoments", &prevMoments},
+        {"packedDepthNormal", &packedDepthNormal},
+        {"prevPackedDepthNormal", &prevPackedDepthNormal},
+        {"prevMetalRougness", &prevMetalRougness},
+    };
+    VkDeviceSize total_bytes = 0;
+    svgfStatsLines.clear();
+    for (const auto& info : images) {
+        const AllocatedImage* img = info.img;
+        size_t bpp = get_bytes_per_pixel(img->imageFormat);
+        VkExtent3D ext = img->imageExtent;
+		VkMemoryRequirements req;
+		vkGetImageMemoryRequirements(engine->_device, info.img->image, &req);
+        VkDeviceSize img_bytes = req.size;
+        total_bytes += img_bytes;
+        char buf[256];
+        snprintf(buf, sizeof(buf), "%s: %ux%ux%u format=%d bytes=%llu", info.name, ext.width, ext.height, ext.depth, (int)img->imageFormat, (unsigned long long)img_bytes);
+        svgfStatsLines.emplace_back(buf);
+        fmt::print("[SVGF] {}\n", buf);
+    }
+    double total_mb = static_cast<double>(total_bytes) / (1024.0 * 1024.0);
+    char totalBuf[128];
+    snprintf(totalBuf, sizeof(totalBuf), "Total memory footprint: %.2f MB", total_mb);
+    svgfStatsLines.emplace_back(totalBuf);
+    fmt::print("[SVGF] {}\n", totalBuf);
+}
+
+void SVGFHandler::draw_imgui() {
+    if (ImGui::Begin("SVGF Memory Footprint")) {
+        for (const auto& line : svgfStatsLines) {
+            ImGui::TextUnformatted(line.c_str());
+        }
+    }
+    ImGui::End();
+}
 
 void SVGFHandler::Modulate(VkCommandBuffer cmd, VulkanEngine* engine) {
 	vkutil::transition_image(cmd, illumination.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);

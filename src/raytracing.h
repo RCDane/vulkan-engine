@@ -77,6 +77,7 @@ struct PushConstantRay
 	glm::vec3 lightColor;
 	int  useAccumulation;
 	glm::vec4 ambientColor;
+	int directionalLightSamples = 1;
 	
 };
 enum RaytracingMode

@@ -24,12 +24,12 @@
 layout(set = 0, binding = 0, rgba32f) uniform image2D packedNormalDepth;
 layout(set = 0, binding = 1, rgba32f) uniform image2D color;
 layout(set = 0, binding = 2, rgba16f) uniform image2D albedo;
-// rename to avoid shadowing below
-layout(set = 0, binding = 3, rgba16f) uniform image2D prevIlluminationImage;
+
+layout(set = 0, binding = 3, rgba32f) uniform image2D prevIlluminationImage;
 layout(set = 0, binding = 4, rgba32f) uniform image2D prevPackedNormalDepth;
 layout(set = 0, binding = 5, r8ui) uniform uimage2D prevHistoryLengthImage;
 layout(set = 0, binding = 6, rg16f) uniform image2D prevMoments;
-layout(set = 0, binding = 7, rgba16f) uniform image2D illumination;
+layout(set = 0, binding = 7, rgba32f) uniform image2D illumination;
 layout(set = 0, binding = 8, r11f_g11f_b10f) uniform image2D metalRoughnessTexture;
 layout(set = 0, binding = 9, r11f_g11f_b10f) uniform image2D prevMetalRoughnessTexture;
 layout(set = 0, binding = 10) uniform sampler2D depth;
