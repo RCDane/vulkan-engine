@@ -69,6 +69,12 @@ struct EngineStats {
     int drawcall_count;
     float scene_update_time;
     float mesh_draw_time;
+	float reprojection_time;
+	float modulate_time;
+	float filter_time;
+	float wavelet_time;
+
+
 };
 
 struct ComputePushConstants {
@@ -98,6 +104,14 @@ struct FrameData {
 	// Add query indices for timestamp queries
 	uint32_t _queryStart;
 	uint32_t _queryEnd;
+	uint32_t _reprojectionStart;
+	uint32_t _reprojectionEnd;
+	uint32_t _modulateStart;
+	uint32_t _modulateEnd;
+	uint32_t _FilterMomentsStart;
+	uint32_t _FilterMomentsEnd;
+	uint32_t _waveletStart;
+	uint32_t _waveletEnd;
 
 };
 
@@ -314,7 +328,7 @@ public:
 
 
 	VkQueryPool _timestampQueryPool;          // Query pool for timestamps
-	const uint32_t QUERIES_PER_FRAME = 2;     // Start and
+	const uint32_t QUERIES_PER_FRAME = 10;     // Start and
 	
 	bool _isInitialized{ false };
 	int _frameNumber {0};

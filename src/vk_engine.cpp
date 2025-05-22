@@ -44,7 +44,7 @@
 //#include <windows.h>
 //#include <tchar.h>
 
-constexpr bool bUseValidationLayers = false;
+constexpr bool bUseValidationLayers = true;
 
 
 VulkanEngine* loadedEngine = nullptr;
@@ -162,7 +162,7 @@ void VulkanEngine::init()
 	for (auto const& [key, scene] : loadedScenes) {
 		if (scene->camera) {
 			mainCamera = scene->camera;
-			mainCamera->zNear = 0.1f;
+			mainCamera->zNear = 0.01f;
 			mainCamera->zFar = 300.0;
 		}
 		if (scene->lightSources.size() > 0) {
@@ -498,6 +498,14 @@ void VulkanEngine::draw()
 	// Calculate query indices
 	currentFrame._queryStart = frameIndex * QUERIES_PER_FRAME;
 	currentFrame._queryEnd = currentFrame._queryStart + 1;
+	currentFrame._reprojectionStart = currentFrame._queryStart + 2;
+	currentFrame._reprojectionEnd = currentFrame._queryStart + 3;
+	currentFrame._FilterMomentsStart= currentFrame._queryStart + 4;
+	currentFrame._FilterMomentsEnd = currentFrame._queryStart + 5;
+	currentFrame._waveletStart= currentFrame._queryStart + 6;
+	currentFrame._waveletEnd= currentFrame._queryStart + 7;
+	currentFrame._modulateStart = currentFrame._queryStart + 8;
+	currentFrame._modulateEnd = currentFrame._queryStart + 9;
 
 	// Reset query pool segment for the current frame
 	vkCmdResetQueryPool(cmd, _timestampQueryPool, currentFrame._queryStart, QUERIES_PER_FRAME);
@@ -1272,6 +1280,12 @@ void VulkanEngine::run()
 		ImGui::Text("Stats:");
         ImGui::Text("frametime %f ms", stats.frametime);
         ImGui::Text("draw time %f ms", stats.mesh_draw_time);
+		ImGui::Text("reprojection time %f ms", stats.reprojection_time);
+		ImGui::Text("modulate time %f ms", stats.modulate_time);
+		ImGui::Text("filter time %f ms", stats.filter_time);
+		ImGui::Text("wavelet time %f ms", stats.wavelet_time);
+
+
         ImGui::Text("update time %f ms", stats.scene_update_time);
 		ImGui::End();
 
@@ -1586,7 +1600,7 @@ void VulkanEngine::init_swapchain()
 	VkImageUsageFlags colorHistoryUsages{};
 	colorHistoryUsages |= VK_IMAGE_USAGE_STORAGE_BIT;
 
-	_colorHistory.imageFormat = VK_FORMAT_R32G32B32A32_SFLOAT;
+	_colorHistory.imageFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
 	_colorHistory.imageExtent = drawImageExtent;
 	create_render_buffer(_colorHistory, drawImageUsages, VK_IMAGE_ASPECT_COLOR_BIT);
 	NameImage(_device, _colorHistory.image, "Color history");
@@ -1662,7 +1676,7 @@ void VulkanEngine::init_swapchain()
 	materialImageUsages |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 	materialImageUsages |= VK_IMAGE_USAGE_SAMPLED_BIT;
 
-	_gBuffer_metallicRoughnes.imageFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
+	_gBuffer_metallicRoughnes.imageFormat = VK_FORMAT_B10G11R11_UFLOAT_PACK32;
 	_gBuffer_metallicRoughnes.imageExtent = drawImageExtent;
 
 	create_render_buffer(_gBuffer_metallicRoughnes, materialImageUsages, VK_IMAGE_ASPECT_COLOR_BIT);
@@ -2296,7 +2310,7 @@ void VulkanEngine::init_mesh_pipeline(){
 	//connect the image format we will draw into, from draw image
 	pipelineBuilder.set_color_attachment_format(_drawImage.imageFormat);
 	pipelineBuilder.set_depth_format(_depthImage.imageFormat);
-
+	
 	//finally build the pipeline
 	_meshPipeline = pipelineBuilder.build_pipeline(_device);
 
@@ -3111,7 +3125,7 @@ void VulkanEngine::retrieve_timestamp_results(uint32_t frameIndex)
 	uint32_t startQuery = currentFrame._queryStart;
 	uint32_t endQuery = currentFrame._queryEnd;
 
-	uint64_t timestamps[2] = {};
+	uint64_t timestamps[10] = {};
 
 	VkResult result = vkGetQueryPoolResults(
 		_device,
@@ -3133,8 +3147,20 @@ void VulkanEngine::retrieve_timestamp_results(uint32_t frameIndex)
 		// Calculate the elapsed time in milliseconds
 		double gpuTime = (timestamps[1] - timestamps[0]) * timestampPeriod / 1e6;
 
+		double reprojectionTime = (timestamps[3] - timestamps[2]) * timestampPeriod / 1e6;
+		double filterTime = (timestamps[5] - timestamps[4]) * timestampPeriod / 1e6;
+		double waveletTime = (timestamps[7] - timestamps[6]) * timestampPeriod / 1e6;
+		double modulateTime = (timestamps[9] - timestamps[8]) * timestampPeriod / 1e6;
+
+
 		// Update the stats
 		stats.mesh_draw_time = static_cast<float>(gpuTime);
+		stats.reprojection_time = static_cast<float>(reprojectionTime);
+		stats.modulate_time = static_cast<float>(modulateTime);
+		stats.filter_time= static_cast<float>(filterTime);
+		stats.wavelet_time= static_cast<float>(waveletTime);
+
+
 	}
 	else {
 		std::cerr << "Failed to retrieve timestamp results!" << std::endl;

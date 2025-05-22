@@ -16,9 +16,8 @@ layout(set = 0, binding = 1, r8ui) uniform uimage2D prevHistoryLengthImage;
 layout(set = 0, binding = 2, rgba32f) uniform image2D packedNormalDepth;
 layout(set = 0, binding = 3, rgba16f) uniform image2D albedoTexture;
 layout(set = 0, binding = 4, rgba16f) uniform image2D outIllumination;
-layout(set = 0, binding = 5, rgba32f) uniform image2D color;
-layout(set = 0, binding = 6, rgba16f) uniform image2D metalRoughnessTexture;
-layout(set = 0, binding = 7, rgba16f) uniform image2D prevMetalRoughnessTexture;
+layout(set = 0, binding = 5, r11f_g11f_b10f) uniform image2D metalRoughnessTexture;
+layout(set = 0, binding = 6, r11f_g11f_b10f) uniform image2D prevMetalRoughnessTexture;
 
 struct PushConstantAtrous {
     ivec2 imageSize;
@@ -29,6 +28,8 @@ struct PushConstantAtrous {
 float computeVarianceCenter(ivec2 ipos)
 {
     float sum = 0.f;
+
+    const vec3 currentMRP = imageLoad(metalRoughnessTexture, ipos).xyz;
 
     const float kernel[2][2] = {
         { 1.0 / 4.0, 1.0 / 8.0 },
@@ -41,9 +42,14 @@ float computeVarianceCenter(ivec2 ipos)
     {
         for (int xx = -radius; xx <= radius; xx++)
         {
+
             const ivec2 p = ipos + ivec2(xx, yy);
-            const float k = kernel[abs(xx)][abs(yy)];
-            sum += imageLoad(illuminationTexture, p).a * k;
+            const vec3 MRP = imageLoad(metalRoughnessTexture, p).xyz;
+            if (abs(MRP.z - currentMRP.z) < 0.2){
+                const float k = kernel[abs(xx)][abs(yy)];
+                sum += imageLoad(illuminationTexture, p).a * k;
+            }
+
         }
     }
 
@@ -63,6 +69,7 @@ float computeVarianceCenterUnrolled(ivec2 ipos)
     #pragma optionNV (unroll all)
     for (int yy = -radius; yy <= radius; ++yy)
     {
+        
         int ay = abs(yy);
         // xx = -1
         ivec2 p0 = ipos + ivec2(-radius, yy);
@@ -112,13 +119,12 @@ void main(){
 
 
     const float phiLIllumination = PC.pc.phiColor * sqrt(max(0.0, epsV + variance));
-    // const float phiDepth = float(max(LinearizeDepth(packedND.x), 1e-8) * PC.pc.stepSize) * 0.1;
-    const float phiDepth = float(max(LinearizeDepth(packedND.x), 1e-8) * PC.pc.stepSize) * 0.1;
+    const float phiDepth = float(max(packedND.x, 1e-8) * PC.pc.stepSize);
     
     const vec3 MR = imageLoad(metalRoughnessTexture, coord).xyz;
     const vec2 MRCenter = MR.xy;
-    int ObjID = int(MR.z);
-    const float depthCenter = float(LinearizeDepth(packedND.x));
+    float ObjID = MR.z;
+    const float depthCenter = packedND.x;
     float phiMR = 10.0;
 
     float sumWIllumination = 1.0;
@@ -138,15 +144,15 @@ void main(){
             {
                 const vec3 MRP = imageLoad(prevMetalRoughnessTexture, p).xyz;
 
-                if (ObjID == int(MRP.z)){
+                if (abs(ObjID - MRP.z) < 0.2){
 
                     const vec4 illuminationP = imageLoad(illuminationTexture, p);
 
                     const float lIlluminationP = luminance(illuminationP.rgb);
-                    const vec4 n = imageLoad(packedNormalDepth, p);
-                    const float zP = float(LinearizeDepth(n.x));
+                    const vec3 n = imageLoad(packedNormalDepth, p).xzw;
+                    const float zP = n.x;
 
-                    const vec3 nP = oct_to_ndir_unorm(n.zw);
+                    const vec3 nP = oct_to_ndir_unorm(n.yz);
 
                     // compute the edge-stopping functions
                     const float w = computeWeight( 
@@ -179,5 +185,4 @@ void main(){
     vec4 filteredIllumination = vec4(sumIllumination / vec4(sumWIllumination.xxx, sumWIllumination * sumWIllumination));
 
     imageStore(outIllumination, coord, filteredIllumination);
-    imageStore(color, coord, vec4(variance));
 }

@@ -232,6 +232,70 @@ void vkutil::transition_gbuffer_images(
 }
 
 
+void vkutil::transition_images_together(
+    VkCommandBuffer cmd,
+    const std::vector<VkImage>& images,
+    const std::vector<VkImageLayout>& oldLayouts,
+    const std::vector<VkImageLayout>& newLayouts
+) {
+    std::vector<VkImageMemoryBarrier2> imageBarriers;
+    imageBarriers.reserve(images.size());
+
+    // Determine source and destination stage and access masks based on layouts
+    VkPipelineStageFlags2 srcStageMask = VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT; // Default
+    VkAccessFlags2 srcAccessMask = VK_ACCESS_2_NONE; // Default
+    VkPipelineStageFlags2 dstStageMask = VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT; // Default
+    VkAccessFlags2 dstAccessMask = VK_ACCESS_2_NONE; // Default
+
+    // --- Case: Previous use was SHADER_READ, next use is COLOR_ATTACHMENT_WRITE ---
+    srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT; // Or COMPUTE_SHADER_BIT if lighting is compute
+    srcAccessMask = VK_ACCESS_2_SHADER_WRITE_BIT;
+    dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+    dstAccessMask = VK_ACCESS_2_SHADER_WRITE_BIT | VK_ACCESS_2_SHADER_READ_BIT; // Read needed for LoadOp=LOAD
+        // Write needed for StoreOp=STORE / rendering itself / LoadOp=CLEAR
+    
+    int index = 0;
+    for (const auto& image : images) {
+        VkImageMemoryBarrier2 imageBarrier{
+            .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+            .pNext = nullptr,
+            .srcStageMask = srcStageMask,
+            .srcAccessMask = srcAccessMask,
+            .dstStageMask = dstStageMask,
+            .dstAccessMask = dstAccessMask,
+            .oldLayout = oldLayouts[index],
+            .newLayout = newLayouts[index],
+            .image = image,
+            .subresourceRange = {
+                .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                .baseMipLevel = 0,
+                .levelCount = 1,
+                .baseArrayLayer = 0,
+                .layerCount = 1
+            }
+        };
+
+        imageBarriers.push_back(imageBarrier);
+    }
+
+    VkDependencyInfo depInfo{
+        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+        .pNext = nullptr,
+        .dependencyFlags = 0,
+        .memoryBarrierCount = 0,
+        .pMemoryBarriers = nullptr,
+        .bufferMemoryBarrierCount = 0,
+        .pBufferMemoryBarriers = nullptr,
+        .imageMemoryBarrierCount = static_cast<uint32_t>(imageBarriers.size()),
+        .pImageMemoryBarriers = imageBarriers.data()
+    };
+
+    vkCmdPipelineBarrier2(cmd, &depInfo);
+}
+
+
+
+
 void vkutil::transition_gbuffer_image(VkCommandBuffer cmd, VkImage image, VkImageLayout oldLayout, VkImageLayout newLayout) {
     VkImageMemoryBarrier2 imageBarrier{
         .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
