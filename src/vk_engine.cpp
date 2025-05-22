@@ -23,6 +23,7 @@
 #include <vk_buffers.h>
 #include "vk_descriptors.h"
 #define STB_IMAGE_IMPLEMENTATION
+#define STB_IMAGE_WRITE_IMPLEMENTATION
 #include <vk_loader.h>
 #include "glm/gtc/random.hpp"
 //bootstrap library
@@ -44,7 +45,7 @@
 //#include <windows.h>
 //#include <tchar.h>
 
-constexpr bool bUseValidationLayers = false;
+constexpr bool bUseValidationLayers = true;
 
 
 VulkanEngine* loadedEngine = nullptr;
@@ -441,12 +442,109 @@ void WaitAll(VkCommandBuffer cmd) {
 	//vkCmdPipelineBarrier2(cmd, &depInfo);
 }
 
-#include <thread>
-#include <iostream>
-#include <chrono>
-using namespace std::chrono_literals;
+#include <stb_image_write.h>
+
+void write_png_image(
+	const float* src,          // ← now float*
+	VkExtent2D      size,
+	int             channelCount, // e.g. 4 for RGBA
+	const std::string& name
+) {
+	int width = size.width;
+	int height = size.height;
+	int numFloats = width * height * channelCount;
+
+	// Prepare a byte buffer the same total size:
+	std::vector<unsigned char> byteData(numFloats);
+
+	// Convert each float [0,1] → [0,255]
+	for (int i = 0; i < numFloats; i++) {
+		float f = std::clamp(src[i], 0.0f, 1.0f);
+		byteData[i] = static_cast<unsigned char>(std::round(f * 255.0f));
+	}
+
+	// Number of bytes per row = pixels * channels
+	int stride_in_bytes = width * channelCount;
+
+	std::string filePath = "./" + name + ".png";
+	if (!stbi_write_png(
+		filePath.c_str(),
+		width,
+		height,
+		channelCount,
+		byteData.data(),
+		stride_in_bytes
+	))
+	{
+		throw std::runtime_error("Failed to write PNG: " + filePath);
+	}
+}
+#include <fstream>
+#include <stdexcept>
+void write_raw_buffer(
+	const float* src,           // your RGBA float data
+	VkExtent2D         size,
+	int                channelCount,  // e.g. 4
+	const std::string& name           // e.g. "frame0001.raw"
+) {
+	uint32_t width = size.width;
+	uint32_t height = size.height;
+	uint32_t channels = channelCount;
+
+	std::ofstream ofs(name, std::ios::binary);
+	if (!ofs) throw std::runtime_error("Failed to open " + name);
+
+	// (optional) write a tiny header so you can re-load more easily:
+	ofs.write(reinterpret_cast<const char*>(&width), sizeof(width));
+	ofs.write(reinterpret_cast<const char*>(&height), sizeof(height));
+	ofs.write(reinterpret_cast<const char*>(&channels), sizeof(channels));
+
+	// write all floats in row-major order:
+	size_t numFloats = size_t(width) * height * channels;
+	ofs.write(reinterpret_cast<const char*>(src),
+		numFloats * sizeof(float));
+
+	// done
+}
+
 void VulkanEngine::draw()
 {
+
+	if (imagesBeingTransferred.size() > 0) {
+		while (imagesBeingTransferred.size() > 0) {
+			auto buffer = imagesBeingTransferred.front();
+			uint64_t signalValue = 1;
+			uint64_t expectedValue;
+			VkSemaphoreWaitInfo waitInfo{ VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO };
+			waitInfo.semaphoreCount = 1;
+			waitInfo.pSemaphores = &buffer.copySemaphore;
+			waitInfo.pValues = &signalValue;
+
+			// block until the GPU has signaled value ≥ 1 (infinite timeout here):
+			vkWaitSemaphores(_device, &waitInfo, UINT64_MAX);
+
+
+			void* srcData = nullptr;
+			VkResult res = vmaMapMemory(_allocator, buffer.transferImage.allocation, &srcData);
+			if (res != VK_SUCCESS) {
+				throw std::runtime_error("Failed to map memory for source transfer image!");
+			}
+
+			int size = buffer.transferImage.allocation->GetSize();
+
+			std::vector<float> hostImageData(size);
+
+			std::memcpy(hostImageData.data(), srcData, buffer.transferImage.allocation->GetSize());
+
+			vmaUnmapMemory(_allocator, buffer.transferImage.allocation);
+
+			write_raw_buffer(hostImageData.data(), _windowExtent, 4, buffer.name);
+			imagesBeingTransferred.erase(imagesBeingTransferred.begin());
+
+			// read buffer out
+		}
+	}
+
 
 	update_scene();
 	// wait until the gpu has finished rendering the last frame. Timeout of 1
@@ -597,7 +695,22 @@ void VulkanEngine::draw()
 
 	}
 	WaitAll(cmd);
+	TransferBuffer buffer;
+	if (currentImageWriteSet.ongoing) {
+		buffer = vkutil::copy_image_to_cpu_buffer(_device, _allocator, cmd, _colorHistory);
+		buffer.name = std::format("image_{}", currentImageWriteSet.currentCount);
 
+
+		currentImageWriteSet.currentCount++;
+
+		// Prepare the timeline semaphore submit info.
+
+
+
+		buffer.copySemaphore = submit_semaphores[swapchainImageIndex];
+
+		imagesBeingTransferred.push_back(buffer);
+	}
 	compute_tonemapping(cmd);
 	
 	WaitAll(cmd);
@@ -641,8 +754,23 @@ void VulkanEngine::draw()
 	VkSemaphoreSubmitInfo waitInfo = vkinit::semaphore_submit_info(VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT,get_current_frame()._swapchainSemaphore);
 	VkSemaphoreSubmitInfo signalInfo = vkinit::semaphore_submit_info(VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT, submit_semaphores[swapchainImageIndex]);
 	
-	VkSubmitInfo2 submit = vkinit::submit_info(&cmdinfo,&signalInfo,&waitInfo);	
 
+
+	VkSubmitInfo2 submit = vkinit::submit_info(&cmdinfo,&signalInfo,&waitInfo);	
+	if (StartImageTransfer) {
+
+		uint64_t signalValue = 1;
+
+		VkTimelineSemaphoreSubmitInfo timelineSubmitInfo = {};
+		timelineSubmitInfo.sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO;
+		timelineSubmitInfo.pNext = nullptr;
+		timelineSubmitInfo.waitSemaphoreValueCount = 0;
+		timelineSubmitInfo.pWaitSemaphoreValues = nullptr;
+		timelineSubmitInfo.signalSemaphoreValueCount = 1;
+		timelineSubmitInfo.pSignalSemaphoreValues = &signalValue;
+		submit.pNext = &timelineSubmitInfo;
+		StartImageTransfer = false;
+	}
 	//submit command buffer to the queue and execute it.
 	// _renderFence will now block until the graphic commands finish execution
 	VK_CHECK(vkQueueSubmit2(_graphicsQueue, 1, &submit, get_current_frame()._renderFence));
@@ -1273,7 +1401,26 @@ void VulkanEngine::run()
         ImGui::Text("frametime %f ms", stats.frametime);
         ImGui::Text("draw time %f ms", stats.mesh_draw_time);
         ImGui::Text("update time %f ms", stats.scene_update_time);
+
+		ImGui::Text("Write image sequence");
+		ImGui::InputInt("Frame count", &UIImageWriteSet.count);
+		ImGui::InputText("Folder name", currentString, 128);
+		StartImageTransfer = ImGui::Button("Take Picture");
 		ImGui::End();
+
+
+
+		if (StartImageTransfer) {
+			currentImageWriteSet = UIImageWriteSet;
+			currentImageWriteSet.folder = std::string(currentString);
+			currentImageWriteSet.ongoing = true;
+			currentImageWriteSet.currentCount = 0;
+		}
+
+		if (currentImageWriteSet.ongoing &&
+			currentImageWriteSet.count <= currentImageWriteSet.currentCount) {
+			currentImageWriteSet.ongoing = false;
+		}
 
 
 

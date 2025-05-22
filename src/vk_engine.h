@@ -161,6 +161,16 @@ struct GLTFMetallic_Roughness {
 	MaterialInstance write_material(VulkanEngine* engine, MaterialPass pass, MaterialResources& resources, DescriptorAllocatorGrowable& descriptorAllocator);
 };
 
+
+struct ImageWriteSet {
+	bool ongoing;
+	int count;
+	int currentCount;
+	std::string folder;
+};
+
+
+
 constexpr unsigned int FRAME_OVERLAP = 1;
 
 
@@ -217,6 +227,13 @@ public:
 	VkDescriptorSet _gBufferDescriptors;
 	VkDescriptorSetLayout _gBufferDescriptorLayout;
 
+	bool StartImageTransfer;
+	std::vector<TransferBuffer> imagesBeingTransferred;
+
+	ImageWriteSet UIImageWriteSet;
+	char currentString[128];
+
+	ImageWriteSet currentImageWriteSet;
 
 	VkPipeline _environmentBackgroundPipeline;
 	VkPipelineLayout _environmentBackgroundLayout;

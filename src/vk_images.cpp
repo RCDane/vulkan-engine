@@ -1,6 +1,7 @@
 #include <vk_images.h>
 #include <vk_initializers.h>
 #include <stb_image.h>
+#include <vk_buffers.h> // Assuming create_buffer and AllocatedBuffer are declared there
 
 
 void vkutil::transition_image(VkCommandBuffer cmd, VkImage image, VkImageLayout currentLayout, VkImageLayout newLayout)
@@ -594,6 +595,53 @@ void vkutil::generate_mipmaps(VkCommandBuffer cmd, VkImage image, VkExtent2D ima
 
     // transition all mip levels into the final read_only layout
     transition_image(cmd, image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+}
+
+TransferBuffer vkutil::copy_image_to_cpu_buffer(VkDevice device, VmaAllocator allocator, VkCommandBuffer cmd, const AllocatedImage& src) {
+    // Transition the source image to TRANSFER_SRC_OPTIMAL
+    vkutil::transition_image(cmd, src.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_ASPECT_COLOR_BIT);
+
+    // Compute the size of the image data.
+    // For simplicity, assume 4 bytes per pixel. In production, calculate based on src.imageFormat.
+    VkDeviceSize imageSize = src.imageExtent.width * src.imageExtent.height * 16;
+
+    // Create a staging (CPU-visible) buffer to receive the copied image data.
+    // Assuming create_buffer is available and takes in (device, allocator, size, bufferUsage, memoryUsage)
+    AllocatedBuffer stagingBuffer = create_buffer(&device, &allocator,
+                                                  imageSize,
+                                                  VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                                                  VMA_MEMORY_USAGE_CPU_ONLY);
+
+    // Define the region to copy
+    VkBufferImageCopy copyRegion{};
+    copyRegion.bufferOffset = 0;
+    copyRegion.bufferRowLength = 0;         // Tightly packed
+    copyRegion.bufferImageHeight = 0;       // Tightly packed
+    copyRegion.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    copyRegion.imageSubresource.mipLevel = 0;
+    copyRegion.imageSubresource.baseArrayLayer = 0;
+    copyRegion.imageSubresource.layerCount = 1;
+    copyRegion.imageOffset = { 0, 0, 0 };
+    copyRegion.imageExtent = src.imageExtent;
+
+    // Issue the copy from the image to the buffer
+    vkCmdCopyImageToBuffer(cmd, src.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                           stagingBuffer.buffer, 1, &copyRegion);
+
+
+
+
+    // Transition the source image back to GENERAL (or to its previous layout as needed)
+    vkutil::transition_image(cmd, src.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
+
+    TransferBuffer tImage;
+    tImage.transferImage = stagingBuffer;
+
+
+
+
+    // The stagingBuffer now contains the image data on CPU-accessible memory.
+    return tImage;
 }
 
 

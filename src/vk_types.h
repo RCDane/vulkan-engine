@@ -34,6 +34,7 @@
     } while (0)
 
 
+
 struct AllocatedImage {
     VkImage image;
     VkImageView imageView;
@@ -42,6 +43,7 @@ struct AllocatedImage {
     VkFormat imageFormat;
     std::string name;
 };
+
 struct CubeMap {
     AllocatedImage image;
 	VkSampler sampler;
@@ -54,6 +56,13 @@ struct AllocatedBuffer {
     VmaAllocationInfo info;
     VmaAllocator *allocator;
 };
+
+struct TransferBuffer {
+    AllocatedBuffer transferImage;
+    VkSemaphore copySemaphore;
+    std::string name;
+};
+
 struct AccelBuffer {
     AllocatedBuffer buffer;
     VkDeviceAddress deviceAddress;
