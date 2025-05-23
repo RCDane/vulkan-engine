@@ -571,9 +571,9 @@ void SVGFHandler::WaveletFilter(VkCommandBuffer cmd, VulkanEngine* engine) {
 	AllocatedImage illuminationIn = illumination;
 	AllocatedImage illuminationOut = prevIllumination;
 
-	int iterations = 4;
+	int iterations = 3;
 
-	for (int i = 0; i < iterations; i++) {
+	for (int i = 0; i <= iterations; i++) {
 
 		VkDescriptorSet globalDescriptor = engine->get_current_frame()._frameDescriptors.allocate(engine->_device, m_atrousDscSetLayout);
 
@@ -678,7 +678,7 @@ void SVGFHandler::calculate_memory_footprint(VulkanEngine* engine) {
         VkDeviceSize img_bytes = req.size;
         total_bytes += img_bytes;
         char buf[256];
-        snprintf(buf, sizeof(buf), "%s: %ux%ux%u format=%d bytes=%llu", info.name, ext.width, ext.height, ext.depth, (int)img->imageFormat, (unsigned long long)img_bytes);
+        snprintf(buf, sizeof(buf), "%s: %ux%ux%u format=%d bytes=%.2f MB", info.name, ext.width, ext.height, ext.depth, (int)img->imageFormat, static_cast<double>(img_bytes) / (1024.0 * 1024.0));
         svgfStatsLines.emplace_back(buf);
         fmt::print("[SVGF] {}\n", buf);
     }

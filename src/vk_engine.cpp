@@ -152,7 +152,7 @@ void VulkanEngine::init()
 	//loadedScenes["helmet"]->rootTransform = glm::scale(glm::vec3(10.0f)) * loadedScenes["helmet"]->rootTransform;
 	//loadedScenes["helmet"]->rootTransform = glm::translate(glm::vec3(0.0f, 20.0f, 0.0f)) * loadedScenes["helmet"]->rootTransform;
 
-	std::string sponzaPath = { "../assets/sphere test.glb" };
+	std::string sponzaPath = { "../assets/sponza.glb" };
 	auto sponzaFile = loadGltf(this, sponzaPath);
 	assert(sponzaFile.has_value());
 	loadedScenes["sponza"] = *sponzaFile;
@@ -166,7 +166,7 @@ void VulkanEngine::init()
 	for (auto const& [key, scene] : loadedScenes) {
 		if (scene->camera) {
 			mainCamera = scene->camera;
-			mainCamera->zNear = 0.3f;
+			mainCamera->zNear = 0.1f;
 			mainCamera->zFar = 300.0;
 		}
 		if (scene->lightSources.size() > 0) {

@@ -63,7 +63,7 @@ bool isReprjValid(
     
 
     // 2) check if deviation of depths is acceptable
-    if ( abs(Zprev - Z) / (fwidthZ + reprojEps) > 0.2 )
+    if ( abs(Zprev - Z) / (fwidthZ + reprojEps) > 0.1 )
         return false;
 
     // 3) normals compatibility

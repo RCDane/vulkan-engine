@@ -3,7 +3,6 @@ from PIL import Image
 from util import load_raw_buffer
 import argparse
 import os
-import glob
 
 def convert_raw_to_png(input_path, output_path):
     # Load the raw image using the utility function
@@ -33,28 +32,16 @@ def convert_raw_to_png(input_path, output_path):
     print(f"Saved PNG image to {output_path}")
 
 
-def batch_convert_raw_to_png(input_dir, output_dir):
-    # Find all files in the input directory
-    raw_files = glob.glob(os.path.join(input_dir, '*'))
-
-    for raw_file in raw_files:
-        # Generate a new name for the output PNG file based on the input file name
-        base_name = os.path.splitext(os.path.basename(raw_file))[0]
-        output_path = os.path.join(output_dir, f"{base_name}.png")
-
-        try:
-            # Convert the raw image to PNG
-            convert_raw_to_png(raw_file, output_path)
-        except Exception as e:
-            print(f"Failed to convert {raw_file}: {e}")
-
-
 if __name__ == "__main__":
     # Parse command-line arguments
-    parser = argparse.ArgumentParser(description="Convert raw images in a directory to PNG format.")
-    parser.add_argument("input_dir", type=str, help="Path to the input directory containing raw image files.")
-    parser.add_argument("output_dir", type=str, help="Directory to save the output PNG files.")
+    parser = argparse.ArgumentParser(description="Convert a raw image to PNG format.")
+    parser.add_argument("input_path", type=str, help="Path to the input raw image file.")
+    parser.add_argument("output_dir", type=str, help="Directory to save the output PNG file.")
+    parser.add_argument("new_name", type=str, help="New name for the output PNG file (without extension).")
     args = parser.parse_args()
 
-    # Convert all raw images in the input directory to PNG
-    batch_convert_raw_to_png(args.input_dir, args.output_dir)
+    # Construct the full output path
+    output_path = os.path.join(args.output_dir, f"{args.new_name}.png")
+
+    # Convert the raw image to PNG
+    convert_raw_to_png(args.input_path, output_path)

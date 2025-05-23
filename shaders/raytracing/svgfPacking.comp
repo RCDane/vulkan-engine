@@ -26,11 +26,11 @@ float shiftDigits(float value, int shift) {
 }
 
 float manualFwidth(sampler2D depth, ivec2 coord) {
-    float right  = fract(shiftDigits(float(LinearizeDepth(texelFetch(depth, coord + ivec2(1, 0), 0).r)),  2));
-    float left   = fract(shiftDigits(float(LinearizeDepth(texelFetch(depth, coord + ivec2(-1, 0), 0).r)), 2));
-    float up     = fract(shiftDigits(float(LinearizeDepth(texelFetch(depth, coord + ivec2(0, 1), 0).r)),  2));
-    float down   = fract(shiftDigits(float(LinearizeDepth(texelFetch(depth, coord + ivec2(0, -1), 0).r)), 2));
-    
+    float right  = float(LinearizeDepth(texelFetch(depth, coord + ivec2(1, 0), 0).r));
+    float left   = float(LinearizeDepth(texelFetch(depth, coord + ivec2(-1, 0), 0).r));
+    float up     = float(LinearizeDepth(texelFetch(depth, coord + ivec2(0, 1), 0).r));
+    float down   = float(LinearizeDepth(texelFetch(depth, coord + ivec2(0, -1), 0).r));
+
 
     float dx = abs(right - left) * 0.5;
     float dy = abs(up - down) * 0.5;
