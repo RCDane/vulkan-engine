@@ -35,8 +35,8 @@ layout(push_constant ) uniform PushConstant { PushConstantReproj pc; } PC;
 
 const float reprojEps = 1e-3;
 
-float gAlpha = 0.1;
-float gMomentsAlpha = 0.2;
+float gAlpha = 0.05;
+float gMomentsAlpha = 0.05;
   
 
 bool isReprjValid(
@@ -198,11 +198,6 @@ bool loadPrevData(
         }
     }
 
-    // double prevD = texelFetch(prevDepth, iposPrev,0).r;
-    // prevD = LinearizeDepth(prevD);
-    // vec3 nP   = normalize(oct_to_ndir_unorm(normfwidthzwidth.xy)); abs(Zprev - Z) / (fwidthZ + 1e-6) > 50.0
-    // valid = isReprjValid(iposPrev, linearDepth, prevD, zWidth, currentNormal, nP, normalFwidth);
-
     // 4) write out history length if valid
     if (valid) {
         historyLength = imageLoad(prevHistoryLengthImage, iposPrev).x;
@@ -265,8 +260,6 @@ void main(){
     vec2 moments;
     moments.r = luminance(illum);
     moments.g = moments.r * moments.r;
-
-    vec2 pm = moments;
 
     // temporal integration of the moments
     moments = mix(pMoments, moments, alphaMoments);

@@ -17,6 +17,7 @@ int main(int argc, char* argv[])
 		_tprintf(TEXT("First argument: %hs\n"), firstArg.c_str());
 	}
 
+
 	if (!SetPriorityClass(GetCurrentProcess(), ABOVE_NORMAL_PRIORITY_CLASS))
 	{
 		dwError = GetLastError();

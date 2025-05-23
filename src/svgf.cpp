@@ -301,11 +301,6 @@ void SVGFHandler::create_frame_buffers(VulkanEngine* engine) {
 	prevPackedDepthNormal.imageExtent = extent;
 
 	engine->create_render_buffer(prevPackedDepthNormal, transferUsages, VK_IMAGE_ASPECT_COLOR_BIT);
-
-	prevMetalRougness.imageFormat = VK_FORMAT_B10G11R11_UFLOAT_PACK32;
-	prevMetalRougness.imageExtent = extent;
-
-	engine->create_render_buffer(prevMetalRougness, transferUsages, VK_IMAGE_ASPECT_COLOR_BIT);
 }
 
 void SVGFHandler::create_descriptors(VulkanEngine* engine) {
@@ -467,8 +462,6 @@ void SVGFHandler::FilterMoments(VkCommandBuffer cmd, VulkanEngine* engine) {
 	vkutil::transition_image(cmd, prevHistoryLength.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
 	vkutil::transition_image(cmd, packedDepthNormal.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
 	vkutil::transition_image(cmd, moments.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
-	vkutil::transition_image(cmd, engine->_gBuffer_metallicRoughnes.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
-	//vkutil::transition_image(cmd, prevMetalRougness.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
 
 	
 
@@ -479,8 +472,6 @@ void SVGFHandler::FilterMoments(VkCommandBuffer cmd, VulkanEngine* engine) {
 	writer.write_image(1, prevHistoryLength.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 	writer.write_image(2, packedDepthNormal.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 	writer.write_image(3, moments.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
-	writer.write_image(4, engine->_gBuffer_metallicRoughnes.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
-	//writer.write_image(5, prevMetalRougness.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 
 
 
@@ -519,10 +510,8 @@ void SVGFHandler::WaveletFilter(VkCommandBuffer cmd, VulkanEngine* engine) {
 		VK_IMAGE_LAYOUT_GENERAL, 
 		VK_IMAGE_LAYOUT_GENERAL, 
 		VK_IMAGE_LAYOUT_GENERAL, 
-		VK_IMAGE_LAYOUT_UNDEFINED,
-		VK_IMAGE_LAYOUT_GENERAL };
+		VK_IMAGE_LAYOUT_UNDEFINED };
 	std::vector<VkImageLayout> newLayouts = {
-		VK_IMAGE_LAYOUT_GENERAL,
 		VK_IMAGE_LAYOUT_GENERAL,
 		VK_IMAGE_LAYOUT_GENERAL,
 		VK_IMAGE_LAYOUT_GENERAL,
@@ -534,8 +523,7 @@ void SVGFHandler::WaveletFilter(VkCommandBuffer cmd, VulkanEngine* engine) {
 		prevHistoryLength.image,
 		packedDepthNormal.image,
 		engine->_gBuffer_albedo.image,
-		prevIllumination.image,
-		engine->_gBuffer_metallicRoughnes.image
+		prevIllumination.image
 	};
 
 
@@ -562,7 +550,6 @@ void SVGFHandler::WaveletFilter(VkCommandBuffer cmd, VulkanEngine* engine) {
 		writer.write_image(2, packedDepthNormal.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 		writer.write_image(3, engine->_gBuffer_albedo.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 		writer.write_image(4, illuminationOut.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
-		writer.write_image(5, engine->_gBuffer_metallicRoughnes.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 
 		writer.update_set(engine->_device, globalDescriptor);
 
@@ -585,7 +572,7 @@ void SVGFHandler::WaveletFilter(VkCommandBuffer cmd, VulkanEngine* engine) {
 		vkCmdPushConstants(cmd, m_reprojPipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(PushConstantAtrous), &settings);
 
 		vkCmdDispatch(cmd, std::ceil(engine->_windowExtent.width / 16.0), std::ceil(engine->_windowExtent.height / 16.0), 1);
-		if (i ==1) {
+		if (i == 0) {
 
 			vkutil::transition_image(cmd, illuminationOut.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_ASPECT_COLOR_BIT);
 
@@ -601,10 +588,10 @@ void SVGFHandler::WaveletFilter(VkCommandBuffer cmd, VulkanEngine* engine) {
 
 	}
 
-	vkutil::transition_image(cmd, engine->_gBuffer_metallicRoughnes.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_ASPECT_COLOR_BIT);
+	//vkutil::transition_image(cmd, engine->_gBuffer_metallicRoughnes.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_ASPECT_COLOR_BIT);
 
-	vkutil::transition_image(cmd, prevMetalRougness.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_ASPECT_COLOR_BIT);
-	vkutil::copy_image_to_image(cmd, engine->_gBuffer_metallicRoughnes.image, prevMetalRougness.image, engine->_windowExtent, engine->_windowExtent);
+	//vkutil::transition_image(cmd, prevMetalRougness.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_ASPECT_COLOR_BIT);
+	//vkutil::copy_image_to_image(cmd, engine->_gBuffer_metallicRoughnes.image, prevMetalRougness.image, engine->_windowExtent, engine->_windowExtent);
 
 	vkutil::transition_image(cmd, packedDepthNormal.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_ASPECT_COLOR_BIT);
 
@@ -643,7 +630,6 @@ void SVGFHandler::calculate_memory_footprint(VulkanEngine* engine) {
         {"prevMoments", &moments},
         {"packedDepthNormal", &packedDepthNormal},
         {"prevPackedDepthNormal", &prevPackedDepthNormal},
-        {"prevMetalRougness", &prevMetalRougness},
     };
     VkDeviceSize total_bytes = 0;
     svgfStatsLines.clear();
@@ -656,11 +642,11 @@ void SVGFHandler::calculate_memory_footprint(VulkanEngine* engine) {
         VkDeviceSize img_bytes = req.size;
         total_bytes += img_bytes;
         char buf[512];
-        snprintf(buf, sizeof(buf), "%s: %ux%ux%u format=%d bytes=%u Bytes", info.name, ext.width, ext.height, ext.depth, (int)img->imageFormat, (int)img_bytes);
+        snprintf(buf, sizeof(buf), "%s: %ux%ux%u bytes=%u Bytes", info.name, ext.width, ext.height, ext.depth, (int)img_bytes);
         svgfStatsLines.emplace_back(buf);
         fmt::print("[SVGF] {}\n", buf);
     }
-    double total_mb = static_cast<double>(total_bytes) / (1024.0 * 1024.0);
+    double total_mb = static_cast<double>(total_bytes);
     char totalBuf[128];
     snprintf(totalBuf, sizeof(totalBuf), "Total memory footprint: %.4f MB", total_mb);
     svgfStatsLines.emplace_back(totalBuf);
@@ -668,12 +654,11 @@ void SVGFHandler::calculate_memory_footprint(VulkanEngine* engine) {
 }
 
 void SVGFHandler::draw_imgui() {
-    if (ImGui::Begin("SVGF Memory Footprint")) {
-        for (const auto& line : svgfStatsLines) {
-            ImGui::TextUnformatted(line.c_str());
-        }
+	ImGui::Text("SVGF Memory Footprint");
+    for (const auto& line : svgfStatsLines) {
+		ImGui::TextUnformatted(line.c_str());
     }
-    ImGui::End();
+    
 }
 
 void SVGFHandler::Modulate(VkCommandBuffer cmd, VulkanEngine* engine) {
@@ -722,8 +707,11 @@ void SVGFHandler::PackNormalDepth(VkCommandBuffer cmd, VulkanEngine* engine) {
 
 void SVGFHandler::Execute(VkCommandBuffer cmd, VulkanEngine *engine) {
 
+	vkCmdWriteTimestamp(cmd, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, engine->_timestampQueryPool, engine->get_current_frame()._depthNormalStart);
 
 	PackNormalDepth(cmd, engine);
+	vkCmdWriteTimestamp(cmd, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, engine->_timestampQueryPool, engine->get_current_frame()._depthNormalEnd);
+
 	vkCmdWriteTimestamp(cmd, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, engine->_timestampQueryPool, engine->get_current_frame()._reprojectionStart);
 	Reprojection(cmd, engine);
 	vkCmdWriteTimestamp(cmd, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, engine->_timestampQueryPool, engine->get_current_frame()._reprojectionEnd);
@@ -747,11 +735,5 @@ SVGFHandler::SVGFHandler() {
 }
 
 SVGFHandler::~SVGFHandler() {
-	//destroy structures properly
-	//vkDestroyImageView(engine->_device, illuminatuion.imageView, nullptr);
-	//vkDestroyImageView(engine->_device, prevIllumination.imageView, nullptr);
-	//vkDestroyImageView(engine->_device, NormalAndDepth.imageView, nullptr);
-	//vkDestroyImageView(engine->_device, prevNormalAndDepth.imageView, nullptr);
-	//vkDestroyImageView(engine->_device, historyLength.imageView, nullptr);
-	//vkDestroyImageView(engine->_device, prevHistoryLength.imageView, nullptr);
+
 }

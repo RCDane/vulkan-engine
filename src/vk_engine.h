@@ -73,6 +73,8 @@ struct EngineStats {
 	float modulate_time;
 	float filter_time;
 	float wavelet_time;
+	float depth_normal_time;
+
 
 
 	
@@ -106,6 +108,8 @@ struct FrameData {
 	// Add query indices for timestamp queries
 	uint32_t _queryStart;
 	uint32_t _queryEnd;
+	uint32_t _depthNormalStart;
+	uint32_t _depthNormalEnd;
 	uint32_t _reprojectionStart;
 	uint32_t _reprojectionEnd;
 	uint32_t _modulateStart;
@@ -350,7 +354,7 @@ public:
 
 
 	VkQueryPool _timestampQueryPool;          // Query pool for timestamps
-	const uint32_t QUERIES_PER_FRAME = 10;     // Start and
+	const uint32_t QUERIES_PER_FRAME = 12;     // Start and
 	
 	bool _isInitialized{ false };
 	int _frameNumber {0};

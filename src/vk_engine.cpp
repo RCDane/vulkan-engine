@@ -576,7 +576,8 @@ void VulkanEngine::draw()
 	currentFrame._waveletEnd= currentFrame._queryStart + 7;
 	currentFrame._modulateStart = currentFrame._queryStart + 8;
 	currentFrame._modulateEnd = currentFrame._queryStart + 9;
-
+	currentFrame._depthNormalStart = currentFrame._queryStart + 10;
+	currentFrame._depthNormalEnd = currentFrame._queryStart + 11;
 	int query_count = 2;
 	if (useSVGF) {
 		query_count = 10;
@@ -1313,16 +1314,7 @@ void VulkanEngine::draw_deferred(VkCommandBuffer cmd)
 		draw(mainDrawContext.OpaqueSurfaces[r]);
 	}
 
-	/*for (auto& r : mainDrawContext.TransparentSurfaces) {
-		draw(r);
-	}*/
-
-
-
 	vkCmdEndRendering(cmd);
-	// we delete the draw commands now that we processed them
-	//mainDrawContext.OpaqueSurfaces.clear();
-	//mainDrawContext.TransparentSurfaces.clear();
 
 
 }
@@ -1351,19 +1343,21 @@ void VulkanEngine::run()
 		ImGui::Text("Stats:");
 		ImGui::Text("frametime %f ms", stats.frametime);
 		ImGui::Text("draw time %f ms", stats.mesh_draw_time);
+		ImGui::Text("depthNormal packing time %f ms", stats.depth_normal_time);
+
 		ImGui::Text("reprojection time %f ms", stats.reprojection_time);
-		ImGui::Text("modulate time %f ms", stats.modulate_time);
-		ImGui::Text("filter time %f ms", stats.filter_time);
+		ImGui::Text("moments filter time %f ms", stats.filter_time);
 		ImGui::Text("wavelet time %f ms", stats.wavelet_time);
+		ImGui::Text("modulate time %f ms", stats.modulate_time);
 
 		
 
 		ImGui::Text("update time %f ms", stats.scene_update_time);
 
-		ImGui::Text("Write image sequence");
-		ImGui::InputInt("Frame count", &UIImageWriteSet.count);
-		ImGui::InputText("Folder name", currentString, 127);
-		StartImageTransfer = ImGui::Button("Take Picture");
+		//ImGui::Text("Write image sequence");
+		//ImGui::InputInt("Frame count", &UIImageWriteSet.count);
+		//ImGui::InputText("Folder name", currentString, 127);
+		//StartImageTransfer = ImGui::Button("Take Picture");
 		_svgfHandler.draw_imgui();
 		
 		ImGui::End();
@@ -3252,7 +3246,7 @@ void VulkanEngine::retrieve_timestamp_results(uint32_t frameIndex)
 	uint32_t startQuery = currentFrame._queryStart;
 	uint32_t endQuery = currentFrame._queryEnd;
 
-	uint64_t timestamps[10] = {};
+	uint64_t timestamps[12] = {};
 
 	int query_count = 2;
 	if (useSVGF)
@@ -3282,6 +3276,7 @@ void VulkanEngine::retrieve_timestamp_results(uint32_t frameIndex)
 		double filterTime = (timestamps[5] - timestamps[4]) * timestampPeriod / 1e6;
 		double waveletTime = (timestamps[7] - timestamps[6]) * timestampPeriod / 1e6;
 		double modulateTime = (timestamps[9] - timestamps[8]) * timestampPeriod / 1e6;
+		double depthNormalTime = (timestamps[9] - timestamps[8]) * timestampPeriod / 1e6;
 
 
 		// Update the stats
@@ -3290,6 +3285,7 @@ void VulkanEngine::retrieve_timestamp_results(uint32_t frameIndex)
 		stats.modulate_time = static_cast<float>(modulateTime);
 		stats.filter_time= static_cast<float>(filterTime);
 		stats.wavelet_time= static_cast<float>(waveletTime);
+		stats.depth_normal_time = static_cast<float>(depthNormalTime);
 
 
 	}

@@ -12,7 +12,6 @@ layout(set = 0, binding = 0, rgba32f) uniform image2D illuminationTexture;
 layout(set = 0, binding = 1, r8ui) uniform uimage2D prevHistoryLengthImage;
 layout(set = 0, binding = 2, rgba32f) uniform image2D packedNormalDepth;
 layout(set = 0, binding = 3, rg16f) uniform image2D Moments;
-layout(set = 0, binding = 4, r11f_g11f_b10f) uniform image2D metalRoughnessTexture;
 
  
 layout (local_size_x = 16, local_size_y = 16) in;
@@ -38,7 +37,6 @@ void main(){
         const float lIlluminationCenter = luminance(illuminationCenter.rgb);
 
         const vec4 normalFZwidth = imageLoad(packedNormalDepth, coord);
-        const vec2 MRCenter = imageLoad(metalRoughnessTexture, coord).xy;
         
         float depth = normalFZwidth.x;
         float zWidth = normalFZwidth.y;
@@ -46,10 +44,9 @@ void main(){
         if (depth < 0.0){
             return;
         }
-        float phiMR = 1.0; 
 
         const vec3 normalCenter = oct_to_ndir_unorm(normalFZwidth.zw);
-        const float phiDepth = float(max(depth, 1e-8)*3.0);
+        const float phiDepth = float(max(depth, 1e-5)*3.0);
 
         const int radius = 2; 
         for (int yy = -radius; yy <= radius; yy++)
@@ -64,7 +61,6 @@ void main(){
                 if (inside)
                 {
                     const vec3 illuminationP = imageLoad(illuminationTexture, p).rgb;
-                    const vec2 MRP = imageLoad(metalRoughnessTexture, p).xy;
 
                     const vec2 momentsP = imageLoad(Moments, p).xy;
                     const float lIlluminationP = luminance(illuminationP.rgb);
@@ -81,10 +77,7 @@ void main(){
                         gPhiNormal,
                         lIlluminationCenter,
                         lIlluminationP,
-                        gPhiColor,
-                        MRCenter,
-                        MRP,
-                        phiMR
+                        gPhiColor
                     );
 
                     sumWIllumination += w;

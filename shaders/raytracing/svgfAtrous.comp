@@ -16,7 +16,6 @@ layout(set = 0, binding = 1, r8ui) uniform uimage2D prevHistoryLengthImage;
 layout(set = 0, binding = 2, rgba32f) uniform image2D packedNormalDepth;
 layout(set = 0, binding = 3, rgba16f) uniform image2D albedoTexture;
 layout(set = 0, binding = 4, rgba32f) uniform image2D outIllumination;
-layout(set = 0, binding = 5, r11f_g11f_b10f) uniform image2D metalRoughnessTexture;
 
 struct PushConstantAtrous {
     ivec2 imageSize;
@@ -28,7 +27,6 @@ float computeVarianceCenter(ivec2 ipos)
 {
     float sum = 0.f;
 
-    const vec3 currentMRP = imageLoad(metalRoughnessTexture, ipos).xyz;
 
     const float kernel[2][2] = {
         { 1.0 / 4.0, 1.0 / 8.0 },
@@ -119,11 +117,8 @@ void main(){
     const float phiLIllumination = PC.pc.phiColor * sqrt(max(0.0, epsV + variance));
     const float phiDepth = float(max(packedND.x, 1e-8) * PC.pc.stepSize)*3.0;
     
-    const vec3 MR = imageLoad(metalRoughnessTexture, coord).xyz;
-    const vec2 MRCenter = MR.xy;
-    float ObjID = MR.z;
+
     const float depthCenter = packedND.x;
-    float phiMR = 10.0;
 
     float sumWIllumination = 1.0;
     vec4 sumIllumination = illuminationCenter;
@@ -137,11 +132,6 @@ void main(){
             const bool inside = isInsideScreen(p, screenSize);
 
             const float kernel = kernelWeights[abs(xx)] * kernelWeights[abs(yy)];
-
-
-                const vec3 MRP = imageLoad(metalRoughnessTexture, p).xyz;
-
-                if (abs(ObjID - MRP.z) < 0.2){
 
                     const vec4 illuminationP = imageLoad(illuminationTexture, p);
 
@@ -161,10 +151,7 @@ void main(){
                         PC.pc.phiNormal,
                         lIlluminationCenter,
                         lIlluminationP,
-                        phiLIllumination,
-                        MRCenter,
-                        MRP.xy,
-                        phiMR
+                        phiLIllumination
                     );
 
                     const float wIllumination = w * kernel;
@@ -174,7 +161,7 @@ void main(){
                     sumIllumination += vec4(wIllumination.xxx, wIllumination * wIllumination) * illuminationP;
                 
             
-            }
+            
         }
     }
 
