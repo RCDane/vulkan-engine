@@ -115,7 +115,7 @@ void main(){
 
 
     const float phiLIllumination = PC.pc.phiColor * sqrt(max(0.0, epsV + variance));
-    const float phiDepth = float(max(packedND.x, 1e-8) * PC.pc.stepSize)*3.0;
+    const float phiDepth = float(max(packedND.x, 1e-5) * PC.pc.stepSize)*3.0;
     
 
     const float depthCenter = packedND.x;

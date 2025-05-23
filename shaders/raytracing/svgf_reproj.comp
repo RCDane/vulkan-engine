@@ -93,7 +93,6 @@ bool loadPrevData(
     double tmpPND = texelFetch(depth, ipos, 0).r;
 
     // compute previous pixel via reprojection
-    // vec2 pixelCenter = posH + vec2(0.5);
     dvec3 worldPos = reconstructWorldPosition(
         tmpPND, ipos, imageDim,
         PC.pc.projInverse, PC.pc.viewInverse
@@ -247,8 +246,6 @@ void main(){
     uint historyLength = 0;
     vec2 pMoments;
     bool success = loadPrevData(pixelCenter, coord, prevIllum, pMoments, historyLength);
-
-    // imageStore(color, coord, success ? vec4(imageColor) : vec4(1.0,0.0,1.0,1.0));
 
     historyLength = min(32, success ? historyLength + 1 : 1);
 

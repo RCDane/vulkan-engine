@@ -1285,7 +1285,7 @@ void RaytracingHandler::createRtPipeline(VulkanEngine* engine) {
 	// as possible for performance reasons. Even recursive ray tracing should be flattened into a loop
 	// in the ray generation to avoid deep recursion.
 	rayPipelineInfo.maxPipelineRayRecursionDepth = std::min(25u, m_rtProperties.maxRayRecursionDepth);  // Ray depth
-	std::cout << "max depth: " << rayPipelineInfo.maxPipelineRayRecursionDepth << std::endl;
+	//std::cout << "max depth: " << rayPipelineInfo.maxPipelineRayRecursionDepth << std::endl;
 
 	rayPipelineInfo.layout = m_rtPipelineLayout;
 

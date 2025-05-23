@@ -5,10 +5,10 @@
 int main(int argc, char* argv[])
 {
 	VulkanEngine engine;
-	DWORD dwError, dwPriClass;
-	dwPriClass = GetPriorityClass(GetCurrentProcess());
+	//DWORD dwError, dwPriClass;
+	//dwPriClass = GetPriorityClass(GetCurrentProcess());
 
-	_tprintf(TEXT("Current priority class is 0x%x\n"), dwPriClass);
+	//_tprintf(TEXT("Current priority class is 0x%x\n"), dwPriClass);
 
 	// Read the first argument as a string if provided
 	std::string firstArg;
@@ -18,18 +18,18 @@ int main(int argc, char* argv[])
 	}
 
 
-	if (!SetPriorityClass(GetCurrentProcess(), ABOVE_NORMAL_PRIORITY_CLASS))
-	{
-		dwError = GetLastError();
-		if (ERROR_PROCESS_MODE_ALREADY_BACKGROUND == dwError)
-			_tprintf(TEXT("Already in background mode\n"));
-		else _tprintf(TEXT("Failed to enter background mode (%d)\n"), dwError);
-	
-	}
+	//if (!SetPriorityClass(GetCurrentProcess(), ABOVE_NORMAL_PRIORITY_CLASS))
+	//{
+	//	dwError = GetLastError();
+	//	if (ERROR_PROCESS_MODE_ALREADY_BACKGROUND == dwError)
+	//		_tprintf(TEXT("Already in background mode\n"));
+	//	else _tprintf(TEXT("Failed to enter background mode (%d)\n"), dwError);
+	//
+	//}
 
-	dwPriClass = GetPriorityClass(GetCurrentProcess());
+	//dwPriClass = GetPriorityClass(GetCurrentProcess());
 
-	_tprintf(TEXT("Current priority class is 0x%x\n"), dwPriClass);
+	//_tprintf(TEXT("Current priority class is 0x%x\n"), dwPriClass);
 	engine.init(firstArg);
 	
 	engine.run();	

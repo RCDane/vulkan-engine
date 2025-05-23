@@ -510,7 +510,7 @@ void VulkanEngine::draw()
 
 			vmaUnmapMemory(_allocator, buffer.transferImage.allocation);
 
-			write_raw_buffer(hostImageData.data(), _windowExtent, 4, buffer.name);
+			//write_raw_buffer(hostImageData.data(), _windowExtent, 4, buffer.name);
 			imagesBeingTransferred.erase(imagesBeingTransferred.begin());
 
 			// read buffer out
@@ -2030,7 +2030,7 @@ void VulkanEngine::init_deferred_pipeline() {
 		fmt::print("Error when building the triangle fragment shader module");
 	}
 	else {
-		fmt::print("Triangle fragment shader succesfully loaded");
+		//fmt::print("Triangle fragment shader succesfully loaded");
 	}
 
 	VkShaderModule deferredVertexShader;
@@ -2038,7 +2038,7 @@ void VulkanEngine::init_deferred_pipeline() {
 		fmt::print("Error when building the triangle vertex shader module");
 	}
 	else {
-		fmt::print("Triangle vertex shader succesfully loaded");
+		//fmt::print("Triangle vertex shader succesfully loaded");
 	}
 	VkPushConstantRange matrixRange{};
 	matrixRange.offset = 0;
@@ -2102,7 +2102,7 @@ void VulkanEngine::init_triangle_pipeline(){
 		fmt::print("Error when building the triangle fragment shader module");
 	}
 	else {
-		fmt::print("Triangle fragment shader succesfully loaded");
+		//fmt::print("Triangle fragment shader succesfully loaded");
 	}
 
 	VkShaderModule triangleVertexShader;
@@ -2110,7 +2110,7 @@ void VulkanEngine::init_triangle_pipeline(){
 		fmt::print("Error when building the triangle vertex shader module");
 	}
 	else {
-		fmt::print("Triangle vertex shader succesfully loaded");
+		//fmt::print("Triangle vertex shader succesfully loaded");
 	}
 	
 	//build the pipeline layout that controls the inputs/outputs of the shader

@@ -55,3 +55,9 @@ assets/SciFiHelmet/screenshot/screenshot-x150.jpg
 assets/SciFiHelmet/screenshot/screenshot.jpg
 /python/data_images
 /python/images
+/engine.tlog
+engine.exe.recipe
+engine.ilk
+engine.log
+imgui.ini
+vc143.pdb
