@@ -17,7 +17,6 @@ layout(set = 0, binding = 2, rgba32f) uniform image2D packedNormalDepth;
 layout(set = 0, binding = 3, rgba16f) uniform image2D albedoTexture;
 layout(set = 0, binding = 4, rgba32f) uniform image2D outIllumination;
 layout(set = 0, binding = 5, r11f_g11f_b10f) uniform image2D metalRoughnessTexture;
-layout(set = 0, binding = 6, r11f_g11f_b10f) uniform image2D prevMetalRoughnessTexture;
 
 struct PushConstantAtrous {
     ivec2 imageSize;
@@ -44,11 +43,10 @@ float computeVarianceCenter(ivec2 ipos)
         {
 
             const ivec2 p = ipos + ivec2(xx, yy);
-            const vec3 MRP = imageLoad(metalRoughnessTexture, p).xyz;
-            if (abs(MRP.z - currentMRP.z) < 0.2){
+
                 const float k = kernel[abs(xx)][abs(yy)];
                 sum += imageLoad(illuminationTexture, p).a * k;
-            }
+            
 
         }
     }
@@ -78,11 +76,11 @@ float computeVarianceCenterUnrolled(ivec2 ipos)
         // xx = 0
         ivec2 p1 = ipos + ivec2(0, yy);
         float k1 = kernel[0 /*abs(0)*/][ay];
-        sum += imageLoad(illuminationTexture, p1).a * k0;
+        sum += imageLoad(illuminationTexture, p1).a * k1;
         // xx = +1
         ivec2 p2 = ipos + ivec2(radius, yy);
         float k2 = kernel[1 /*abs(1)*/][ay];
-        sum += imageLoad(illuminationTexture, p2).a * k0;
+        sum += imageLoad(illuminationTexture, p2).a * k2;
     }
 
     return sum;
@@ -119,13 +117,13 @@ void main(){
 
 
     const float phiLIllumination = PC.pc.phiColor * sqrt(max(0.0, epsV + variance));
-    const float phiDepth = float(max(packedND.x, 1e-8) * PC.pc.stepSize) * 3.0;
+    const float phiDepth = float(max(packedND.x, 1e-8) * PC.pc.stepSize)*3.0;
     
     const vec3 MR = imageLoad(metalRoughnessTexture, coord).xyz;
     const vec2 MRCenter = MR.xy;
     float ObjID = MR.z;
     const float depthCenter = packedND.x;
-    float phiMR = 2.0;
+    float phiMR = 10.0;
 
     float sumWIllumination = 1.0;
     vec4 sumIllumination = illuminationCenter;
@@ -140,9 +138,8 @@ void main(){
 
             const float kernel = kernelWeights[abs(xx)] * kernelWeights[abs(yy)];
 
-            if (inside && (xx != 0 || yy != 0)) // ignore center
-            {
-                const vec3 MRP = imageLoad(prevMetalRoughnessTexture, p).xyz;
+
+                const vec3 MRP = imageLoad(metalRoughnessTexture, p).xyz;
 
                 if (abs(ObjID - MRP.z) < 0.2){
 
@@ -175,7 +172,7 @@ void main(){
                     // alpha channel contains the variance, therefore the weights need to be squared, see paper for the formula
                     sumWIllumination += wIllumination;
                     sumIllumination += vec4(wIllumination.xxx, wIllumination * wIllumination) * illuminationP;
-                }
+                
             
             }
         }

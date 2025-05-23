@@ -1181,7 +1181,7 @@ void RaytracingHandler::createRtPipeline(VulkanEngine* engine) {
 
 	// Raygen
 	VkShaderModule main;
-	if (!vkutil::load_shader_module("../shaders/spv/raytraceAccIter.rgen.spv", engine->_device, &main)) {
+	if (!vkutil::load_shader_module("shaders/spv/raytraceAccIter.rgen.spv", engine->_device, &main)) {
 		fmt::print("Error when building the raygen shader module\n");
 	}
 	else {
@@ -1193,7 +1193,7 @@ void RaytracingHandler::createRtPipeline(VulkanEngine* engine) {
 
 	// Miss
 	VkShaderModule miss;
-	if (!vkutil::load_shader_module("../shaders/spv/raytrace.rmiss.spv", engine->_device, &miss)) {
+	if (!vkutil::load_shader_module("shaders/spv/raytrace.rmiss.spv", engine->_device, &miss)) {
 		fmt::print("Error when building the miss shader module\n");
 	}
 	else {
@@ -1205,7 +1205,7 @@ void RaytracingHandler::createRtPipeline(VulkanEngine* engine) {
 
 	// The second miss shader is invoked when a shadow ray misses the geometry. It simply indicates that no occlusion has been found
 	VkShaderModule miss2;
-	if (!vkutil::load_shader_module("../shaders/spv/raytraceShadow.rmiss.spv", engine->_device, &miss2)) {
+	if (!vkutil::load_shader_module("shaders/spv/raytraceShadow.rmiss.spv", engine->_device, &miss2)) {
 		fmt::print("Error when building the shadow miss shader module\n");
 	}
 	else {
@@ -1217,7 +1217,7 @@ void RaytracingHandler::createRtPipeline(VulkanEngine* engine) {
 
 	// Hit Group - Closest Hit
 	VkShaderModule closestHit;
-	if (!vkutil::load_shader_module("../shaders/spv/raytracepbrAccIter.rchit.spv", engine->_device, &closestHit)) {
+	if (!vkutil::load_shader_module("shaders/spv/raytracepbrAccIter.rchit.spv", engine->_device, &closestHit)) {
 		fmt::print("Error when building the closest hit shader module\n");
 	}
 	else {

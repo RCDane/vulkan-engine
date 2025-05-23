@@ -22,20 +22,15 @@
 
 // Motion not needed
 layout(set = 0, binding = 0, rgba32f) uniform image2D packedNormalDepth;
-layout(set = 0, binding = 1, rgba32f) uniform image2D color;
-layout(set = 0, binding = 2, rgba16f) uniform image2D albedo;
-
-layout(set = 0, binding = 3, rgba32f) uniform image2D prevIlluminationImage;
-layout(set = 0, binding = 4, rgba32f) uniform image2D prevPackedNormalDepth;
-layout(set = 0, binding = 5, r8ui) uniform uimage2D prevHistoryLengthImage;
-layout(set = 0, binding = 6, rg16f) uniform image2D prevMoments;
-layout(set = 0, binding = 7, rgba32f) uniform image2D illumination;
-layout(set = 0, binding = 8, r11f_g11f_b10f) uniform image2D metalRoughnessTexture;
-layout(set = 0, binding = 9, r11f_g11f_b10f) uniform image2D prevMetalRoughnessTexture;
-layout(set = 0, binding = 10) uniform sampler2D depth;
+layout(set = 0, binding = 1, rgba16f) uniform image2D albedo;
+layout(set = 0, binding = 2, rgba32f) uniform image2D prevIlluminationImage;
+layout(set = 0, binding = 3, rgba32f) uniform image2D prevPackedNormalDepth;
+layout(set = 0, binding = 4, r8ui) uniform uimage2D prevHistoryLengthImage;
+layout(set = 0, binding = 5, rg16f) uniform image2D prevMoments;
+layout(set = 0, binding = 6, rgba32f) uniform image2D illumination;
+layout(set = 0, binding = 7) uniform sampler2D depth;
 
 
-// new depth reprojection uniforms (after binding=7)
 layout(push_constant ) uniform PushConstant { PushConstantReproj pc; } PC;
 
 const float reprojEps = 1e-3;
@@ -75,12 +70,6 @@ bool isReprjValid(
 }
 
 
-float shiftDigitsRight(float value, int shift) {
-    float s = sign(value);
-    float v = abs(value);
-    float factor = pow(10.0, float(shift));
-    return s * (v / factor);
-}
 
 bool loadPrevData(
     vec2 posH,
@@ -114,21 +103,15 @@ bool loadPrevData(
     vec3 prevNDC  = prevClip.xyz / prevClip.w; 
     vec2 prevUV   = prevNDC.xy * 0.5 + 0.5;
     vec2 posPrev  = prevUV * imageDim + (vec2(1.0) / imageDim);
-    ivec2 iposPrev = ivec2(floor(posPrev));  // base for bilinear taps
+    ivec2 iposPrev = ivec2(floor(posPrev)); 
 
 
     
-    // imageStore(color, ipos, vec4(linearDepth, tmpPrevD, abs(tmpPrevD - linearDepth) / (zWidth + 1e-3), 1.0));
 
-    vec3 MRTex = imageLoad(metalRoughnessTexture, ipos).xyz;
-    vec2 metalRoughness = MRTex.xy;
-    float objID = MRTex.z;
-    // imageStore(color, ipos, vec4(prevD, linearDepth, zWidth,abs(prevD - linearDepth) / (zWidth + 1e-7)));
-    // return false;
     prevIllum   = vec4(0.0);
     pMoments = vec2(0.0);
 
-    // bilinear taps
+
     ivec2 offsets[4] = ivec2[4](
         ivec2(0,0), ivec2(1,0),
         ivec2(0,1), ivec2(1,1)
@@ -136,7 +119,7 @@ bool loadPrevData(
     bool v[4];
     bool valid = false;
     vec4 validity = vec4(0.0);
-    // float failStep = 0.0;
+
     // 1) test validity at each tap
     for (int i = 0; i < 4; ++i) {
         ivec2 loc = iposPrev + offsets[i];
@@ -155,8 +138,7 @@ bool loadPrevData(
         valid = valid || v[i];
     }
 
-    // validity += valid ? vec4(failStep,0,0,0) : vec4(0);
-    // // 2) if any valid, do bilinear interp
+    // 2) if any valid, do bilinear interp
     if (valid) {
         float fx = fract(posPrev.x), fy = fract(posPrev.y);
         float w[4] = float[4](
@@ -184,9 +166,6 @@ bool loadPrevData(
         }
 
     }
-    // validity += valid ? vec4(0,1,0,0) : vec4(0);
-
-
 
     // 3) fallback cross‐bilateral if still invalid
     if (!valid) {
@@ -218,26 +197,11 @@ bool loadPrevData(
             valid        = true;
         }
     }
-    // validity += valid ? vec4(0,0,1,0) : vec4(0);
-
-    // imageStore(color, ipos, validity);
-
-    // vec4 normfwidthzwidth = imageLoad(prevNormalFWidthZWidth, iposPrev);
 
     // double prevD = texelFetch(prevDepth, iposPrev,0).r;
     // prevD = LinearizeDepth(prevD);
     // vec3 nP   = normalize(oct_to_ndir_unorm(normfwidthzwidth.xy)); abs(Zprev - Z) / (fwidthZ + 1e-6) > 50.0
     // valid = isReprjValid(iposPrev, linearDepth, prevD, zWidth, currentNormal, nP, normalFwidth);
-    
-    vec4 prevPack = imageLoad(prevPackedNormalDepth, iposPrev);
-    double prevD = prevPack.x;
-    
-    double error = abs(prevD - linearDepth) / (zWidth + reprojEps);
-    imageStore(color, ipos, vec4(linearDepth, prevD, error, zWidth ));
-    // imageStore(color, ipos, vec4(ipos-iposPrev,0.0,0.0));
-    // imageStore(color, ipos, validity);
-
-    // imageStore(color, ipos, vec4(valid ? 1.0 : 0.0));
 
     // 4) write out history length if valid
     if (valid) {
@@ -275,7 +239,7 @@ void main(){
     const vec2 inUV        = pixelCenter / PC.pc.imageSize;
 
     vec4 albedoColor = imageLoad(albedo, coord);
-    vec4 imageColor = imageLoad(color, coord);
+    vec4 imageColor = imageLoad(illumination, coord);
 
     vec3 illum = demodulate(imageColor.xyz, albedoColor.xyz);
 
@@ -313,6 +277,5 @@ void main(){
 
     imageStore(prevMoments,coord, vec4(moments, 1.0,1.0));
     imageStore(prevHistoryLengthImage,coord, ivec4(historyLength, 0,0,0));
-    // imageStore(illumination,coord, vec4(illum, variance));
     imageStore(illumination,         coord, vec4(blendedIllum,  variance));
 }

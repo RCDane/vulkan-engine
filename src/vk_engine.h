@@ -75,6 +75,8 @@ struct EngineStats {
 	float wavelet_time;
 
 
+	
+
 };
 
 struct ComputePushConstants {
@@ -364,6 +366,7 @@ public:
 
 	//initializes everything in the engine
 	void init();
+	void init(std::string scene_path);
 
 	//shuts down the engine
 	void cleanup();

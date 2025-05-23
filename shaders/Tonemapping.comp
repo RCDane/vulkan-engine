@@ -4,7 +4,7 @@
 
 layout (local_size_x = 16, local_size_y = 16) in;
 
-layout(set = 0, binding = 0,rgba16f) uniform image2D colorHistory;
+layout(set = 0, binding = 0,rgba32f) uniform image2D colorHistory;
 layout(set = 0, binding = 1,rgba16f) uniform image2D outputImage;
 
 #include "common/host_device.h"
@@ -51,6 +51,10 @@ void main()
     vec3 tonemappedColor = PBRNeutralToneMapping(currentColor);
 
     vec3 gammaCorrectedColor = gammaCorrect(tonemappedColor, tone.gamma);
+
+    if (any(isnan(gammaCorrectedColor))) {
+        gammaCorrectedColor = vec3(0.0, 0.0, 0.0);
+    }
 
     imageStore(outputImage, texelCoord, vec4(gammaCorrectedColor, 1.0));
 

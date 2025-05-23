@@ -273,7 +273,7 @@ float computeWeight(
 )
 {
 
-    const vec2 diffMR = abs(metalRoughness - metalRoughnessP) / phiMR;
+    const vec2 diffMR = abs(metalRoughness - metalRoughnessP) * phiMR;
     const float weightMR = length(diffMR);
 
     const float weightNormal = pow(clamp(dot(normalCenter, normalP), 0.0, 1.0), phiNormal);

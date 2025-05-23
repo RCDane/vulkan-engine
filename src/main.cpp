@@ -1,6 +1,7 @@
 #include <vk_engine.h>
 #include <Windows.h>
 #include <tchar.h>
+#include <string>
 int main(int argc, char* argv[])
 {
 	VulkanEngine engine;
@@ -9,6 +10,12 @@ int main(int argc, char* argv[])
 
 	_tprintf(TEXT("Current priority class is 0x%x\n"), dwPriClass);
 
+	// Read the first argument as a string if provided
+	std::string firstArg;
+	if (argc > 1) {
+		firstArg = argv[1];
+		_tprintf(TEXT("First argument: %hs\n"), firstArg.c_str());
+	}
 
 	if (!SetPriorityClass(GetCurrentProcess(), ABOVE_NORMAL_PRIORITY_CLASS))
 	{
@@ -22,7 +29,7 @@ int main(int argc, char* argv[])
 	dwPriClass = GetPriorityClass(GetCurrentProcess());
 
 	_tprintf(TEXT("Current priority class is 0x%x\n"), dwPriClass);
-	engine.init();	
+	engine.init(firstArg);
 	
 	engine.run();	
 

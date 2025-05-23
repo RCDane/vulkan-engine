@@ -15,12 +15,12 @@ void ShadowPipeline::build_pipelines(VulkanEngine* engine)
 {
 	// Prepare shaders
     VkShaderModule meshFragShader;
-	if (!vkutil::load_shader_module("../shaders/spv/shadow.frag.spv", engine->_device, &meshFragShader)) {
+	if (!vkutil::load_shader_module("shaders/spv/shadow.frag.spv", engine->_device, &meshFragShader)) {
 		fmt::println("Error when building the triangle fragment shader module");
 	}
 
 	VkShaderModule meshVertexShader;
-	if (!vkutil::load_shader_module("../shaders/spv/shadow.vert.spv", engine->_device, &meshVertexShader)) {
+	if (!vkutil::load_shader_module("shaders/spv/shadow.vert.spv", engine->_device, &meshVertexShader)) {
 		fmt::println("Error when building the triangle vertex shader module");
 	}
 

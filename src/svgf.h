@@ -36,7 +36,7 @@ private:
     AllocatedImage prevNormalFWidthZWidth;
     AllocatedImage historyLength;
     AllocatedImage prevHistoryLength;
-    AllocatedImage prevMoments;
+    AllocatedImage moments;
 	AllocatedImage packedDepthNormal;
     AllocatedImage prevPackedDepthNormal;
 

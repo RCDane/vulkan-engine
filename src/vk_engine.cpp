@@ -54,7 +54,7 @@ VulkanEngine* loadedEngine = nullptr;
 
 
 VulkanEngine& VulkanEngine::Get() { return *loadedEngine; }
-void VulkanEngine::init()
+void VulkanEngine::init(std::string scene_path)
 {
     // only one engine initialization is allowed with the application.
     assert(loadedEngine == nullptr);
@@ -121,46 +121,13 @@ void VulkanEngine::init()
 	UIImageWriteSet.ongoing = false;
 	UIImageWriteSet.folder = "images/";
 
-	_cubeMap = load_cube_map(this, "../assets/black_skybox");
+	_cubeMap = load_cube_map(this, "assets/black_skybox");
 
-
-
-
-	//std::string spherePath = { "../assets/simple_sphere.glb"};
-	//auto sphereFile = loadGltf(this, spherePath);
-
-	//assert(sphereFile.has_value());
-	//
-
-	//loadedScenes["sphere"] = *sphereFile;
-	//loadedScenes["sphere"]->rootTransform = glm::scale(glm::vec3(10.0f)) * loadedScenes["sphere"]->rootTransform;
-	//loadedScenes["sphere"]->rootTransform = glm::translate(glm::vec3(0.0f, 20.0f, 0.0f)) * loadedScenes["sphere"]->rootTransform;
-
-
-	
-
-
-
-
-	//std::string helmetPath = { "../assets/SciFiHelmet/SciFiHelmet.glb"};
-	//std::optional<std::shared_ptr<LoadedGLTF>> helmetFile = loadGltf(this, helmetPath);
-
-	//assert(helmetFile.has_value());
-	//
-
-	//loadedScenes["helmet"] = *helmetFile;
-	//loadedScenes["helmet"]->rootTransform = glm::scale(glm::vec3(10.0f)) * loadedScenes["helmet"]->rootTransform;
-	//loadedScenes["helmet"]->rootTransform = glm::translate(glm::vec3(0.0f, 20.0f, 0.0f)) * loadedScenes["helmet"]->rootTransform;
-
-	std::string sponzaPath = { "../assets/sponza.glb" };
+	std::string sponzaPath = { scene_path };
 	auto sponzaFile = loadGltf(this, sponzaPath);
 	assert(sponzaFile.has_value());
 	loadedScenes["sponza"] = *sponzaFile;
 
-	//std::string sphereTestPath = { "../assets/sphere test.glb" };
-	//auto sphereTestFile = loadGltf(this, sphereTestPath);
-	//assert(sphereTestFile.has_value());
-	//loadedScenes["sphereTest"] = *sphereTestFile;
 
 
 	for (auto const& [key, scene] : loadedScenes) {
@@ -1378,7 +1345,8 @@ void VulkanEngine::run()
 		ImGui::Begin("Main");
 		ImGui::Checkbox("Use SVGF", &useSVGF);
 		ImGui::Checkbox("Accumulate", &accumulate);
-		ImGui::InputInt("directional light samples:", &_raytracePushConstant.directionalLightSamples);
+		ImGui::Text("Light samples:");
+		ImGui::InputInt(" ", & _raytracePushConstant.directionalLightSamples);
 
 		ImGui::Text("Stats:");
 		ImGui::Text("frametime %f ms", stats.frametime);
@@ -1577,11 +1545,8 @@ void VulkanEngine::init_vulkan()
 		.set_minimum_version(1, 3)
 		.set_required_features(deviceFeatures)
 		.add_required_extension("VK_KHR_acceleration_structure")
-		.add_required_extension("VK_KHR_shader_relaxed_extended_instruction")
 		.add_required_extension("VK_KHR_buffer_device_address")
-		.add_required_extension("VK_KHR_shader_clock")
 		.add_required_extension("VK_KHR_push_descriptor")
-		.add_required_extension("VK_KHR_ray_query")
 
 		.add_required_extension_features(rayQueryFeatures)
 		.add_required_extension_features(localreadfeatures)
@@ -2067,7 +2032,7 @@ void VulkanEngine::init_pipelines(){
 
 void VulkanEngine::init_deferred_pipeline() {
 	VkShaderModule deferredFragShader;
-	if (!vkutil::load_shader_module("../shaders/spv/deferred.frag.spv", _device, &deferredFragShader)) {
+	if (!vkutil::load_shader_module("shaders/spv/deferred.frag.spv", _device, &deferredFragShader)) {
 		fmt::print("Error when building the triangle fragment shader module");
 	}
 	else {
@@ -2075,7 +2040,7 @@ void VulkanEngine::init_deferred_pipeline() {
 	}
 
 	VkShaderModule deferredVertexShader;
-	if (!vkutil::load_shader_module("../shaders/spv/deferred.vert.spv", _device, &deferredVertexShader)) {
+	if (!vkutil::load_shader_module("shaders/spv/deferred.vert.spv", _device, &deferredVertexShader)) {
 		fmt::print("Error when building the triangle vertex shader module");
 	}
 	else {
@@ -2139,7 +2104,7 @@ void VulkanEngine::init_deferred_pipeline() {
 
 void VulkanEngine::init_triangle_pipeline(){
 	VkShaderModule triangleFragShader;
-	if (!vkutil::load_shader_module("../shaders/spv/colored_triangle.frag.spv", _device, &triangleFragShader)) {
+	if (!vkutil::load_shader_module("shaders/spv/colored_triangle.frag.spv", _device, &triangleFragShader)) {
 		fmt::print("Error when building the triangle fragment shader module");
 	}
 	else {
@@ -2147,7 +2112,7 @@ void VulkanEngine::init_triangle_pipeline(){
 	}
 
 	VkShaderModule triangleVertexShader;
-	if (!vkutil::load_shader_module("../shaders/spv/colored_triangle.vert.spv", _device, &triangleVertexShader)) {
+	if (!vkutil::load_shader_module("shaders/spv/colored_triangle.vert.spv", _device, &triangleVertexShader)) {
 		fmt::print("Error when building the triangle vertex shader module");
 	}
 	else {
@@ -2419,7 +2384,7 @@ GPUMeshBuffers VulkanEngine::uploadMesh(
 
 void VulkanEngine::init_mesh_pipeline(){
 	VkShaderModule triangleFragShader;
-	if (!vkutil::load_shader_module("../shaders/spv/tex_image.frag.spv", _device, &triangleFragShader)) {
+	if (!vkutil::load_shader_module("shaders/spv/tex_image.frag.spv", _device, &triangleFragShader)) {
 		fmt::print("Error when building the fragment shader \n");
 	}
 	else {
@@ -2427,7 +2392,7 @@ void VulkanEngine::init_mesh_pipeline(){
 	}
 
 	VkShaderModule triangleVertexShader;
-	if (!vkutil::load_shader_module("../shaders/spv/colored_triangle_mesh.vert.spv", _device, &triangleVertexShader)) {
+	if (!vkutil::load_shader_module("shaders/spv/colored_triangle_mesh.vert.spv", _device, &triangleVertexShader)) {
 		fmt::print("Error when building the vertex shader \n");
 	}
 	else {
@@ -2771,12 +2736,12 @@ void VulkanEngine::destroy_image(const AllocatedImage& img){
 void GLTFMetallic_Roughness::build_pipelines(VulkanEngine* engine)
 {
 	VkShaderModule meshFragShader;
-	if (!vkutil::load_shader_module("../shaders/spv/phong_directional.frag.spv", engine->_device, &meshFragShader)) {
+	if (!vkutil::load_shader_module("shaders/spv/phong_directional.frag.spv", engine->_device, &meshFragShader)) {
 		fmt::println("Error when building the triangle fragment shader module");
 	}
 
 	VkShaderModule meshVertexShader;
-	if (!vkutil::load_shader_module("../shaders/spv/phong_directional.vert.spv", engine->_device, &meshVertexShader)) {
+	if (!vkutil::load_shader_module("shaders/spv/phong_directional.vert.spv", engine->_device, &meshVertexShader)) {
 		fmt::println("Error when building the triangle vertex shader module");
 	}
 
@@ -3124,7 +3089,7 @@ void VulkanEngine::init_background_pipelines()
 
 
 	VkShaderModule backgroundShader;
-	if (!vkutil::load_shader_module("../shaders/spv/environment_map_background.comp.spv", _device, &backgroundShader)) {
+	if (!vkutil::load_shader_module("shaders/spv/environment_map_background.comp.spv", _device, &backgroundShader)) {
 		fmt::print("Error when building the compute shader \n");
 	}
 
@@ -3199,7 +3164,7 @@ void VulkanEngine::init_tonemapping_pipeline()
 
 
 	VkShaderModule toneMappingShader;
-	if (!vkutil::load_shader_module("../shaders/spv/Tonemapping.comp.spv", _device, &toneMappingShader)) {
+	if (!vkutil::load_shader_module("shaders/spv/Tonemapping.comp.spv", _device, &toneMappingShader)) {
 		fmt::print("Error when building the compute shader \n");
 	}
 

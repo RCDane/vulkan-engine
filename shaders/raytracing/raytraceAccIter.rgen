@@ -24,7 +24,7 @@ layout(set = 2, binding = 1, rgba16f) readonly uniform image2D normal;
 layout(set = 2, binding = 2, r11f_g11f_b10f) readonly uniform image2D material;
 layout(set = 2, binding = 3, rgba32f) readonly uniform image2D emission; 
 layout(set = 2, binding = 4, r32f) readonly uniform image2D depth; 
-layout(set = 2, binding = 5, rgba16f) uniform image2D colorHistory; 
+layout(set = 2, binding = 5, rgba32f) uniform image2D colorHistory; 
 layout(set = 2, binding = 6, r32f) readonly uniform image2D depthHistory;
 layout(set = 3, binding = 0, std430) readonly buffer LightSources {LightSource l[]; } lights;
 
@@ -152,75 +152,27 @@ void main()
   prd.normal = N;
   prd.attenuation = vec3(1.0);
   vec3 F0 = mix(vec3(0.04), albedoColor.xyz, metalness);
-	vec3 rayOrigin = prd.rayOrigin;
-	vec3 hitNormal = prd.normal;
-  createCoordinateSystem(hitNormal, tangent, bitangent);
-
-  float pdf = 0.0;
-  vec3 rayDirection = sampleGGXDirection(
-      hitNormal,
-      V,
-      roughness,
-      tangent,
-      bitangent,
-      seed,
-      pdf
-  );
-  vec3 indirectIllumination = vec3(0);
-
-	float tMin   = e;
-	float tMax   = 10000000.0;
-	vec3  rayDir = rayDirection;
-	uint  flags  = gl_RayFlagsNoneEXT;
-	prd.depth += 1;
-	prd.rayDir = rayDirection;
-  prd.hitValue = vec3(0);
-	traceRayEXT(topLevelAS,  // acceleration structure
-						flags,       // rayFlags
-						0xFF,        // cullMask
-						0,           // sbtRecordOffset 
-						0,           // sbtRecordStride
-						0,           // missIndex
-						rayOrigin,      // ray origin
-						tMin,        // ray min range
-						rayDirection,      // ray direction
-						tMax,        // ray max range
-						0            // payload is payload
-	);
-  float invPdf = 1.0 / pdf;
-
-  PBR_result result = CalculatePBRResult(
-    N,V, 
-    rayDirection, albedoColor.xyz, 
-    prd.hitValue, 1.0f, 
-    F0, metalness,  
-    roughness);
-    
-
-
-	indirectIllumination += result.color * invPdf;
 
 
   // Next event estimation for direct lighting
-  vec3 directIllumination = vec3(0.0); 
+  vec3 directIllumination = vec3(0.0);
 
   for (int i = 0; i < pcRay.directionalLightSamples; i++){
 
     LightSample Ls = sampleLightsPdf(vec3(worldPos), seed, uni.raytracingSettings.lightCount);
-    
 
 
-    vec3 L = normalize(Ls.direction); 
-    isShadowed   = true; 
+    vec3 L = normalize(Ls.direction);
+    isShadowed   = true;
 
       if(dot(N, L) > 0) 
       {
         
-        tMin   = 0.01;
-        tMax   = Ls.distance; 
-        rayOrigin = vec3(worldPos); // offset the ray origin to avoid self-intersection
-        rayDir = L; 
-        flags  = gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsOpaqueEXT | gl_RayFlagsSkipClosestHitShaderEXT;
+        float tMin   = 0.01;
+        float tMax   = Ls.distance; 
+        vec3 rayOrigin = vec3(worldPos); // offset the ray origin to avoid self-intersection
+        vec3 rayDir = L; 
+        uint flags  = gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsOpaqueEXT | gl_RayFlagsSkipClosestHitShaderEXT;
         traceRayEXT(topLevelAS,  // acceleration structure
               flags,       // rayFlags
               0xFF,        // cullMask
@@ -243,7 +195,7 @@ void main()
       }   
   }
   
-  vec3 combined =  directIllumination / pcRay.directionalLightSamples ; // combine direct and indirect illumination
+  vec3 combined = directIllumination / pcRay.directionalLightSamples ; // combine direct and indirect illumination
 
   float currentRayCount =  float(uni.raytracingSettings.currentRayCount);
   float rayBudget =  float(uni.raytracingSettings.rayBudget); 
