@@ -1,9 +1,15 @@
 # This readme is outdated. This branch is being used for the student competition for the high performance graphics conference.
 
 Files related to SVGF can be found in:
-shaders/raytracing
-src/svgf.h
-src/svgf.cpp
+- shaders/raytracing
+  -  modulate.comp
+  -  svgfPacking.comp
+  -  svgf_reproj.comp
+  -  svgfFilterMoments.comp
+  -  svgfAtrous.comp
+  -  modulate.comp
+- src/svgf.h
+- src/svgf.cpp
 
 
 
