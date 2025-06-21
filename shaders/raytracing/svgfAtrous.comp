@@ -8,7 +8,7 @@
 #include "../common/host_device.h"
 #include "../common/util.glsl"
 
-layout (local_size_x = 16, local_size_y = 16) in;
+layout (local_size_x = 128, local_size_y = 8) in;
 
 
 layout(set = 0, binding = 0, rgba32f) uniform image2D illuminationTexture;
@@ -115,7 +115,7 @@ void main(){
 
 
     const float phiLIllumination = PC.pc.phiColor * sqrt(max(0.0, epsV + variance));
-    const float phiDepth = float(max(packedND.x, 1e-5) * PC.pc.stepSize)*3.0;
+    const float phiDepth = float(max(packedND.x, 1e-7) * PC.pc.stepSize)*3.0;
     
 
     const float depthCenter = packedND.x;

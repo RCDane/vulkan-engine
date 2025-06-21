@@ -510,7 +510,7 @@ void VulkanEngine::draw()
 
 			vmaUnmapMemory(_allocator, buffer.transferImage.allocation);
 
-			//write_raw_buffer(hostImageData.data(), _windowExtent, 4, buffer.name);
+			write_raw_buffer(hostImageData.data(), _windowExtent, 4, buffer.name);
 			imagesBeingTransferred.erase(imagesBeingTransferred.begin());
 
 			// read buffer out
@@ -839,24 +839,23 @@ void VulkanEngine::prepare_lighting_data() {
 		shaderLight.radius = light->radius;
 		shaderLight.sunAngle = light->sunAngle;
 		if (light->type == LightType::Directional) {
-			shaderLight.pdf = 1.0f / lightCount;
 			shaderLight.intensity = light->intensity;
 
 			float cosMax = cos(shaderLight.sunAngle / 2.0);
 
 			float coneSolidAngle = 2.0 * glm::pi<float>() * (1.0 - cosMax);
 
-			shaderLight.pdf = coneSolidAngle;
+			shaderLight.pdf = 1.0;
 
 		}
 		else if (light->type == LightType::Point){
 			shaderLight.intensity = light->intensity;
 
 			float area = light->radius * light->radius * (4.0f * glm::pi<float>());
-			shaderLight.pdf = 1.0f / area / lightCount;
+			shaderLight.pdf = 1.0f ;
 		}
 		else {
-			shaderLight.pdf = 1.0f / lightCount;
+			shaderLight.pdf = 1.0f ;
 		}
 		shaderLightSources.push_back(shaderLight);
 	}
@@ -1338,7 +1337,8 @@ void VulkanEngine::run()
 		ImGui::Checkbox("Use SVGF", &useSVGF);
 		ImGui::Checkbox("Accumulate", &accumulate);
 		ImGui::Text("Light samples:");
-		ImGui::InputInt(" ", & _raytracePushConstant.directionalLightSamples);
+		ImGui::InputInt("Direct ", & _raytracePushConstant.directionalLightSamples);
+		ImGui::InputInt("Indirect ", &_raytracePushConstant.indirectLightSamples);
 
 		ImGui::Text("Stats:");
 		ImGui::Text("frametime %f ms", stats.frametime);
@@ -1354,10 +1354,10 @@ void VulkanEngine::run()
 
 		ImGui::Text("update time %f ms", stats.scene_update_time);
 
-		//ImGui::Text("Write image sequence");
-		//ImGui::InputInt("Frame count", &UIImageWriteSet.count);
-		//ImGui::InputText("Folder name", currentString, 127);
-		//StartImageTransfer = ImGui::Button("Take Picture");
+		ImGui::Text("Write image sequence");
+		ImGui::InputInt("Frame count", &UIImageWriteSet.count);
+		ImGui::InputText("Folder name", currentString, 127);
+		StartImageTransfer = ImGui::Button("Take Picture");
 		_svgfHandler.draw_imgui();
 		
 		ImGui::End();
@@ -1949,7 +1949,6 @@ void VulkanEngine::init_descriptors(){
 		builder.add_binding(3, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, flags); // emissive
 		builder.add_binding(4, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, flags); // emissive
 		builder.add_binding(5, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, flags); // color history
-		builder.add_binding(6, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, flags);
 
 		_deferredDscSetLayout = builder.build(_device,
 			VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_FRAGMENT_BIT,

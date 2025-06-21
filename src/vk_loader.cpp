@@ -236,7 +236,7 @@ LightSource loadLight(fastgltf::Light light, Node *node, LightExtras extra) {
     LightSource newLight;
     if (light.type == fastgltf::LightType::Directional) {
         newLight.color = glm::vec3(light.color[0], light.color[1], light.color[2]);
-        newLight.intensity = light.intensity /40.0 ;
+        newLight.intensity = light.intensity ;
         glm::quat rotation = glm::quat_cast(node->localTransform);
         glm::vec4 transformedDirection = node->localTransform * glm::vec4(0, 0, -1, 0);
 

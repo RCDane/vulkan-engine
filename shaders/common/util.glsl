@@ -192,7 +192,7 @@ LightSample ProcessLight(vec3 hitPoint, inout uint seed, LightSource Ls){
         ls.direction = dir;
         ls.distance  = dist;
     } else {
-                vec3 w = normalize(-Ls.direction.xyz);
+        vec3 w = normalize(-Ls.direction.xyz);
 
         // 2) branchless ONB (Duff et al. 2017)
         float s = (w.z >= 0.0 ? 1.0 : -1.0);
@@ -220,6 +220,7 @@ LightSample ProcessLight(vec3 hitPoint, inout uint seed, LightSource Ls){
         ls.direction   = sampleDir;
         ls.distance    = INF_DISTANCE;
         ls.attenuation = vec3(1.0);
+        // ls.pdf = 1.0 / (2.0 * PI * (1.0 - cosMax));
         ls.pdf = Ls.pdf;
     }
     return ls;

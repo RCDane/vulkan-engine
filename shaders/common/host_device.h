@@ -141,6 +141,7 @@ struct PushConstantRay
 	int  useAccumulation;
 	vec4 ambientColor;
 	int directionalLightSamples;
+	int indirectLightSamples;
 };
 
 // Push-constant block for SVGF reprojection
@@ -164,8 +165,6 @@ struct LightSource {
 	int type;
 
 	float pdf;
-	// vec4 padding1;
-	// vec4 padding2;
 
 
 };

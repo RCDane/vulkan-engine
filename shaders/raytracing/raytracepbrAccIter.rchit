@@ -42,10 +42,10 @@ LightSample sampleLightsPdf(vec3 hitPoint, inout uint seed,  int lightCount) {
     LightSource Ls = lights.l[i];
 
     LightSample s = ProcessLight(hitPoint, seed, Ls); // Sample the light source
-	s.intensity = Ls.intensity;
-    // s.pdf /= double(lightCount); // Scale the pdf by the light source pdf 
+	// s.intensity = Ls.intensity;
+    // s.pdf /= lightCount; // Scale the pdf by the light source pdf 
     return s;
-}
+} 
 
 
 vec3 computeMappedNormal(Vertex v0, Vertex v1, Vertex v2, vec3 barycentrics, GLTFMaterialData mat)
@@ -59,7 +59,7 @@ vec3 computeMappedNormal(Vertex v0, Vertex v1, Vertex v2, vec3 barycentrics, GLT
     vec3 nrm = v0.normal * barycentrics.x +
                v1.normal * barycentrics.y +
                v2.normal * barycentrics.z;
-    vec3 worldNrm = normalize(vec3(nrm * gl_WorldToObjectEXT));
+    vec3 worldNrm = normalize(vec3(nrm * gl_WorldToObjectEXT)); 
 
     
     // Compute edges and UV deltas.
@@ -173,7 +173,6 @@ void main()
 
 	vec3 tmpColor = vec3(1.0);
 	
-    vec3 F0 = mix(vec3(0.04), baseColor.xyz, metallic);
 	vec3 directRadiance = vec3(0.0);
 	vec3  bsdf = vec3(0.0);
 	isShadowed   = true; 
@@ -197,46 +196,28 @@ void main()
 			tMax,        // ray max range
 			1            // payload is isShadowed
 		);
-
+ 
 
 		// 2) pick unshadowed radiance
 		if (!isShadowed) {
 			PBR_result res = CalculatePBRResult(worldNrm, V, L,
 										baseColor, l_Sample.color,
-										float(l_Sample.intensity), F0,
+										float(l_Sample.intensity),
 										metallic, roughness);
 
 			// 4) compute the direct radiance
-			directRadiance = l_Sample.color  * l_Sample.attenuation;
-			directRadiance /= l_Sample.pdf;
+			directRadiance = (res.color * l_Sample.attenuation) / l_Sample.pdf;
 			bsdf = res.f;
 
 		}
 		isShadowed   = true; 
 
 	}
-	
-	
-	// 1) compute direct PBR_result
-
-	// 3) clamp the light falloff
-	const float minD = 0.01;
-
-
-	// 4) build your throughput update **without dividing by pdf**
-	//    since you’re cosine‑hemisphere sampling: 
-	
-
-
-
-	float tHit = gl_HitTEXT;
-	const float maxAtt = 100.0;
-	float dist = max(tHit, minD);
-	float invSq = 1.0 / (dist * dist);
-	invSq = min(invSq, maxAtt);
-
 	// 5) update attenuation
-	prd.attenuation *= l_Sample.attenuation * bsdf ;
+	vec3 from = prd.rayOrigin;
+	vec3 to = worldPos;
+	float dist = length(to - from);
+	// prd.attenuation *= bsdf;
 
 
 	// 6) write your radiance into the payload
