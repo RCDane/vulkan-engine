@@ -1,18 +1,3 @@
-# This readme is outdated. This branch is being used for the student competition for the high performance graphics conference.
-
-Files related to SVGF can be found in:
-- shaders/raytracing
-  -  modulate.comp
-  -  svgfPacking.comp
-  -  svgf_reproj.comp
-  -  svgfFilterMoments.comp
-  -  svgfAtrous.comp
-  -  modulate.comp
-- src/svgf.h
-- src/svgf.cpp
-
-
-
 # vulkan-engine
 This project is for a special course in Computer Graphics, focused on implementing Raytracing using C++ and Vulkan.
 
