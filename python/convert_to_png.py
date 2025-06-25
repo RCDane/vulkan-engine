@@ -24,8 +24,47 @@ def convert_raw_to_png(input_path, output_path):
     else:
         raise ValueError(f"Unsupported number of channels: {c}")
 
-    # Normalize the image to 0-255 and convert to uint8
-    img = (img / np.max(img) * 255).astype(np.uint8)
+    # Add raw data analysis and validation before processing
+    # Debug: inspect raw data and file integrity
+    file_size = os.path.getsize(input_path)
+    # Use float32 item size since raw data is 32-bit floats
+    expected_size = 12 + (w * h * c) * np.dtype(np.float32).itemsize
+    print(f"Raw file size: {file_size} bytes, expected: {expected_size} bytes")
+    # Validate pixel count
+    expected_count = w * h * c
+    actual_count = img.size
+    if actual_count != expected_count:
+        print(f"Warning: expected {expected_count} values, but loaded {actual_count}")
+    # Compute basic statistics
+    nan_count = np.isnan(img).sum()
+    posinf_count = np.isposinf(img).sum()
+    neginf_count = np.isneginf(img).sum()
+    try:
+        raw_min = np.nanmin(img)
+        raw_max = np.nanmax(img)
+        raw_mean = np.nanmean(img)
+    except ValueError:
+        raw_min = raw_max = raw_mean = float('nan')
+    print(f"Raw data stats -> min: {raw_min}, max: {raw_max}, mean: {raw_mean}, NaNs: {nan_count}, +inf: {posinf_count}, -inf: {neginf_count}")
+
+    # sanitize NaNs and infs in one go
+    img = np.nan_to_num(img, nan=0.0, posinf=0.0, neginf=0.0)
+    # clamp negative values to zero (black)
+    img[img < 0] = 0
+    # clamp extreme high values to 99th percentile to reduce outliers
+    high = np.nanpercentile(img, 99)
+    img[img > high] = high
+
+    # Normalize the image to 0–255
+    max_val = img.max()
+    if max_val > 0:
+        img = img / max_val * 255
+    else:
+        img = img * 0
+    img = img.astype(np.uint8)
+    # if RGBA, force alpha channel to fully opaque
+    if c == 4:
+        img[..., 3] = 255
 
     # Save the image as PNG
     Image.fromarray(img, mode).save(output_path)

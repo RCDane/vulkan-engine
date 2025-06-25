@@ -142,6 +142,7 @@ struct PushConstantRay
 	vec4 ambientColor;
 	int directionalLightSamples;
 	int indirectLightSamples;
+	int samplingStrategy;
 };
 
 // Push-constant block for SVGF reprojection

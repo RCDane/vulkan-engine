@@ -123,6 +123,27 @@ vec3 samplingHemisphere(inout uint seed, in vec3 x, in vec3 y, in vec3 z)
   return normalize(direction);
 }
 
+vec3 sampleCosineHemisphere(
+    inout uint seed,
+    in vec3 N,
+    in vec3 T,
+    in vec3 B,
+    out float pdf_out
+) {
+    float u1 = rnd(seed), u2 = rnd(seed);
+    float r   = sqrt(u1);
+    float phi = 2.0 * PI * u2;
+    float x   = r * cos(phi);
+    float y   = r * sin(phi);
+    float z   = sqrt(max(0.0, 1.0 - u1)); // cosθ
+
+    pdf_out = z / PI; // cosθ / π
+
+    // build world-space direction
+    return normalize(T*x + B*y + N*z);
+}
+
+
 // Return the tangent and binormal from the incoming normal
 void createCoordinateSystem(in vec3 N, out vec3 Nt, out vec3 Nb)
 {

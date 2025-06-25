@@ -845,7 +845,7 @@ void VulkanEngine::prepare_lighting_data() {
 
 			float coneSolidAngle = 2.0 * glm::pi<float>() * (1.0 - cosMax);
 
-			shaderLight.pdf = 1.0;
+			shaderLight.pdf = 1.;
 
 		}
 		else if (light->type == LightType::Point){
@@ -1339,6 +1339,7 @@ void VulkanEngine::run()
 		ImGui::Text("Light samples:");
 		ImGui::InputInt("Direct ", & _raytracePushConstant.directionalLightSamples);
 		ImGui::InputInt("Indirect ", &_raytracePushConstant.indirectLightSamples);
+		ImGui::InputInt("Sampling strategy", &_raytracePushConstant.samplingStrategy);
 
 		ImGui::Text("Stats:");
 		ImGui::Text("frametime %f ms", stats.frametime);
