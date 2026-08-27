@@ -207,19 +207,19 @@ void main()
 
     // vec3 env = SRGBtoLINEAR(texture(cubeMap, normalize(R)).rgb);
 
-	vec3 directContribution = CalculatePBR(N,V,L,baseColor, lightColor, directionalLight.intensity , F0, metallic, roughness);
+	// vec3 directContribution = 
 
-    // Shadow factor
-    float shadow = ShadowCalculation(lightFragPos, N);
+    // // Shadow factor
+    // float shadow = ShadowCalculation(lightFragPos, N);
 
-    // // Apply shadow
-    // diffuse *= shadow;
-    // specular *= shadow;
-    directContribution *= shadow;
-    // Combine components
-    vec3 result = LINEARtoSRGB(directContribution + emission);
+    // // // Apply shadow
+    // // diffuse *= shadow;
+    // // specular *= shadow;
+    // directContribution *= shadow;
+    // // Combine components
+    // vec3 result = LINEARtoSRGB(directContribution + emission);
 
 
-    // Output final color with alpha from material data
-    outFragColor = vec4(result, materialData.colorFactors.a);
+    // // Output final color with alpha from material data
+    // outFragColor = vec4(result, materialData.colorFactors.a);
 }

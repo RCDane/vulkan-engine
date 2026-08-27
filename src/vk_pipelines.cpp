@@ -1,6 +1,7 @@
 ﻿#include <vk_pipelines.h>
 #include <vk_pipelines.h>
 #include <fstream>
+#include <filesystem>
 #include <vk_initializers.h>
 #include <vulkan/vulkan_core.h>
 
@@ -9,6 +10,12 @@
         VkDevice device,
         VkShaderModule* outShaderModule)
     {
+
+        if (!std::filesystem::exists(filePath)) {
+            fmt::println("Shader file does not exist: {}", filePath);
+            return false;
+        }
+
         // open the file. With cursor at the end
         std::ifstream file(filePath, std::ios::ate | std::ios::binary);
 
@@ -127,8 +134,7 @@ VkPipeline PipelineBuilder::build_pipeline(VkDevice device)
     
     pipelineInfo.pDynamicState = &dynamicInfo;
 
-        // its easy to error out on create graphics pipeline, so we handle it a bit
-    // better than the common VK_CHECK case
+
     VkPipeline newPipeline;
     if (vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo,
             nullptr, &newPipeline)

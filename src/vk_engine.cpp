@@ -45,7 +45,7 @@
 //#include <windows.h>
 //#include <tchar.h>
 
-constexpr bool bUseValidationLayers = false;
+constexpr bool bUseValidationLayers = true;
 
 
 VulkanEngine* loadedEngine = nullptr;
@@ -1445,10 +1445,10 @@ void VulkanEngine::init_vulkan()
 	auto inst_ret2 = inst_ret.use_default_debug_messenger();
 	auto inst_ret3 = inst_ret2.require_api_version(1, 3, 0).request_validation_layers(bUseValidationLayers)
 
-		.add_validation_feature_disable(VK_VALIDATION_FEATURE_DISABLE_UNIQUE_HANDLES_EXT)
-		//.add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_BEST_PRACTICES_EXT)
-		.add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT)
-		.add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_RESERVE_BINDING_SLOT_EXT)
+		// .add_validation_feature_disable(VK_VALIDATION_FEATURE_DISABLE_UNIQUE_HANDLES_EXT)
+		// //.add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_BEST_PRACTICES_EXT)
+		// .add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT)
+		// .add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_RESERVE_BINDING_SLOT_EXT)
 		.add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT); // Add validation features
 	auto inst_ret4 = inst_ret3.build();
 	if (!inst_ret4) {
@@ -1517,7 +1517,7 @@ void VulkanEngine::init_vulkan()
 
 
 	VkPhysicalDeviceRayTracingValidationFeaturesNV rtValidationFeatures{ .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_VALIDATION_FEATURES_NV };
-	rtValidationFeatures.rayTracingValidation = VK_TRUE;
+	// rtValidationFeatures.rayTracingValidation = VK_TRUE;
 	
 	VkPhysicalDeviceFeatures deviceFeatures{};
 
@@ -1551,7 +1551,7 @@ void VulkanEngine::init_vulkan()
 
 		.add_required_extension_features(rtPipelineFeatures)
 		.add_required_extension("VK_EXT_descriptor_buffer")
-		.add_required_extension("VK_NV_ray_tracing_validation")
+		// .add_required_extension("VK_ray_tracing_validation")
 		.add_required_extension("VK_NV_compute_shader_derivatives")
 
 		.add_required_extension("VK_KHR_dynamic_rendering_local_read")

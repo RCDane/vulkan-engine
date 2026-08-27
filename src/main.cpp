@@ -1,6 +1,6 @@
 #include <vk_engine.h>
-#include <Windows.h>
-#include <tchar.h>
+// #include <Windows.h>
+// #include <tchar.h>
 #include <string>
 int main(int argc, char* argv[])
 {
@@ -14,7 +14,7 @@ int main(int argc, char* argv[])
 	std::string firstArg;
 	if (argc > 1) {
 		firstArg = argv[1];
-		_tprintf(TEXT("First argument: %hs\n"), firstArg.c_str());
+		printf("First argument: %s\n", firstArg.c_str());
 	}
 
 

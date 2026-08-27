@@ -305,7 +305,7 @@ void DescriptorWriter::write_image(int binding,VkImageView image, VkSampler samp
 	writes.push_back(write);
 }
 
-void DescriptorWriter::write_acceleration_structure(int binding, VkWriteDescriptorSetAccelerationStructureKHR as)
+void DescriptorWriter::write_acceleration_structure(int binding, const VkWriteDescriptorSetAccelerationStructureKHR& as)
 {
 	
 	VkWriteDescriptorSet write = { VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET };
