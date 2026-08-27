@@ -1407,6 +1407,8 @@ void RaytracingHandler::raytrace(VkCommandBuffer cmd, VulkanEngine* engine) {
 	m_uniformMappedPtr->raytracingSettings.rayBudget = rayBudget;
 	m_uniformMappedPtr->raytracingSettings.seed = uint32_t(std::rand());
 	m_uniformMappedPtr->raytracingSettings.lightCount = engine->lightSources.size();
+	m_uniformMappedPtr->raytracingSettings.forcePointLights = forcePointLights;
+	m_uniformMappedPtr->raytracingSettings.environmentIntensity = environmentIntensity;
 	m_uniformMappedPtr->clearScreen = clearScreen ? 1 : 0;
 	m_uniformMappedPtr->raytracingSettings.currentRayCount = currentRayCount;
 	
@@ -1467,6 +1469,8 @@ void RaytracingHandler::raytrace(VkCommandBuffer cmd, VulkanEngine* engine) {
 	writer2.write_image(3, engine->_gBuffer_Emissive.imageView, engine->_defaultSamplerNearest, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 	writer2.write_image(4, engine->_depthImage.imageView, engine->_defaultSamplerNearest, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 	writer2.write_image(5, engine->_colorHistory.imageView, engine->_defaultSamplerNearest, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+	writer2.write_image(6, engine->_directLighting.imageView, engine->_defaultSamplerNearest, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+	writer2.write_image(7, engine->_indirectLighting.imageView, engine->_defaultSamplerNearest, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 
 	writer2.update_set(engine->_device, engine->_gBufferDescriptors);
 	// Bind the ray tracing descriptor sets

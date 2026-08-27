@@ -41,7 +41,7 @@ LightSample sampleLightsPdf(vec3 hitPoint, inout uint seed,  int lightCount) {
 
     LightSource Ls = lights.l[i];
 
-    LightSample s = ProcessLight(hitPoint, seed, Ls); // Sample the light source
+    LightSample s = ProcessLight(hitPoint, seed, Ls, uni.raytracingSettings.forcePointLights != 0); // Sample the light source
 	// s.intensity = Ls.intensity;
     // s.pdf /= lightCount; // Scale the pdf by the light source pdf 
     return s;
@@ -225,4 +225,3 @@ void main()
 
 
 }
- 

@@ -118,8 +118,9 @@ glm::mat4 Camera::getProjectionMatrix() {
     }
     else if (isOrtographic) {
         glm::mat4 ortho = glm::orthoRH_ZO(-xMag, xMag, -yMag, yMag, zFar, zNear);
-        ortho[1, 1] *= -1.0f;
+        ortho[(1, 1)] *= -1.0f;
 
         return ortho;
     }
+    return glm::mat4(1);
 }

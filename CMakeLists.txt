@@ -46,6 +46,7 @@ file(GLOB_RECURSE GLSL_SOURCE_FILES
     "${PROJECT_SOURCE_DIR}/shaders/**/*.rint"
     "${PROJECT_SOURCE_DIR}/shaders/**/*.rahit"
     )
+file(GLOB_RECURSE GLSL_INCLUDE_FILES "${PROJECT_SOURCE_DIR}/shaders/common/*")
 
 
 # print current directory
@@ -58,7 +59,7 @@ foreach(GLSL ${GLSL_SOURCE_FILES})
     OUTPUT ${SPIRV}
     COMMAND ${CMAKE_COMMAND} -E env "VK_LAYER_DISABLES=VK_VALIDATION_FEATURE_DISABLE_SHADER_VALIDATION_CACHE_EXT"
             ${GLSL_VALIDATOR} -g --target-env vulkan1.3 -V ${GLSL} "${PROJECT_SOURCE_DIR}/myconfig.conf" -o ${SPIRV}
-    DEPENDS ${GLSL})
+    DEPENDS ${GLSL} ${GLSL_INCLUDE_FILES})
   list(APPEND SPIRV_BINARY_FILES ${SPIRV})
 endforeach(GLSL)
 

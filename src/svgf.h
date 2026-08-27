@@ -27,21 +27,20 @@ public:
     void draw_imgui();
 
 private:
+    struct Signal {
+        AllocatedImage illumination;
+        AllocatedImage prevIllumination;
+        AllocatedImage colorHistory;
+        AllocatedImage historyLength;
+        AllocatedImage prevHistoryLength;
+        AllocatedImage moments;
+        AllocatedImage prevMoments;
+    };
 
-    AllocatedImage illumination;
-    AllocatedImage prevIllumination;
-    AllocatedImage illuminationBlend;
-
-    AllocatedImage normalFWidthZWidth;
-    AllocatedImage prevNormalFWidthZWidth;
-    AllocatedImage historyLength;
-    AllocatedImage prevHistoryLength;
-    AllocatedImage moments;
-    AllocatedImage prevMoments;
+    Signal direct;
+    Signal indirect;
     AllocatedImage packedDepthNormal;
     AllocatedImage prevPackedDepthNormal;
-
-    AllocatedImage prevMetalRougness;
 
 
     VkPipeline m_packNormalDepthPipeline;
@@ -96,11 +95,11 @@ private:
     /// </summary>
     /// <param name="cmd"></param>
 
-    void Reprojection(VkCommandBuffer cmd, VulkanEngine* engine);
+    void Reprojection(VkCommandBuffer cmd, VulkanEngine* engine, Signal& signal, const AllocatedImage& input);
 
-    void FilterMoments(VkCommandBuffer cmd, VulkanEngine* engine);
+    void FilterMoments(VkCommandBuffer cmd, VulkanEngine* engine, Signal& signal);
 
-    void WaveletFilter(VkCommandBuffer cmd, VulkanEngine* engine);
+    void WaveletFilter(VkCommandBuffer cmd, VulkanEngine* engine, Signal& signal);
 
     void Modulate(VkCommandBuffer cmd, VulkanEngine* engine);
 

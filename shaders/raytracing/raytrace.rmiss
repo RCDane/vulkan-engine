@@ -7,6 +7,7 @@
 #include "../common/host_device.h"
 layout(location = 0) rayPayloadInEXT hitPayload prd;
 layout(set = 1, binding=4) uniform samplerCube cubeMap;
+layout(set = 1, binding = 0) uniform _GlobalUniforms { GlobalUniforms uni; };
 
 layout(push_constant) uniform _PushConstantRay
 {
@@ -15,7 +16,8 @@ layout(push_constant) uniform _PushConstantRay
 
 void main()
 {
-  prd.hitValue = pow(texture(cubeMap, normalize(gl_WorldRayDirectionEXT)).rgb, vec3(2.2));
+  prd.hitValue = pow(texture(cubeMap, normalize(gl_WorldRayDirectionEXT)).rgb, vec3(2.2))
+      * uni.raytracingSettings.environmentIntensity;
   prd.attenuation = vec3(1.0);
   
   prd.done = 1;

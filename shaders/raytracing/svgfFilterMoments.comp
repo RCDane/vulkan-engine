@@ -13,12 +13,26 @@ layout(set = 0, binding = 1, r8ui) uniform uimage2D prevHistoryLengthImage;
 layout(set = 0, binding = 2, rgba32f) uniform image2D packedNormalDepth;
 layout(set = 0, binding = 3, rg16f) uniform image2D Moments;
 layout(set = 0, binding = 4, rgba32f) writeonly uniform image2D filteredIllumination;
+layout(set = 0, binding = 5) uniform sampler2D depthTexture;
+layout(set = 0, binding = 6, r11f_g11f_b10f) readonly uniform image2D materialTexture;
 
  
 layout (local_size_x = 16, local_size_y = 16) in;
 
 float gPhiColor = 5;
 float gPhiNormal = 128.0;
+const float gSigmaDepth = 1.0;
+const float gDepthEpsilon = 1e-6;
+
+vec2 computeDepthGradient(ivec2 coord)
+{
+    const ivec2 maxCoord = textureSize(depthTexture, 0) - 1;
+    const float left = texelFetch(depthTexture, clamp(coord - ivec2(1, 0), ivec2(0), maxCoord), 0).r;
+    const float right = texelFetch(depthTexture, clamp(coord + ivec2(1, 0), ivec2(0), maxCoord), 0).r;
+    const float down = texelFetch(depthTexture, clamp(coord - ivec2(0, 1), ivec2(0), maxCoord), 0).r;
+    const float up = texelFetch(depthTexture, clamp(coord + ivec2(0, 1), ivec2(0), maxCoord), 0).r;
+    return 0.5 * vec2(right - left, up - down);
+}
 
 
 layout(push_constant ) uniform PushConstant { PushConstantImageSize pc; } PC;
@@ -41,16 +55,17 @@ void main(){
 
         const vec4 normalFZwidth = imageLoad(packedNormalDepth, coord);
         
-        float depth = normalFZwidth.x;
-        float zWidth = normalFZwidth.y;
+        float packedDepth = normalFZwidth.x;
 
-        if (depth < 0.0){
+        if (packedDepth < 0.0){
             imageStore(filteredIllumination, coord, illuminationCenter);
             return;
         }
 
         const vec3 normalCenter = oct_to_ndir_unorm(normalFZwidth.zw);
-        const float phiDepth = float(max(depth, 1e-5)*3.0);
+        const vec3 materialCenter = imageLoad(materialTexture, coord).rgb;
+        const float depthCenter = texelFetch(depthTexture, coord, 0).r;
+        const vec2 depthGradient = computeDepthGradient(coord);
 
         const int radius = 2; 
         for (int yy = -radius; yy <= radius; yy++)
@@ -69,15 +84,20 @@ void main(){
                     const vec2 momentsP = imageLoad(Moments, p).xy;
                     const float lIlluminationP = luminance(illuminationP.rgb);
                     const vec4 packedNormal = imageLoad(packedNormalDepth, p);
-                    const float zP = packedNormal.x;
+                    const float zP = texelFetch(depthTexture, p, 0).r;
                     const vec3 nP = oct_to_ndir_unorm(packedNormal.zw);
+                    const vec3 materialP = imageLoad(materialTexture, p).rgb;
+                    const vec2 pixelOffset = vec2(xx, yy);
+                    const float phiDepth = gSigmaDepth * abs(dot(depthGradient, pixelOffset)) + gDepthEpsilon;
 
                     const float w = computeWeight(
-                        depth,
+                        depthCenter,
                         zP,
-                        phiDepth * length(vec2(xx, yy)),
+                        phiDepth,
                         normalCenter,
                         nP,
+                        materialCenter,
+                        materialP,
                         gPhiNormal,
                         lIlluminationCenter,
                         lIlluminationP,
@@ -100,7 +120,7 @@ void main(){
         float variance = sumMoments.g - sumMoments.r * sumMoments.r;
 
         // give the variance a boost for the first frames
-        variance *= 4.0 / h;
+        // variance *= 4.0 / h;
 
         imageStore(filteredIllumination, coord, vec4(sumIllumination, variance.r));
     } else {

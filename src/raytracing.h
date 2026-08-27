@@ -139,6 +139,8 @@ public:
 	void cleanup(VkDevice device);
 	int currentRayCount = 0;
 	bool offlineMode = false;
+	bool forcePointLights = false;
+	float environmentIntensity = 1.0f;
 	int rayBudget = 1;
 };
 

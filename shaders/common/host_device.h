@@ -62,6 +62,9 @@ struct RaytracingSettings {
 	int currentRayCount;
 	uint seed;
 	int lightCount;
+	int forcePointLights;
+	float environmentIntensity;
+	float padding0;
 };
 
 struct FilteringSettings {

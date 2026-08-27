@@ -114,11 +114,12 @@ PBR_result CalculatePBRResult(
     float NdotL = max(dot(N, L), 0.0);
     vec3 diffuse_brdf  = kD * (albedo)/ PI;
 
-    vec3 outgoing = (diffuse_brdf  + specular) * radiance * NdotL;
+    vec3 combined = diffuse_brdf + specular;
+    vec3 outgoing = (combined) * radiance * NdotL;
 
     PBR_result res;
     res.color = outgoing;
-    res.f = diffuse_brdf  + specular; // BRDF is diffuse + specular
+    res.f = combined; // BRDF is diffuse + specular
     return res; 
 }
 

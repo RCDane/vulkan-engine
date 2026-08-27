@@ -189,14 +189,16 @@ struct LightSample {
 	float pdf;
 };
 
-LightSample ProcessLight(vec3 hitPoint, inout uint seed, LightSource Ls){
+LightSample ProcessLight(vec3 hitPoint, inout uint seed, LightSource Ls, bool forcePointLights){
     LightSample ls;
     ls.color = Ls.color.xyz;           // base color of the light
     ls.intensity = Ls.intensity;   // scalar intensity
 
-    if (Ls.type == 0) {
+    if (Ls.type == 0 || forcePointLights) {
 
-        vec3 samplePos = sampleSphere(Ls.position.xyz, Ls.radius, seed);
+        vec3 samplePos = forcePointLights
+            ? Ls.position.xyz
+            : sampleSphere(Ls.position.xyz, Ls.radius, seed);
 
         vec3 toLight   = samplePos - hitPoint;
         float dist     = length(toLight);
@@ -285,12 +287,16 @@ float computeWeight(
     float phiDepth,
     vec3 normalCenter,
     vec3 normalP,
+    vec3 materialCenter,
+    vec3 materialP,
     float phiNormal,
     float luminanceIllumCenter,
     float luminanceIllumP,
     float phiIllum
 )
 {
+    if ((materialCenter.g >= 0.5) != (materialP.g >= 0.5)) return 0.0;
+
     const float weightNormal = pow(clamp(dot(normalCenter, normalP), 0.0, 1.0), phiNormal);
     
     const float weightZ = (phiDepth == 0) ? 0.0f : abs(depthCenter - depthP) / phiDepth;

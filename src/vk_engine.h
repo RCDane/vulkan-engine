@@ -137,6 +137,9 @@ struct RaytracingSettings {
 	int currentRayCount;
 	uint32_t seed;
 	int lightCount;
+	int forcePointLights;
+	float environmentIntensity;
+	float padding0;
 };
 
 struct GlobalUniforms
@@ -302,6 +305,8 @@ public:
 
 	// History buffers
 	AllocatedImage _colorHistory;
+	AllocatedImage _directLighting;
+	AllocatedImage _indirectLighting;
 	AllocatedImage _depthHistory;
 
 

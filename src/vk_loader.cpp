@@ -201,18 +201,17 @@ VkSamplerMipmapMode extract_mipmap_mode(fastgltf::Filter filter)
 
 
 std::optional<Camera> loadCamera(fastgltf::Camera& camera) {
+    Camera newCamera;
+
     if (std::holds_alternative<fastgltf::Camera::Perspective>(camera.camera)) {
-        Camera newCamera;
         auto gltfCam = std::get< fastgltf::Camera::Perspective>(camera.camera);
         newCamera.isPerspective = true;
         newCamera.zFar = gltfCam.zfar.has_value() ? gltfCam.zfar.value() : 0.0f;
         newCamera.zNear = gltfCam.znear;
         newCamera.fov = gltfCam.yfov;
         newCamera.aspectRatio = gltfCam.aspectRatio.has_value() ? gltfCam.aspectRatio.value() : 1.0f;
-        return newCamera;
     }
     else if (std::holds_alternative<fastgltf::Camera::Orthographic>(camera.camera)) {
-        Camera newCamera;
         auto gltfCam = std::get< fastgltf::Camera::Orthographic>(camera.camera);
 
 
@@ -223,8 +222,9 @@ std::optional<Camera> loadCamera(fastgltf::Camera& camera) {
         newCamera.zFar = gltfCam.zfar;
         newCamera.zNear = gltfCam.znear;
 
-        return newCamera;
     }
+
+    return newCamera;
 }
 
 struct LightExtras {
@@ -234,6 +234,7 @@ struct LightExtras {
 //
 LightSource loadLight(fastgltf::Light light, Node *node, LightExtras extra) {
     LightSource newLight;
+	newLight.position = node->localTransform[3];
     if (light.type == fastgltf::LightType::Directional) {
         newLight.color = glm::vec3(light.color[0], light.color[1], light.color[2]);
         newLight.intensity = light.intensity ;
@@ -247,7 +248,6 @@ LightSource loadLight(fastgltf::Light light, Node *node, LightExtras extra) {
     else if (light.type == fastgltf::LightType::Point) {
         newLight.color = glm::vec3(light.color[0], light.color[1], light.color[2]);
         newLight.intensity = light.intensity / (4.0 * extra.radius * extra.radius);
-        newLight.position = node->localTransform[3];
         newLight.type = LightType::Point;
     }
     return newLight;
@@ -292,20 +292,22 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGltf(VulkanEngine* engine, std::s
             // Read "radius" if present
             if ((*extras)["radius"].get(elem) == simdjson::SUCCESS) {
                 double r;
-                elem.get_double().get(r);
-                LightExtras extra;
-                extra.radius = r;
-                vec->push_back(extra);
+                if (elem.get_double().get(r) == simdjson::SUCCESS) {
+                    LightExtras extra;
+                    extra.radius = r;
+                    vec->push_back(extra);
+                }
                 //(*vec)[objectIndex].radius = r;
             }
 
             // Read "sunAngle" if present
             if ((*extras)["sunAngle"].get(elem) == simdjson::SUCCESS) {
                 double a;
-                elem.get_double().get(a);
-                LightExtras extra;
-                extra.sunAngle = a;
-                vec->push_back(extra);
+                if (elem.get_double().get(a) == simdjson::SUCCESS) {
+                    LightExtras extra;
+                    extra.sunAngle = a;
+                    vec->push_back(extra);
+                }
             }
         };
 
@@ -320,7 +322,6 @@ std::optional<std::shared_ptr<LoadedGLTF>> loadGltf(VulkanEngine* engine, std::s
     constexpr auto gltfOptions =
         fastgltf::Options::DontRequireValidAssetMember |
         fastgltf::Options::AllowDouble |
-        fastgltf::Options::LoadGLBBuffers |
         fastgltf::Options::LoadExternalBuffers;
 
     

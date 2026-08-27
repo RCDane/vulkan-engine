@@ -14,8 +14,9 @@ layout (local_size_x = 128, local_size_y = 8) in;
 layout(set = 0, binding = 0, rgba32f) uniform image2D illuminationTexture;
 layout(set = 0, binding = 1, r8ui) uniform uimage2D prevHistoryLengthImage;
 layout(set = 0, binding = 2, rgba32f) uniform image2D packedNormalDepth;
-layout(set = 0, binding = 3, rgba16f) uniform image2D albedoTexture;
+layout(set = 0, binding = 3) uniform sampler2D depthTexture;
 layout(set = 0, binding = 4, rgba32f) uniform image2D outIllumination;
+layout(set = 0, binding = 5, r11f_g11f_b10f) readonly uniform image2D materialTexture;
 
 struct PushConstantAtrous {
     ivec2 imageSize;
@@ -23,6 +24,20 @@ struct PushConstantAtrous {
     float phiColor;
     float phiNormal;
 };
+
+const float gSigmaDepth = 1.0;
+const float gDepthEpsilon = 1e-6;
+
+vec2 computeDepthGradient(ivec2 coord)
+{
+    const ivec2 maxCoord = textureSize(depthTexture, 0) - 1;
+    const float left = texelFetch(depthTexture, clamp(coord - ivec2(1, 0), ivec2(0), maxCoord), 0).r;
+    const float right = texelFetch(depthTexture, clamp(coord + ivec2(1, 0), ivec2(0), maxCoord), 0).r;
+    const float down = texelFetch(depthTexture, clamp(coord - ivec2(0, 1), ivec2(0), maxCoord), 0).r;
+    const float up = texelFetch(depthTexture, clamp(coord + ivec2(0, 1), ivec2(0), maxCoord), 0).r;
+    return 0.5 * vec2(right - left, up - down);
+}
+
 float computeVarianceCenter(ivec2 ipos)
 {
     float sum = 0.f;
@@ -106,7 +121,6 @@ void main(){
     const vec4 packedND = imageLoad(packedNormalDepth, coord);
 
 
-    const float zWidth = packedND.y;
     if (packedND.x < 0.0){
         imageStore(outIllumination, coord, illuminationCenter);
         return;
@@ -114,13 +128,12 @@ void main(){
 
 
     const vec3 normalCenter = oct_to_ndir_unorm(packedND.zw);
+    const vec3 materialCenter = imageLoad(materialTexture, coord).rgb;
 
 
     const float phiLIllumination = PC.pc.phiColor * sqrt(max(0.0, epsV + variance));
-    const float phiDepth = float(max(packedND.x, 1e-7) * PC.pc.stepSize)*3.0;
-    
-
-    const float depthCenter = packedND.x;
+    const float depthCenter = texelFetch(depthTexture, coord, 0).r;
+    const vec2 depthGradient = computeDepthGradient(coord);
 
     float sumWIllumination = 1.0;
     vec4 sumIllumination = illuminationCenter;
@@ -141,17 +154,22 @@ void main(){
 
                     const float lIlluminationP = luminance(illuminationP.rgb);
                     const vec3 n = imageLoad(packedNormalDepth, p).xzw;
-                    const float zP = n.x;
+                    const float zP = texelFetch(depthTexture, p, 0).r;
 
                     const vec3 nP = oct_to_ndir_unorm(n.yz);
+                    const vec3 materialP = imageLoad(materialTexture, p).rgb;
+                    const vec2 pixelOffset = vec2(xx, yy) * float(PC.pc.stepSize);
+                    const float phiDepth = gSigmaDepth * abs(dot(depthGradient, pixelOffset)) + gDepthEpsilon;
 
                     // compute the edge-stopping functions
                     const float w = computeWeight( 
                         depthCenter,
                         zP,
-                        phiDepth * length(vec2(xx, yy)),
+                        phiDepth,
                         normalCenter,
                         nP,
+                        materialCenter,
+                        materialP,
                         PC.pc.phiNormal,
                         lIlluminationCenter,
                         lIlluminationP,

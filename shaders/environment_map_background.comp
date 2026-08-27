@@ -29,6 +29,7 @@ void main()
     if(texelCoord.x < size.x && texelCoord.y < size.y)
     {
     
-        imageStore(image, texelCoord, texture(cubeMap, direction.xyz));
+        imageStore(image, texelCoord, texture(cubeMap, direction.xyz)
+            * uni.raytracingSettings.environmentIntensity);
     }
 }

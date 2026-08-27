@@ -121,7 +121,7 @@ void VulkanEngine::init(std::string scene_path)
 	UIImageWriteSet.ongoing = false;
 	UIImageWriteSet.folder = "images/";
 
-	_cubeMap = load_cube_map(this, "assets/black_skybox");
+	_cubeMap = load_cube_map(this, "assets/skybox");
 
 	std::string sponzaPath = { scene_path };
 	auto sponzaFile = loadGltf(this, sponzaPath);
@@ -485,18 +485,10 @@ void VulkanEngine::draw()
 {
 
 	if (imagesBeingTransferred.size() > 0) {
+		// ponytail: screenshot export stalls the graphics queue; add a per-export fence if captures need to be asynchronous.
+		VK_CHECK(vkQueueWaitIdle(_graphicsQueue));
 		while (imagesBeingTransferred.size() > 0) {
 			auto buffer = imagesBeingTransferred.front();
-			uint64_t signalValue = 1;
-			uint64_t expectedValue;
-			VkSemaphoreWaitInfo waitInfo{ VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO };
-			waitInfo.semaphoreCount = 1;
-			waitInfo.pSemaphores = &buffer.copySemaphore;
-			waitInfo.pValues = &signalValue;
-
-			// block until the GPU has signaled value ≥ 1 (infinite timeout here):
-			vkWaitSemaphores(_device, &waitInfo, UINT64_MAX);
-
 
 			void* srcData = nullptr;
 			VkResult res = vmaMapMemory(_allocator, buffer.transferImage.allocation, &srcData);
@@ -649,6 +641,8 @@ void VulkanEngine::draw()
 		vkutil::transition_image(cmd, _depthImage.image, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_DEPTH_BIT);
 
 		vkutil::transition_image(cmd, _colorHistory.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
+		vkutil::transition_image(cmd, _directLighting.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
+		vkutil::transition_image(cmd, _indirectLighting.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
 		WaitAll(cmd);
 
 		_raytracingHandler.raytrace(cmd, this);
@@ -697,12 +691,6 @@ void VulkanEngine::draw()
 
 		currentImageWriteSet.currentCount++;
 
-		// Prepare the timeline semaphore submit info.
-
-
-
-		buffer.copySemaphore = submit_semaphores[swapchainImageIndex];
-
 		imagesBeingTransferred.push_back(buffer);
 	}
 
@@ -750,20 +738,7 @@ void VulkanEngine::draw()
 
 
 	VkSubmitInfo2 submit = vkinit::submit_info(&cmdinfo,&signalInfo,&waitInfo);	
-	if (StartImageTransfer) {
-
-		uint64_t signalValue = 1;
-
-		VkTimelineSemaphoreSubmitInfo timelineSubmitInfo = {};
-		timelineSubmitInfo.sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO;
-		timelineSubmitInfo.pNext = nullptr;
-		timelineSubmitInfo.waitSemaphoreValueCount = 0;
-		timelineSubmitInfo.pWaitSemaphoreValues = nullptr;
-		timelineSubmitInfo.signalSemaphoreValueCount = 1;
-		timelineSubmitInfo.pSignalSemaphoreValues = &signalValue;
-		submit.pNext = &timelineSubmitInfo;
-		StartImageTransfer = false;
-	}
+	StartImageTransfer = false;
 	//submit command buffer to the queue and execute it.
 	// _renderFence will now block until the graphic commands finish execution
 	VK_CHECK(vkQueueSubmit2(_graphicsQueue, 1, &submit, get_current_frame()._renderFence));
@@ -1338,6 +1313,12 @@ void VulkanEngine::run()
 		ImGui::Begin("Main");
 		ImGui::Checkbox("Use SVGF", &useSVGF);
 		ImGui::Checkbox("Accumulate", &accumulate);
+		if (ImGui::Checkbox("All lights as point lights", &_raytracingHandler.forcePointLights)) {
+			cameraMoved = true;
+		}
+		if (ImGui::DragFloat("Environment intensity", &_raytracingHandler.environmentIntensity, 0.01f, 0.0f, 100.0f)) {
+			cameraMoved = true;
+		}
 		ImGui::Text("Light samples:");
 		ImGui::InputInt("Direct ", & _raytracePushConstant.directionalLightSamples);
 		ImGui::InputInt("Indirect ", &_raytracePushConstant.indirectLightSamples);
@@ -1688,7 +1669,7 @@ void VulkanEngine::create_render_buffer(AllocatedImage& image, VkImageUsageFlags
 
 	VK_CHECK(vkCreateImageView(_device, &rview_info, nullptr, &image.imageView));
 
-	_mainDeletionQueue.push_function([=]() {
+	_mainDeletionQueue.push_function([=, this]() {
 		vkDestroyImageView(_device, image.imageView, nullptr);
 		vmaDestroyImage(_allocator, image.image, image.allocation);
 	});
@@ -1731,6 +1712,18 @@ void VulkanEngine::init_swapchain()
 	create_render_buffer(_colorHistory, drawImageUsages, VK_IMAGE_ASPECT_COLOR_BIT);
 	NameImage(_device, _colorHistory.image, "Color history");
 	NameImageView(_device, _colorHistory.imageView, "Color history View");
+
+	_directLighting.imageFormat = VK_FORMAT_R32G32B32A32_SFLOAT;
+	_directLighting.imageExtent = drawImageExtent;
+	create_render_buffer(_directLighting, drawImageUsages, VK_IMAGE_ASPECT_COLOR_BIT);
+	NameImage(_device, _directLighting.image, "Direct lighting");
+	NameImageView(_device, _directLighting.imageView, "Direct lighting View");
+
+	_indirectLighting.imageFormat = VK_FORMAT_R32G32B32A32_SFLOAT;
+	_indirectLighting.imageExtent = drawImageExtent;
+	create_render_buffer(_indirectLighting, drawImageUsages, VK_IMAGE_ASPECT_COLOR_BIT);
+	NameImage(_device, _indirectLighting.image, "Indirect lighting");
+	NameImageView(_device, _indirectLighting.imageView, "Indirect lighting View");
 
 
 
@@ -1857,7 +1850,7 @@ void VulkanEngine::init_commands()
 
 	VK_CHECK(vkAllocateCommandBuffers(_device, &cmdAllocInfo, &_immCommandBuffer));
 
-	_mainDeletionQueue.push_function([=]() { 
+	_mainDeletionQueue.push_function([=, this]() { 
 	vkDestroyCommandPool(_device, _immCommandPool, nullptr);
 	});
 
@@ -1876,7 +1869,7 @@ void VulkanEngine::init_sync_structures()
 		VK_CHECK(vkCreateSemaphore(_device, &semaphoreCreateInfo, nullptr, &_frames[i]._renderSemaphore));
 	}
 	VK_CHECK(vkCreateFence(_device, &fenceCreateInfo, nullptr, &_immFence));
-	_mainDeletionQueue.push_function([=]() { vkDestroyFence(_device, _immFence, nullptr); });
+	_mainDeletionQueue.push_function([=, this]() { vkDestroyFence(_device, _immFence, nullptr); });
 }
 
 
@@ -1954,6 +1947,8 @@ void VulkanEngine::init_descriptors(){
 		builder.add_binding(3, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, flags); // emissive
 		builder.add_binding(4, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, flags); // depth
 		builder.add_binding(5, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, flags); // color history
+		builder.add_binding(6, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, flags); // direct lighting
+		builder.add_binding(7, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, flags); // indirect lighting
 
 		_deferredDscSetLayout = builder.build(_device,
 			VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_FRAGMENT_BIT,
@@ -2252,7 +2247,7 @@ void VulkanEngine::init_imgui()
 	ImGui_ImplVulkan_CreateFontsTexture();
 
 	// add the destroy the imgui created structures
-	_mainDeletionQueue.push_function([=]() {
+	_mainDeletionQueue.push_function([=, this]() {
 		ImGui_ImplVulkan_Shutdown();
 		vkDestroyDescriptorPool(_device, imguiPool, nullptr);
 	});
@@ -3112,7 +3107,7 @@ void VulkanEngine::init_background_pipelines()
 
 	//destroy structures properly
 	vkDestroyShaderModule(_device, backgroundShader, nullptr);
-	_mainDeletionQueue.push_function([=]() {
+	_mainDeletionQueue.push_function([=, this]() {
 		vkDestroyPipelineLayout(_device, _environmentBackgroundLayout, nullptr);
 		vkDestroyPipeline(_device, _environmentBackgroundPipeline, nullptr);
 		});
@@ -3187,7 +3182,7 @@ void VulkanEngine::init_tonemapping_pipeline()
 
 	//destroy structures properly
 	vkDestroyShaderModule(_device, toneMappingShader, nullptr);
-	_mainDeletionQueue.push_function([=]() {
+	_mainDeletionQueue.push_function([=, this]() {
 		vkDestroyPipelineLayout(_device, _tonemappingLayout, nullptr);
 		vkDestroyPipeline(_device, _tonemappingPipeline, nullptr);
 		});

@@ -50,7 +50,7 @@ void SVGFHandler::create_reprojection_pipeline(VulkanEngine* engine) {
 
 	//destroy structures properly
 	vkDestroyShaderModule(engine->_device, toneMappingShader, nullptr);
-	engine->_mainDeletionQueue.push_function([=]() {
+	engine->_mainDeletionQueue.push_function([=, this]() {
 		vkDestroyPipelineLayout(engine->_device, m_reprojPipelineLayout, nullptr);
 		vkDestroyPipeline(engine->_device, m_reprojectionPipeline, nullptr);
 		});
@@ -100,7 +100,7 @@ void SVGFHandler::create_moments_filter_pipeline(VulkanEngine* engine) {
 
 	//destroy structures properly
 	vkDestroyShaderModule(engine->_device, momentsFilterShader, nullptr);
-	engine->_mainDeletionQueue.push_function([=]() {
+	engine->_mainDeletionQueue.push_function([=, this]() {
 		vkDestroyPipelineLayout(engine->_device, m_momentsFilterPipelineLayout, nullptr);
 		vkDestroyPipeline(engine->_device, m_momentsFilterPipeline, nullptr);
 		});
@@ -149,7 +149,7 @@ void SVGFHandler::create_wavelet_filter_pipeline(VulkanEngine* engine) {
 
 	//destroy structures properly
 	vkDestroyShaderModule(engine->_device, AtrousShader, nullptr);
-	engine->_mainDeletionQueue.push_function([=]() {
+	engine->_mainDeletionQueue.push_function([=, this]() {
 		vkDestroyPipelineLayout(engine->_device, m_atrousPipelineLayout, nullptr);
 		vkDestroyPipeline(engine->_device, m_atrousPipeline, nullptr);
 		});
@@ -161,6 +161,7 @@ void SVGFHandler::create_packing_pipeline(VulkanEngine* engine) {
 	builder.add_binding(0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE); // Output packed image
 	builder.add_binding(1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE); // Input normal
 	builder.add_binding(2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER); // Input depth
+	builder.add_binding(3, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE); // Input roughness/metallic material
 	m_packNormalDepthDscSetLayout = builder.build(engine->_device, VK_SHADER_STAGE_COMPUTE_BIT, NULL);
 	builder.clear();
 
@@ -195,7 +196,7 @@ void SVGFHandler::create_packing_pipeline(VulkanEngine* engine) {
 
 	//destroy structures properly
 	vkDestroyShaderModule(engine->_device, packingShader, nullptr);
-	engine->_mainDeletionQueue.push_function([=]() {
+	engine->_mainDeletionQueue.push_function([=, this]() {
 		vkDestroyPipelineLayout(engine->_device, m_NormalDepthPipelineLayout, nullptr);
 		vkDestroyPipeline(engine->_device, m_packNormalDepthPipeline, nullptr);
 		vkDestroyDescriptorSetLayout(engine->_device, m_packNormalDepthDscSetLayout, nullptr);
@@ -240,7 +241,7 @@ void SVGFHandler::create_modulate_pipeline(VulkanEngine* engine) {
 
 	//destroy structures properly
 	vkDestroyShaderModule(engine->_device, modulateShader, nullptr);
-	engine->_mainDeletionQueue.push_function([=]() {
+	engine->_mainDeletionQueue.push_function([=, this]() {
 		vkDestroyPipelineLayout(engine->_device, m_modulatePipelineLayout, nullptr);
 		vkDestroyPipeline(engine->_device, m_modulatePipeline, nullptr);
 		});
@@ -256,44 +257,35 @@ void SVGFHandler::create_frame_buffers(VulkanEngine* engine) {
 
 
 
-	illumination.imageFormat = VK_FORMAT_R32G32B32A32_SFLOAT;
-	illumination.imageExtent = extent;
+	for (Signal* signal : { &direct, &indirect }) {
+		signal->illumination.imageFormat = VK_FORMAT_R32G32B32A32_SFLOAT;
+		signal->illumination.imageExtent = extent;
+		engine->create_render_buffer(signal->illumination, transferUsages, VK_IMAGE_ASPECT_COLOR_BIT);
 
+		signal->prevIllumination.imageFormat = VK_FORMAT_R32G32B32A32_SFLOAT;
+		signal->prevIllumination.imageExtent = extent;
+		engine->create_render_buffer(signal->prevIllumination, transferUsages, VK_IMAGE_ASPECT_COLOR_BIT);
 
+		signal->colorHistory.imageFormat = VK_FORMAT_R32G32B32A32_SFLOAT;
+		signal->colorHistory.imageExtent = extent;
+		engine->create_render_buffer(signal->colorHistory, transferUsages, VK_IMAGE_ASPECT_COLOR_BIT);
 
-	engine->create_render_buffer(illumination, transferUsages, VK_IMAGE_ASPECT_COLOR_BIT);
+		signal->historyLength.imageFormat = VK_FORMAT_R8_UINT;
+		signal->historyLength.imageExtent = extent;
+		engine->create_render_buffer(signal->historyLength, transferUsages, VK_IMAGE_ASPECT_COLOR_BIT);
 
-	illuminationBlend.imageFormat = VK_FORMAT_R32G32B32A32_SFLOAT;
-	illuminationBlend.imageExtent = extent;
+		signal->prevHistoryLength.imageFormat = VK_FORMAT_R8_UINT;
+		signal->prevHistoryLength.imageExtent = extent;
+		engine->create_render_buffer(signal->prevHistoryLength, transferUsages, VK_IMAGE_ASPECT_COLOR_BIT);
 
+		signal->moments.imageFormat = VK_FORMAT_R16G16_SFLOAT;
+		signal->moments.imageExtent = extent;
+		engine->create_render_buffer(signal->moments, transferUsages, VK_IMAGE_ASPECT_COLOR_BIT);
 
-
-	engine->create_render_buffer(illuminationBlend, transferUsages, VK_IMAGE_ASPECT_COLOR_BIT);
-
-
-	prevHistoryLength.imageFormat = VK_FORMAT_R8_UINT;
-	prevHistoryLength.imageExtent = extent;
-	engine->create_render_buffer(prevHistoryLength, transferUsages, VK_IMAGE_ASPECT_COLOR_BIT);
-
-	historyLength.imageFormat = VK_FORMAT_R8_UINT;
-	historyLength.imageExtent = extent;
-	engine->create_render_buffer(historyLength, transferUsages, VK_IMAGE_ASPECT_COLOR_BIT);
-
-
-	prevIllumination.imageFormat = VK_FORMAT_R32G32B32A32_SFLOAT;
-	prevIllumination.imageExtent = extent;
-
-	engine->create_render_buffer(prevIllumination, transferUsages, VK_IMAGE_ASPECT_COLOR_BIT);
-
-
-	moments.imageFormat = VK_FORMAT_R16G16_SFLOAT;
-	moments.imageExtent = extent;
-
-	engine->create_render_buffer(moments, transferUsages, VK_IMAGE_ASPECT_COLOR_BIT);
-
-	prevMoments.imageFormat = VK_FORMAT_R16G16_SFLOAT;
-	prevMoments.imageExtent = extent;
-	engine->create_render_buffer(prevMoments, transferUsages, VK_IMAGE_ASPECT_COLOR_BIT);
+		signal->prevMoments.imageFormat = VK_FORMAT_R16G16_SFLOAT;
+		signal->prevMoments.imageExtent = extent;
+		engine->create_render_buffer(signal->prevMoments, transferUsages, VK_IMAGE_ASPECT_COLOR_BIT);
+	}
 
 	packedDepthNormal.imageFormat = VK_FORMAT_R32G32B32A32_SFLOAT;
 	packedDepthNormal.imageExtent = extent;
@@ -310,7 +302,7 @@ void SVGFHandler::create_descriptors(VulkanEngine* engine) {
 
 	builder.add_binding(0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE); // normalDepth
 	builder.add_binding(1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE); // albedo
-	builder.add_binding(2, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE); // prevIllumination
+	builder.add_binding(2, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE); // first-pass color history
 	builder.add_binding(3, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE); // prevnormalDepth
 	builder.add_binding(4, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE); // prevHistoryLength
 	builder.add_binding(5, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE); // prevMoments
@@ -329,7 +321,8 @@ void SVGFHandler::create_descriptors(VulkanEngine* engine) {
 	builder.add_binding(2, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE); // normalDpeth
 	builder.add_binding(3, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE); // moments
 	builder.add_binding(4, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE); // color (debug)
-	builder.add_binding(5, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE); // color (debug)
+	builder.add_binding(5, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER); // clip-space depth
+	builder.add_binding(6, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE); // roughness/metallic material
 
 
 	m_momentsFilterDscSetLayout = builder.build(engine->_device, VK_SHADER_STAGE_COMPUTE_BIT, NULL);
@@ -339,9 +332,9 @@ void SVGFHandler::create_descriptors(VulkanEngine* engine) {
 	builder.add_binding(0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE); // Illumination
 	builder.add_binding(1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE); // history
 	builder.add_binding(2, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE); // normalDepth
-	builder.add_binding(3, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE); // albedo
+	builder.add_binding(3, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER); // clip-space depth
 	builder.add_binding(4, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE); // color (debug)
-	builder.add_binding(5, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE); // color (debug)
+	builder.add_binding(5, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE); // roughness/metallic material
 
 
 
@@ -349,17 +342,18 @@ void SVGFHandler::create_descriptors(VulkanEngine* engine) {
 	m_atrousDscSetLayout = builder.build(engine->_device, VK_SHADER_STAGE_COMPUTE_BIT, NULL);
 	builder.clear();
 
-	// modulate
-	builder.add_binding(0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE); // Illumination
-	builder.add_binding(1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE); // history
-	builder.add_binding(2, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE); // normalDepth
+	// Compose denoised direct and indirect lighting.
+	builder.add_binding(0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE); // direct illumination
+	builder.add_binding(1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE); // indirect illumination
+	builder.add_binding(2, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE); // albedo
+	builder.add_binding(3, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE); // output
 
 
 
 	m_modulateDscSetLayout = builder.build(engine->_device, VK_SHADER_STAGE_COMPUTE_BIT, NULL);
 	
 	
-	engine->_mainDeletionQueue.push_function([=]() {
+	engine->_mainDeletionQueue.push_function([=, this]() {
 		vkDestroyDescriptorSetLayout(engine->_device, m_reprojDscSetLayout, nullptr);
 		vkDestroyDescriptorSetLayout(engine->_device, m_momentsFilterDscSetLayout, nullptr);
 		vkDestroyDescriptorSetLayout(engine->_device, m_atrousDscSetLayout, nullptr);
@@ -383,31 +377,31 @@ SVGFHandler::SVGFHandler(VulkanEngine* engine, VkExtent2D extent) {
 	init(engine, extent);
 }
 
-void SVGFHandler::Reprojection(VkCommandBuffer cmd, VulkanEngine* engine) {
+void SVGFHandler::Reprojection(VkCommandBuffer cmd, VulkanEngine* engine, Signal& signal, const AllocatedImage& input) {
 
 
 
 
 	vkutil::transition_image(cmd, packedDepthNormal.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
-	vkutil::transition_image(cmd, illuminationBlend.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
-	vkutil::transition_image(cmd, prevHistoryLength.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
-	vkutil::transition_image(cmd, historyLength.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
-	vkutil::transition_image(cmd, prevMoments.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
-	vkutil::transition_image(cmd, moments.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
+	vkutil::transition_image(cmd, signal.prevHistoryLength.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
+	vkutil::transition_image(cmd, signal.historyLength.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
+	vkutil::transition_image(cmd, signal.prevMoments.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
+	vkutil::transition_image(cmd, signal.moments.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
+	vkutil::transition_image(cmd, signal.colorHistory.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
 	vkutil::transition_image(cmd, prevPackedDepthNormal.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
 	vkutil::transition_image(cmd, engine->_depthImage.image, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_ASPECT_DEPTH_BIT);
 
 
 
 
-	vkutil::transition_image(cmd, engine->_colorHistory.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_ASPECT_COLOR_BIT);
+	vkutil::transition_image(cmd, input.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_ASPECT_COLOR_BIT);
 
-	vkutil::transition_image(cmd, illumination.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_ASPECT_COLOR_BIT);
-	vkutil::copy_image_to_image(cmd, engine->_colorHistory.image, illumination.image, engine->_windowExtent, engine->_windowExtent);
+	vkutil::transition_image(cmd, signal.illumination.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_ASPECT_COLOR_BIT);
+	vkutil::copy_image_to_image(cmd, input.image, signal.illumination.image, engine->_windowExtent, engine->_windowExtent);
 	
-	vkutil::transition_image(cmd, engine->_colorHistory.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
+	vkutil::transition_image(cmd, input.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
 
-	vkutil::transition_image(cmd, illumination.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
+	vkutil::transition_image(cmd, signal.illumination.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
 
 
 	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_reprojectionPipeline);
@@ -423,14 +417,14 @@ void SVGFHandler::Reprojection(VkCommandBuffer cmd, VulkanEngine* engine) {
 	DescriptorWriter writer;
 	writer.write_image(0, packedDepthNormal.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 	writer.write_image(1, engine->_gBuffer_albedo.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
-	writer.write_image(2, illuminationBlend.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);	
+	writer.write_image(2, signal.colorHistory.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 	writer.write_image(3, prevPackedDepthNormal.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
-	writer.write_image(4, prevHistoryLength.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
-	writer.write_image(5, prevMoments.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
-	writer.write_image(6, illumination.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+	writer.write_image(4, signal.prevHistoryLength.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+	writer.write_image(5, signal.prevMoments.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+	writer.write_image(6, signal.illumination.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 	writer.write_image(7, engine->_depthImage.imageView, engine->_defaultSamplerNearest, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
-	writer.write_image(8, historyLength.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
-	writer.write_image(9, moments.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+	writer.write_image(8, signal.historyLength.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+	writer.write_image(9, signal.moments.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 
 
 
@@ -462,25 +456,28 @@ void SVGFHandler::Reprojection(VkCommandBuffer cmd, VulkanEngine* engine) {
 }
 
 
-void SVGFHandler::FilterMoments(VkCommandBuffer cmd, VulkanEngine* engine) {
+void SVGFHandler::FilterMoments(VkCommandBuffer cmd, VulkanEngine* engine, Signal& signal) {
 
 
-	vkutil::transition_image(cmd, illumination.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
-	vkutil::transition_image(cmd, historyLength.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
+	vkutil::transition_image(cmd, signal.illumination.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
+	vkutil::transition_image(cmd, signal.historyLength.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
 	vkutil::transition_image(cmd, packedDepthNormal.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
-	vkutil::transition_image(cmd, moments.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
-	vkutil::transition_image(cmd, prevIllumination.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
+	vkutil::transition_image(cmd, signal.moments.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
+	vkutil::transition_image(cmd, signal.prevIllumination.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
+	vkutil::transition_image(cmd, engine->_gBuffer_metallicRoughnes.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
 
 	
 
 	VkDescriptorSet globalDescriptor = engine->get_current_frame()._frameDescriptors.allocate(engine->_device, m_momentsFilterDscSetLayout);
 
 	DescriptorWriter writer;
-	writer.write_image(0, illumination.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
-	writer.write_image(1, historyLength.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+	writer.write_image(0, signal.illumination.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+	writer.write_image(1, signal.historyLength.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 	writer.write_image(2, packedDepthNormal.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
-	writer.write_image(3, moments.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
-	writer.write_image(4, prevIllumination.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+	writer.write_image(3, signal.moments.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+	writer.write_image(4, signal.prevIllumination.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+	writer.write_image(5, engine->_depthImage.imageView, engine->_defaultSamplerNearest, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+	writer.write_image(6, engine->_gBuffer_metallicRoughnes.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 
 
 
@@ -502,20 +499,17 @@ void SVGFHandler::FilterMoments(VkCommandBuffer cmd, VulkanEngine* engine) {
 
 	// execute the compute pipeline dispatch. We are using 16x16 workgroup size so we need to divide by it
 	vkCmdDispatch(cmd, (engine->_windowExtent.width + 15) / 16, (engine->_windowExtent.height + 15) / 16, 1);
-	std::swap(illumination, prevIllumination);
+	std::swap(signal.illumination, signal.prevIllumination);
 }
 
 
 
-void SVGFHandler::WaveletFilter(VkCommandBuffer cmd, VulkanEngine* engine) {
-
-
-
+void SVGFHandler::WaveletFilter(VkCommandBuffer cmd, VulkanEngine* engine, Signal& signal) {
+	vkutil::transition_image(cmd, engine->_gBuffer_metallicRoughnes.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
 
 
 
 	std::vector<VkImageLayout> oldLayouts = {
-		VK_IMAGE_LAYOUT_GENERAL, 
 		VK_IMAGE_LAYOUT_GENERAL, 
 		VK_IMAGE_LAYOUT_GENERAL, 
 		VK_IMAGE_LAYOUT_GENERAL, 
@@ -524,15 +518,13 @@ void SVGFHandler::WaveletFilter(VkCommandBuffer cmd, VulkanEngine* engine) {
 		VK_IMAGE_LAYOUT_GENERAL,
 		VK_IMAGE_LAYOUT_GENERAL,
 		VK_IMAGE_LAYOUT_GENERAL,
-		VK_IMAGE_LAYOUT_GENERAL,
 		VK_IMAGE_LAYOUT_GENERAL };
 
 	std::vector<VkImage> images{
-		illumination.image,
-		historyLength.image,
+		signal.illumination.image,
+		signal.historyLength.image,
 		packedDepthNormal.image,
-		engine->_gBuffer_albedo.image,
-		prevIllumination.image
+		signal.prevIllumination.image
 	};
 
 
@@ -543,8 +535,8 @@ void SVGFHandler::WaveletFilter(VkCommandBuffer cmd, VulkanEngine* engine) {
 
 
 
-	AllocatedImage illuminationIn = illumination;
-	AllocatedImage illuminationOut = prevIllumination;
+	AllocatedImage illuminationIn = signal.illumination;
+	AllocatedImage illuminationOut = signal.prevIllumination;
 
 	int iterations = 4;
 
@@ -555,15 +547,14 @@ void SVGFHandler::WaveletFilter(VkCommandBuffer cmd, VulkanEngine* engine) {
 
 		DescriptorWriter writer;
 		writer.write_image(0, illuminationIn.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
-		writer.write_image(1, historyLength.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+		writer.write_image(1, signal.historyLength.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 		writer.write_image(2, packedDepthNormal.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
-		writer.write_image(3, engine->_gBuffer_albedo.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+		writer.write_image(3, engine->_depthImage.imageView, engine->_defaultSamplerNearest, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 		writer.write_image(4, illuminationOut.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+		writer.write_image(5, engine->_gBuffer_metallicRoughnes.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 
 		writer.update_set(engine->_device, globalDescriptor);
 
-
-		std::swap(illuminationIn, illuminationOut);
 
 		vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_atrousPipeline);
 
@@ -582,16 +573,13 @@ void SVGFHandler::WaveletFilter(VkCommandBuffer cmd, VulkanEngine* engine) {
 
 		vkCmdDispatch(cmd, (engine->_windowExtent.width + 127) / 128, (engine->_windowExtent.height + 7) / 8, 1);
 		if (i == 0) {
-
 			vkutil::transition_image(cmd, illuminationOut.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_ASPECT_COLOR_BIT);
-
-			vkutil::transition_image(cmd, illuminationBlend.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_ASPECT_COLOR_BIT);
-			vkutil::copy_image_to_image(cmd, illuminationOut.image, illuminationBlend.image, engine->_windowExtent, engine->_windowExtent);
+			vkutil::transition_image(cmd, signal.colorHistory.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_ASPECT_COLOR_BIT);
+			vkutil::copy_image_to_image(cmd, illuminationOut.image, signal.colorHistory.image, engine->_windowExtent, engine->_windowExtent);
 			vkutil::transition_image(cmd, illuminationOut.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
-			vkutil::transition_image(cmd, illuminationBlend.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
-
-
+			vkutil::transition_image(cmd, signal.colorHistory.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
 		}
+		std::swap(illuminationIn, illuminationOut);
 		if (i != iterations)
 			vkutil::transition_images_together(cmd, images, newLayouts, newLayouts);
 
@@ -611,8 +599,8 @@ void SVGFHandler::WaveletFilter(VkCommandBuffer cmd, VulkanEngine* engine) {
 	vkutil::transition_image(cmd, prevPackedDepthNormal.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
 
 
-	illumination = illuminationIn;
-	prevIllumination = illuminationOut;
+	signal.illumination = illuminationIn;
+	signal.prevIllumination = illuminationOut;
 }
 
 
@@ -635,13 +623,20 @@ void SVGFHandler::calculate_memory_footprint(VulkanEngine* engine) {
         const AllocatedImage* img;
     };
     std::vector<ImageInfo> images = {
-		{"illumination", &illumination},
-		{"prevIllumination", &prevIllumination},
-		{"illuminationBlend", &illuminationBlend},
-		{"historyLength", &historyLength},
-		{"prevHistoryLength", &prevHistoryLength},
-		{"moments", &moments},
-		{"prevMoments", &prevMoments},
+		{"direct illumination", &direct.illumination},
+		{"direct previous illumination", &direct.prevIllumination},
+		{"direct color history", &direct.colorHistory},
+		{"direct history length", &direct.historyLength},
+		{"direct previous history length", &direct.prevHistoryLength},
+		{"direct moments", &direct.moments},
+		{"direct previous moments", &direct.prevMoments},
+		{"indirect illumination", &indirect.illumination},
+		{"indirect previous illumination", &indirect.prevIllumination},
+		{"indirect color history", &indirect.colorHistory},
+		{"indirect history length", &indirect.historyLength},
+		{"indirect previous history length", &indirect.prevHistoryLength},
+		{"indirect moments", &indirect.moments},
+		{"indirect previous moments", &indirect.prevMoments},
 		{"packedDepthNormal", &packedDepthNormal},
 		{"prevPackedDepthNormal", &prevPackedDepthNormal},
     };
@@ -676,7 +671,8 @@ void SVGFHandler::draw_imgui() {
 }
 
 void SVGFHandler::Modulate(VkCommandBuffer cmd, VulkanEngine* engine) {
-	vkutil::transition_image(cmd, illumination.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
+	vkutil::transition_image(cmd, direct.illumination.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
+	vkutil::transition_image(cmd, indirect.illumination.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
 	vkutil::transition_image(cmd, engine->_gBuffer_albedo.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
 	vkutil::transition_image(cmd, engine->_colorHistory.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
 
@@ -684,9 +680,10 @@ void SVGFHandler::Modulate(VkCommandBuffer cmd, VulkanEngine* engine) {
 	VkDescriptorSet globalDescriptor = engine->get_current_frame()._frameDescriptors.allocate(engine->_device, m_modulateDscSetLayout);
 
 	DescriptorWriter writer;
-	writer.write_image(0, illumination.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
-	writer.write_image(1, engine->_gBuffer_albedo.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
-	writer.write_image(2, engine->_colorHistory.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+	writer.write_image(0, direct.illumination.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+	writer.write_image(1, indirect.illumination.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+	writer.write_image(2, engine->_gBuffer_albedo.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+	writer.write_image(3, engine->_colorHistory.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 
 	writer.update_set(engine->_device, globalDescriptor);
 
@@ -702,15 +699,17 @@ void SVGFHandler::Modulate(VkCommandBuffer cmd, VulkanEngine* engine) {
 // Add function to execute the packing pass
 void SVGFHandler::PackNormalDepth(VkCommandBuffer cmd, VulkanEngine* engine) {
 	// Transition output image to general layout
-	vkutil::transition_image(cmd, packedDepthNormal.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
-	vkutil::transition_image(cmd, engine->_gBuffer_normal.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
-	vkutil::transition_image(cmd, engine->_depthImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_ASPECT_DEPTH_BIT);
+    vkutil::transition_image(cmd, packedDepthNormal.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
+    vkutil::transition_image(cmd, engine->_gBuffer_normal.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
+    vkutil::transition_image(cmd, engine->_gBuffer_metallicRoughnes.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
+    vkutil::transition_image(cmd, engine->_depthImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_ASPECT_DEPTH_BIT);
 
     VkDescriptorSet descriptorSet = engine->get_current_frame()._frameDescriptors.allocate(engine->_device, m_packNormalDepthDscSetLayout);
     DescriptorWriter writer;
     writer.write_image(0, packedDepthNormal.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
     writer.write_image(1, engine->_gBuffer_normal.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
     writer.write_image(2, engine->_depthImage.imageView, engine->_defaultSamplerNearest, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+    writer.write_image(3, engine->_gBuffer_metallicRoughnes.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
     writer.update_set(engine->_device, descriptorSet);
 
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_packNormalDepthPipeline);
@@ -720,12 +719,18 @@ void SVGFHandler::PackNormalDepth(VkCommandBuffer cmd, VulkanEngine* engine) {
 }
 
 void SVGFHandler::Execute(VkCommandBuffer cmd, VulkanEngine *engine) {
+	if (engine->cameraMoved) {
+		initialized = false;
+	}
+
 	if (!initialized) {
 		const VkClearColorValue clearValue{};
 		const VkImageSubresourceRange clearRange = vkinit::image_subresource_range(VK_IMAGE_ASPECT_COLOR_BIT);
 		const VkImage images[] = {
-			illumination.image, prevIllumination.image, illuminationBlend.image,
-			historyLength.image, prevHistoryLength.image, moments.image, prevMoments.image,
+			direct.illumination.image, direct.prevIllumination.image, direct.colorHistory.image,
+			direct.historyLength.image, direct.prevHistoryLength.image, direct.moments.image, direct.prevMoments.image,
+			indirect.illumination.image, indirect.prevIllumination.image, indirect.colorHistory.image,
+			indirect.historyLength.image, indirect.prevHistoryLength.image, indirect.moments.image, indirect.prevMoments.image,
 			packedDepthNormal.image, prevPackedDepthNormal.image
 		};
 		for (VkImage image : images) {
@@ -742,22 +747,27 @@ void SVGFHandler::Execute(VkCommandBuffer cmd, VulkanEngine *engine) {
 	vkCmdWriteTimestamp(cmd, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, engine->_timestampQueryPool, engine->get_current_frame()._depthNormalEnd);
 
 	vkCmdWriteTimestamp(cmd, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, engine->_timestampQueryPool, engine->get_current_frame()._reprojectionStart);
-	Reprojection(cmd, engine);
+	Reprojection(cmd, engine, direct, engine->_directLighting);
+	Reprojection(cmd, engine, indirect, engine->_indirectLighting);
 	vkCmdWriteTimestamp(cmd, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, engine->_timestampQueryPool, engine->get_current_frame()._reprojectionEnd);
 
 	vkCmdWriteTimestamp(cmd, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, engine->_timestampQueryPool, engine->get_current_frame()._FilterMomentsStart);
 
-	FilterMoments(cmd,engine);
+	FilterMoments(cmd, engine, direct);
+	FilterMoments(cmd, engine, indirect);
 	vkCmdWriteTimestamp(cmd, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, engine->_timestampQueryPool, engine->get_current_frame()._FilterMomentsEnd);
 	vkCmdWriteTimestamp(cmd, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, engine->_timestampQueryPool, engine->get_current_frame()._waveletStart);
-	WaveletFilter(cmd,engine);
+	WaveletFilter(cmd, engine, direct);
+	WaveletFilter(cmd, engine, indirect);
 	vkCmdWriteTimestamp(cmd, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, engine->_timestampQueryPool, engine->get_current_frame()._waveletEnd);
 	vkCmdWriteTimestamp(cmd, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, engine->_timestampQueryPool, engine->get_current_frame()._modulateStart);
 
 	Modulate(cmd, engine);
 	vkCmdWriteTimestamp(cmd, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, engine->_timestampQueryPool, engine->get_current_frame()._modulateEnd);
-	std::swap(historyLength, prevHistoryLength);
-	std::swap(moments, prevMoments);
+	std::swap(direct.historyLength, direct.prevHistoryLength);
+	std::swap(direct.moments, direct.prevMoments);
+	std::swap(indirect.historyLength, indirect.prevHistoryLength);
+	std::swap(indirect.moments, indirect.prevMoments);
 
 }
 

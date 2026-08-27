@@ -59,7 +59,6 @@ struct AllocatedBuffer {
 
 struct TransferBuffer {
     AllocatedBuffer transferImage;
-    VkSemaphore copySemaphore;
     std::string name;
 };
 
@@ -241,4 +240,3 @@ struct MeshNode : public Node {
 
 	virtual void Draw(const glm::mat4& topMatrix, DrawContext& ctx) override;
 };
-
