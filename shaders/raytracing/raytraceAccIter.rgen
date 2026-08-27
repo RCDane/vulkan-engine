@@ -23,7 +23,7 @@ layout(set = 2, binding = 0, rgba16f) readonly uniform image2D albedo;
 layout(set = 2, binding = 1, rgba16f) readonly uniform image2D normal; 
 layout(set = 2, binding = 2, r11f_g11f_b10f) readonly uniform image2D material;
 layout(set = 2, binding = 3, rgba32f) readonly uniform image2D emission; 
-layout(set = 2, binding = 4, r32f) readonly uniform image2D depth; 
+layout(set = 2, binding = 4) uniform sampler2D depth;
 layout(set = 2, binding = 5, rgba32f) uniform image2D colorHistory; 
 layout(set = 3, binding = 0, std430) readonly buffer LightSources {LightSource l[]; } lights; 
 
@@ -157,7 +157,7 @@ void main()
   vec4 target    = uni.projInverse * vec4(d.x, d.y, 1, 1);
   vec4 direction = uni.viewInverse * vec4(normalize(target.xyz), 0);
 
-  double currentDepth = imageLoad(depth, ivec2(gl_LaunchIDEXT.xy)).r;
+  double currentDepth = texelFetch(depth, ivec2(gl_LaunchIDEXT.xy), 0).r;
   if (currentDepth == 0.0) {
     imageStore(colorHistory, ivec2(gl_LaunchIDEXT.xy), vec4(0.0, 0.0, 0.0, 1.0));
     return; // If there is no depth, then nothing has been rendered here.

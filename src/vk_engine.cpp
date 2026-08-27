@@ -257,6 +257,9 @@ void VulkanEngine::cleanup()
 
 		for (auto& mesh : testMeshes) {
 			destroy_buffer(mesh->meshBuffers.indexBuffer);
+			if (mesh->meshBuffers.indexBufferRaytracing.buffer) {
+				destroy_buffer(mesh->meshBuffers.indexBufferRaytracing);
+			}
 			destroy_buffer(mesh->meshBuffers.vertexBuffer);
 		}
 
@@ -264,7 +267,6 @@ void VulkanEngine::cleanup()
 
 
 		_mainDeletionQueue.flush();
-		vkDestroyQueryPool(_device, _timestampQueryPool, nullptr);
         destroy_swapchain();
 
 		vkDestroySurfaceKHR(_instance, _surface, nullptr);
@@ -580,7 +582,7 @@ void VulkanEngine::draw()
 	currentFrame._depthNormalEnd = currentFrame._queryStart + 11;
 	int query_count = 2;
 	if (useSVGF) {
-		query_count = 10;
+		query_count = QUERIES_PER_FRAME;
 	}
 
 
@@ -1477,6 +1479,7 @@ void VulkanEngine::init_vulkan()
 	
     features.synchronization2 = true;
 	features.privateData = true;
+	features.shaderDemoteToHelperInvocation = true;
 	
 
     VkPhysicalDeviceVulkan12Features features12{ .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES };
@@ -1497,7 +1500,7 @@ void VulkanEngine::init_vulkan()
 	features12.timelineSemaphore = true;
 	
 	VkPhysicalDeviceShaderClockFeaturesKHR shaderClockFeatures{ .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_CLOCK_FEATURES_KHR };
-	shaderClockFeatures.shaderSubgroupClock = true;
+	shaderClockFeatures.shaderDeviceClock = true;
 
 	VkPhysicalDeviceVulkan11Features features11{ .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES };
 	features11.storageBuffer16BitAccess = true;
@@ -1542,6 +1545,7 @@ void VulkanEngine::init_vulkan()
 		.add_required_extension("VK_KHR_acceleration_structure")
 		.add_required_extension("VK_KHR_buffer_device_address")
 		.add_required_extension("VK_KHR_push_descriptor")
+		.add_required_extension("VK_KHR_shader_clock")
 
 		.add_required_extension_features(rayQueryFeatures)
 		.add_required_extension_features(localreadfeatures)
@@ -1882,7 +1886,7 @@ void VulkanEngine::init_descriptors(){
 		{ VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 10 },
 		{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 30 }
 		,
-		{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 100},
+		{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 101},
 		{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 100 },
 		{ VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, 3}
 	};
@@ -1948,7 +1952,7 @@ void VulkanEngine::init_descriptors(){
 		builder.add_binding(1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, flags); // normal
 		builder.add_binding(2, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, flags); // metallic rougness
 		builder.add_binding(3, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, flags); // emissive
-		builder.add_binding(4, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, flags); // emissive
+		builder.add_binding(4, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, flags); // depth
 		builder.add_binding(5, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, flags); // color history
 
 		_deferredDscSetLayout = builder.build(_device,
@@ -2530,10 +2534,11 @@ void VulkanEngine::init_default_data(){
 		vkDestroySampler(_device,_defaultSamplerNearest,nullptr);
 		vkDestroySampler(_device,_defaultSamplerLinear,nullptr);
 
-		destroy_image(_whiteImage);
-		destroy_image(_greyImage);
-		destroy_image(_blackImage);
-		destroy_image(_errorCheckerboardImage);
+			destroy_image(_whiteImage);
+			destroy_image(_greyImage);
+			destroy_image(_blackImage);
+			destroy_image(_defaultNormalMap);
+			destroy_image(_errorCheckerboardImage);
 	});
 
 	

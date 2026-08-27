@@ -363,7 +363,7 @@ void SVGFHandler::create_descriptors(VulkanEngine* engine) {
 		vkDestroyDescriptorSetLayout(engine->_device, m_reprojDscSetLayout, nullptr);
 		vkDestroyDescriptorSetLayout(engine->_device, m_momentsFilterDscSetLayout, nullptr);
 		vkDestroyDescriptorSetLayout(engine->_device, m_atrousDscSetLayout, nullptr);
-		vkDestroyDescriptorSetLayout(engine->_device, m_packNormalDepthDscSetLayout, nullptr);
+		vkDestroyDescriptorSetLayout(engine->_device, m_modulateDscSetLayout, nullptr);
 		});
 }
 

@@ -30,7 +30,7 @@ struct MeshAsset {
     std::string name;
 
     std::vector<GeoSurface> surfaces;
-    GPUMeshBuffers meshBuffers;
+    GPUMeshBuffers meshBuffers{};
 };
 
 //forward declaration
@@ -52,9 +52,9 @@ struct LoadedGLTF : public IRenderable {
     std::shared_ptr<Camera> camera = NULL;
     DescriptorAllocatorGrowable descriptorPool;
 
-    AllocatedBuffer materialDataBuffer;
+    AllocatedBuffer materialDataBuffer{};
 
-    VulkanEngine* creator;
+    VulkanEngine* creator = nullptr;
 
 	glm::mat4 rootTransform = glm::mat4(1.0f);
 

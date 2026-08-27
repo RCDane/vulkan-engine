@@ -870,15 +870,27 @@ void LoadedGLTF::Draw(const glm::mat4& topMatrix, DrawContext& ctx){
 
 void LoadedGLTF::clearAll()
 {
+    if (!creator) {
+        return;
+    }
+
     VkDevice dv = creator->_device;
 
     descriptorPool.destroy_pools(dv);
-    destroy_buffer(materialDataBuffer);
+    if (materialDataBuffer.buffer) {
+        destroy_buffer(materialDataBuffer);
+    }
 
     for (auto& [k, v] : meshes) {
-
-		destroy_buffer(v->meshBuffers.indexBuffer);
-		destroy_buffer(v->meshBuffers.vertexBuffer);
+        if (v->meshBuffers.indexBuffer.buffer) {
+			destroy_buffer(v->meshBuffers.indexBuffer);
+        }
+        if (v->meshBuffers.indexBufferRaytracing.buffer) {
+			destroy_buffer(v->meshBuffers.indexBufferRaytracing);
+        }
+        if (v->meshBuffers.vertexBuffer.buffer) {
+			destroy_buffer(v->meshBuffers.vertexBuffer);
+        }
     }
 
     for (auto& [k, v] : images) {
