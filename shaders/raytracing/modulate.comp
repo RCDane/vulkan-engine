@@ -17,6 +17,9 @@ layout(set = 0, binding = 2, rgba32f) uniform image2D color;
 void main()
 {
     const ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
+
+    if (any(greaterThanEqual(coord, imageSize(color)))) return;
+
     const vec4 illumination = imageLoad(illuminationTexture, coord);
     const vec4 albedo = imageLoad(albedoTexture, coord);
 

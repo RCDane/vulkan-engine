@@ -25,10 +25,12 @@ layout(set = 0, binding = 0, rgba32f) uniform image2D packedNormalDepth;
 layout(set = 0, binding = 1, rgba16f) uniform image2D albedo;
 layout(set = 0, binding = 2, rgba32f) uniform image2D prevIlluminationImage;
 layout(set = 0, binding = 3, rgba32f) uniform image2D prevPackedNormalDepth;
-layout(set = 0, binding = 4, r8ui) uniform uimage2D prevHistoryLengthImage;
-layout(set = 0, binding = 5, rg16f) uniform image2D prevMoments;
+layout(set = 0, binding = 4, r8ui) readonly uniform uimage2D prevHistoryLengthImage;
+layout(set = 0, binding = 5, rg16f) readonly uniform image2D prevMoments;
 layout(set = 0, binding = 6, rgba32f) uniform image2D illumination;
 layout(set = 0, binding = 7) uniform sampler2D depth;
+layout(set = 0, binding = 8, r8ui) writeonly uniform uimage2D historyLengthImage;
+layout(set = 0, binding = 9, rg16f) writeonly uniform image2D momentsImage;
 
 
 layout(push_constant ) uniform PushConstant { PushConstantReproj pc; } PC;
@@ -199,7 +201,7 @@ bool loadPrevData(
 
     // 4) write out history length if valid
     if (valid) {
-        historyLength = imageLoad(prevHistoryLengthImage, iposPrev).x;
+        historyLength = imageLoad(prevHistoryLengthImage, clamp(iposPrev, ivec2(0), ivec2(imageDim) - 1)).x;
     } else {
         prevIllum     = vec4(0.0);
         pMoments   = vec2(0.0);
@@ -228,6 +230,8 @@ layout (local_size_x = 16, local_size_y = 16) in;
 
 void main(){
     const ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
+
+    if (any(greaterThanEqual(coord, PC.pc.imageSize))) return;
 
     const vec2 pixelCenter = vec2(gl_GlobalInvocationID.xy) + vec2(0.5);
     const vec2 inUV        = pixelCenter / PC.pc.imageSize;
@@ -265,7 +269,7 @@ void main(){
 
     vec3 blendedIllum = mix(prevIllum.rgb, illum, alpha);
 
-    imageStore(prevMoments,coord, vec4(moments, 1.0,1.0));
-    imageStore(prevHistoryLengthImage,coord, ivec4(historyLength, 0,0,0));
+    imageStore(momentsImage,coord, vec4(moments, 1.0,1.0));
+    imageStore(historyLengthImage,coord, ivec4(historyLength, 0,0,0));
     imageStore(illumination,         coord, vec4(blendedIllum,  variance));
 }

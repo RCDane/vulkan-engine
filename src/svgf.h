@@ -37,7 +37,8 @@ private:
     AllocatedImage historyLength;
     AllocatedImage prevHistoryLength;
     AllocatedImage moments;
-	AllocatedImage packedDepthNormal;
+    AllocatedImage prevMoments;
+    AllocatedImage packedDepthNormal;
     AllocatedImage prevPackedDepthNormal;
 
     AllocatedImage prevMetalRougness;
@@ -111,6 +112,7 @@ private:
 
     // Store SVGF memory statistics for ImGui
     std::vector<std::string> svgfStatsLines;
+    bool initialized = false;
 };
 
 #endif // !SVGF_H

@@ -55,6 +55,7 @@ float computeVarianceCenter(ivec2 ipos)
 float computeVarianceCenterUnrolled(ivec2 ipos)
 {
     float sum = 0.0;
+    const ivec2 maxCoord = imageSize(illuminationTexture) - 1;
 
     const float kernel[2][2] = {
         { 1.0 / 4.0, 1.0 / 8.0 },
@@ -68,15 +69,15 @@ float computeVarianceCenterUnrolled(ivec2 ipos)
         
         int ay = abs(yy);
         // xx = -1
-        ivec2 p0 = ipos + ivec2(-radius, yy);
+        ivec2 p0 = clamp(ipos + ivec2(-radius, yy), ivec2(0), maxCoord);
         float k0 = kernel[1 /*abs(-1)*/][ay];
         sum += imageLoad(illuminationTexture, p0).a * k0;
         // xx = 0
-        ivec2 p1 = ipos + ivec2(0, yy);
+        ivec2 p1 = clamp(ipos + ivec2(0, yy), ivec2(0), maxCoord);
         float k1 = kernel[0 /*abs(0)*/][ay];
         sum += imageLoad(illuminationTexture, p1).a * k1;
         // xx = +1
-        ivec2 p2 = ipos + ivec2(radius, yy);
+        ivec2 p2 = clamp(ipos + ivec2(radius, yy), ivec2(0), maxCoord);
         float k2 = kernel[1 /*abs(1)*/][ay];
         sum += imageLoad(illuminationTexture, p2).a * k2;
     }
@@ -89,8 +90,9 @@ layout(push_constant ) uniform PushConstant { PushConstantAtrous pc; } PC;
 
 void main(){
     const ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
-    
     const ivec2 screenSize = PC.pc.imageSize;
+
+    if (any(greaterThanEqual(coord, screenSize))) return;
 
     const float epsV = 1e-10;
     const float kernelWeights[3] = { 1.0, 2.0 / 3.0, 1.0 / 6.0 };
@@ -132,6 +134,8 @@ void main(){
             const bool inside = isInsideScreen(p, screenSize);
 
             const float kernel = kernelWeights[abs(xx)] * kernelWeights[abs(yy)];
+
+                    if (!inside) continue;
 
                     const vec4 illuminationP = imageLoad(illuminationTexture, p);
 

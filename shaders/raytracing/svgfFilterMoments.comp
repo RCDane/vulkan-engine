@@ -8,10 +8,11 @@
 #include "../common/host_device.h"
 #include "../common/util.glsl"
 
-layout(set = 0, binding = 0, rgba32f) uniform image2D illuminationTexture;
+layout(set = 0, binding = 0, rgba32f) readonly uniform image2D illuminationTexture;
 layout(set = 0, binding = 1, r8ui) uniform uimage2D prevHistoryLengthImage;
 layout(set = 0, binding = 2, rgba32f) uniform image2D packedNormalDepth;
 layout(set = 0, binding = 3, rg16f) uniform image2D Moments;
+layout(set = 0, binding = 4, rgba32f) writeonly uniform image2D filteredIllumination;
 
  
 layout (local_size_x = 16, local_size_y = 16) in;
@@ -24,9 +25,11 @@ layout(push_constant ) uniform PushConstant { PushConstantImageSize pc; } PC;
 
 void main(){
     const ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
+    const ivec2 screenSize = PC.pc.imageSize;
+
+    if (any(greaterThanEqual(coord, screenSize))) return;
 
     uint h = imageLoad(prevHistoryLengthImage, coord).x;
-    ivec2 screenSize = PC.pc.imageSize;
     
     if (h < 4.0){
         float sumWIllumination = 0.0;
@@ -42,6 +45,7 @@ void main(){
         float zWidth = normalFZwidth.y;
 
         if (depth < 0.0){
+            imageStore(filteredIllumination, coord, illuminationCenter);
             return;
         }
 
@@ -98,7 +102,9 @@ void main(){
         // give the variance a boost for the first frames
         variance *= 4.0 / h;
 
-        imageStore(illuminationTexture, coord, vec4(sumIllumination, variance.r));
+        imageStore(filteredIllumination, coord, vec4(sumIllumination, variance.r));
+    } else {
+        imageStore(filteredIllumination, coord, imageLoad(illuminationTexture, coord));
     }
     
 

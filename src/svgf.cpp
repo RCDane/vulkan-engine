@@ -3,6 +3,7 @@
 #include <vk_pipelines.h>
 #include <vk_descriptors.h>
 #include <vk_images.h>
+#include <vk_initializers.h>
 #include <unordered_map>
 #include <imgui.h>
 
@@ -246,9 +247,6 @@ void SVGFHandler::create_modulate_pipeline(VulkanEngine* engine) {
 }
 
 void SVGFHandler::create_frame_buffers(VulkanEngine* engine) {
-	VkImageUsageFlags reprojectionUsages{};
-	reprojectionUsages |= VK_IMAGE_USAGE_STORAGE_BIT;
-
 	VkImageUsageFlags transferUsages{};
 	transferUsages |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
 	transferUsages |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
@@ -275,11 +273,11 @@ void SVGFHandler::create_frame_buffers(VulkanEngine* engine) {
 
 	prevHistoryLength.imageFormat = VK_FORMAT_R8_UINT;
 	prevHistoryLength.imageExtent = extent;
+	engine->create_render_buffer(prevHistoryLength, transferUsages, VK_IMAGE_ASPECT_COLOR_BIT);
 
-
-
-
-	engine->create_render_buffer(prevHistoryLength, reprojectionUsages, VK_IMAGE_ASPECT_COLOR_BIT);
+	historyLength.imageFormat = VK_FORMAT_R8_UINT;
+	historyLength.imageExtent = extent;
+	engine->create_render_buffer(historyLength, transferUsages, VK_IMAGE_ASPECT_COLOR_BIT);
 
 
 	prevIllumination.imageFormat = VK_FORMAT_R32G32B32A32_SFLOAT;
@@ -292,6 +290,10 @@ void SVGFHandler::create_frame_buffers(VulkanEngine* engine) {
 	moments.imageExtent = extent;
 
 	engine->create_render_buffer(moments, transferUsages, VK_IMAGE_ASPECT_COLOR_BIT);
+
+	prevMoments.imageFormat = VK_FORMAT_R16G16_SFLOAT;
+	prevMoments.imageExtent = extent;
+	engine->create_render_buffer(prevMoments, transferUsages, VK_IMAGE_ASPECT_COLOR_BIT);
 
 	packedDepthNormal.imageFormat = VK_FORMAT_R32G32B32A32_SFLOAT;
 	packedDepthNormal.imageExtent = extent;
@@ -314,6 +316,8 @@ void SVGFHandler::create_descriptors(VulkanEngine* engine) {
 	builder.add_binding(5, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE); // prevMoments
 	builder.add_binding(6, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE); // illumination
 	builder.add_binding(7, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER); // depth
+	builder.add_binding(8, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE); // history
+	builder.add_binding(9, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE); // moments
 
 
 
@@ -384,11 +388,13 @@ void SVGFHandler::Reprojection(VkCommandBuffer cmd, VulkanEngine* engine) {
 
 
 
-	vkutil::transition_image(cmd, packedDepthNormal.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
-	vkutil::transition_image(cmd, illuminationBlend.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
-	vkutil::transition_image(cmd, prevHistoryLength.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
-	vkutil::transition_image(cmd, moments.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
-	vkutil::transition_image(cmd, prevPackedDepthNormal.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
+	vkutil::transition_image(cmd, packedDepthNormal.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
+	vkutil::transition_image(cmd, illuminationBlend.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
+	vkutil::transition_image(cmd, prevHistoryLength.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
+	vkutil::transition_image(cmd, historyLength.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
+	vkutil::transition_image(cmd, prevMoments.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
+	vkutil::transition_image(cmd, moments.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
+	vkutil::transition_image(cmd, prevPackedDepthNormal.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
 	vkutil::transition_image(cmd, engine->_depthImage.image, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_ASPECT_DEPTH_BIT);
 
 
@@ -396,7 +402,7 @@ void SVGFHandler::Reprojection(VkCommandBuffer cmd, VulkanEngine* engine) {
 
 	vkutil::transition_image(cmd, engine->_colorHistory.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_ASPECT_COLOR_BIT);
 
-	vkutil::transition_image(cmd, illumination.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_ASPECT_COLOR_BIT);
+	vkutil::transition_image(cmd, illumination.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_ASPECT_COLOR_BIT);
 	vkutil::copy_image_to_image(cmd, engine->_colorHistory.image, illumination.image, engine->_windowExtent, engine->_windowExtent);
 	
 	vkutil::transition_image(cmd, engine->_colorHistory.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
@@ -420,9 +426,11 @@ void SVGFHandler::Reprojection(VkCommandBuffer cmd, VulkanEngine* engine) {
 	writer.write_image(2, illuminationBlend.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);	
 	writer.write_image(3, prevPackedDepthNormal.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 	writer.write_image(4, prevHistoryLength.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
-	writer.write_image(5, moments.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+	writer.write_image(5, prevMoments.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 	writer.write_image(6, illumination.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 	writer.write_image(7, engine->_depthImage.imageView, engine->_defaultSamplerNearest, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+	writer.write_image(8, historyLength.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+	writer.write_image(9, moments.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 
 
 
@@ -446,7 +454,7 @@ void SVGFHandler::Reprojection(VkCommandBuffer cmd, VulkanEngine* engine) {
 
 
 	// execute the compute pipeline dispatch. We are using 16x16 workgroup size so we need to divide by it
-	vkCmdDispatch(cmd, std::ceil(engine->_windowExtent.width / 16), std::ceil(engine->_windowExtent.height / 16), 1);
+	vkCmdDispatch(cmd, (engine->_windowExtent.width + 15) / 16, (engine->_windowExtent.height + 15) / 16, 1);
 
 
 
@@ -458,9 +466,10 @@ void SVGFHandler::FilterMoments(VkCommandBuffer cmd, VulkanEngine* engine) {
 
 
 	vkutil::transition_image(cmd, illumination.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
-	vkutil::transition_image(cmd, prevHistoryLength.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
+	vkutil::transition_image(cmd, historyLength.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
 	vkutil::transition_image(cmd, packedDepthNormal.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
 	vkutil::transition_image(cmd, moments.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
+	vkutil::transition_image(cmd, prevIllumination.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
 
 	
 
@@ -468,9 +477,10 @@ void SVGFHandler::FilterMoments(VkCommandBuffer cmd, VulkanEngine* engine) {
 
 	DescriptorWriter writer;
 	writer.write_image(0, illumination.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
-	writer.write_image(1, prevHistoryLength.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+	writer.write_image(1, historyLength.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 	writer.write_image(2, packedDepthNormal.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 	writer.write_image(3, moments.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+	writer.write_image(4, prevIllumination.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 
 
 
@@ -487,11 +497,12 @@ void SVGFHandler::FilterMoments(VkCommandBuffer cmd, VulkanEngine* engine) {
 
 
 
-	vkCmdPushConstants(cmd, m_reprojPipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(PushConstantImageSize), &settings);
+	vkCmdPushConstants(cmd, m_momentsFilterPipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(PushConstantImageSize), &settings);
 
 
 	// execute the compute pipeline dispatch. We are using 16x16 workgroup size so we need to divide by it
-	vkCmdDispatch(cmd, std::ceil(engine->_windowExtent.width / 16.0), std::ceil(engine->_windowExtent.height / 16.0), 1);
+	vkCmdDispatch(cmd, (engine->_windowExtent.width + 15) / 16, (engine->_windowExtent.height + 15) / 16, 1);
+	std::swap(illumination, prevIllumination);
 }
 
 
@@ -508,7 +519,7 @@ void SVGFHandler::WaveletFilter(VkCommandBuffer cmd, VulkanEngine* engine) {
 		VK_IMAGE_LAYOUT_GENERAL, 
 		VK_IMAGE_LAYOUT_GENERAL, 
 		VK_IMAGE_LAYOUT_GENERAL, 
-		VK_IMAGE_LAYOUT_UNDEFINED };
+		VK_IMAGE_LAYOUT_GENERAL };
 	std::vector<VkImageLayout> newLayouts = {
 		VK_IMAGE_LAYOUT_GENERAL,
 		VK_IMAGE_LAYOUT_GENERAL,
@@ -518,7 +529,7 @@ void SVGFHandler::WaveletFilter(VkCommandBuffer cmd, VulkanEngine* engine) {
 
 	std::vector<VkImage> images{
 		illumination.image,
-		prevHistoryLength.image,
+		historyLength.image,
 		packedDepthNormal.image,
 		engine->_gBuffer_albedo.image,
 		prevIllumination.image
@@ -544,7 +555,7 @@ void SVGFHandler::WaveletFilter(VkCommandBuffer cmd, VulkanEngine* engine) {
 
 		DescriptorWriter writer;
 		writer.write_image(0, illuminationIn.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
-		writer.write_image(1, prevHistoryLength.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+		writer.write_image(1, historyLength.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 		writer.write_image(2, packedDepthNormal.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 		writer.write_image(3, engine->_gBuffer_albedo.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 		writer.write_image(4, illuminationOut.imageView, NULL, VK_IMAGE_LAYOUT_GENERAL, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
@@ -567,16 +578,17 @@ void SVGFHandler::WaveletFilter(VkCommandBuffer cmd, VulkanEngine* engine) {
 
 
 
-		vkCmdPushConstants(cmd, m_reprojPipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(PushConstantAtrous), &settings);
+		vkCmdPushConstants(cmd, m_atrousPipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(PushConstantAtrous), &settings);
 
-		vkCmdDispatch(cmd, std::ceil(engine->_windowExtent.width / 128), std::ceil(engine->_windowExtent.height / 8), 1);
+		vkCmdDispatch(cmd, (engine->_windowExtent.width + 127) / 128, (engine->_windowExtent.height + 7) / 8, 1);
 		if (i == 0) {
 
 			vkutil::transition_image(cmd, illuminationOut.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_ASPECT_COLOR_BIT);
 
-			vkutil::transition_image(cmd, illuminationBlend.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_ASPECT_COLOR_BIT);
+			vkutil::transition_image(cmd, illuminationBlend.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_ASPECT_COLOR_BIT);
 			vkutil::copy_image_to_image(cmd, illuminationOut.image, illuminationBlend.image, engine->_windowExtent, engine->_windowExtent);
-			vkutil::transition_image(cmd, illumination.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
+			vkutil::transition_image(cmd, illuminationOut.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
+			vkutil::transition_image(cmd, illuminationBlend.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
 
 
 		}
@@ -595,6 +607,8 @@ void SVGFHandler::WaveletFilter(VkCommandBuffer cmd, VulkanEngine* engine) {
 
 	vkutil::transition_image(cmd, prevPackedDepthNormal.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_ASPECT_COLOR_BIT);
 	vkutil::copy_image_to_image(cmd, packedDepthNormal.image, prevPackedDepthNormal.image, engine->_windowExtent, engine->_windowExtent);
+	vkutil::transition_image(cmd, packedDepthNormal.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
+	vkutil::transition_image(cmd, prevPackedDepthNormal.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
 
 
 	illumination = illuminationIn;
@@ -621,13 +635,15 @@ void SVGFHandler::calculate_memory_footprint(VulkanEngine* engine) {
         const AllocatedImage* img;
     };
     std::vector<ImageInfo> images = {
-        {"illumination", &illumination},
-        {"prevIllumination", &prevIllumination},
-        {"illuminationBlend", &illuminationBlend},
-        {"prevHistoryLength", &prevHistoryLength},
-        {"prevMoments", &moments},
-        {"packedDepthNormal", &packedDepthNormal},
-        {"prevPackedDepthNormal", &prevPackedDepthNormal},
+		{"illumination", &illumination},
+		{"prevIllumination", &prevIllumination},
+		{"illuminationBlend", &illuminationBlend},
+		{"historyLength", &historyLength},
+		{"prevHistoryLength", &prevHistoryLength},
+		{"moments", &moments},
+		{"prevMoments", &prevMoments},
+		{"packedDepthNormal", &packedDepthNormal},
+		{"prevPackedDepthNormal", &prevPackedDepthNormal},
     };
     VkDeviceSize total_bytes = 0;
     svgfStatsLines.clear();
@@ -679,14 +695,14 @@ void SVGFHandler::Modulate(VkCommandBuffer cmd, VulkanEngine* engine) {
 	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_modulatePipelineLayout, 0, 1, &globalDescriptor, 0, nullptr);
 
 
-	vkCmdDispatch(cmd, std::ceil(engine->_windowExtent.width / 16.0), std::ceil(engine->_windowExtent.height / 16.0), 1);
+	vkCmdDispatch(cmd, (engine->_windowExtent.width + 15) / 16, (engine->_windowExtent.height + 15) / 16, 1);
 
 }
 
 // Add function to execute the packing pass
 void SVGFHandler::PackNormalDepth(VkCommandBuffer cmd, VulkanEngine* engine) {
-    // Transition output image to general layout
-    vkutil::transition_image(cmd, packedDepthNormal.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
+	// Transition output image to general layout
+	vkutil::transition_image(cmd, packedDepthNormal.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
 	vkutil::transition_image(cmd, engine->_gBuffer_normal.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
 	vkutil::transition_image(cmd, engine->_depthImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_ASPECT_DEPTH_BIT);
 
@@ -700,10 +716,25 @@ void SVGFHandler::PackNormalDepth(VkCommandBuffer cmd, VulkanEngine* engine) {
     vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_packNormalDepthPipeline);
     vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_NormalDepthPipelineLayout, 0, 1, &descriptorSet, 0, nullptr);
 
-    vkCmdDispatch(cmd, std::ceil(engine->_windowExtent.width / 16.0), std::ceil(engine->_windowExtent.height / 16.0), 1);
+    vkCmdDispatch(cmd, (engine->_windowExtent.width + 15) / 16, (engine->_windowExtent.height + 15) / 16, 1);
 }
 
 void SVGFHandler::Execute(VkCommandBuffer cmd, VulkanEngine *engine) {
+	if (!initialized) {
+		const VkClearColorValue clearValue{};
+		const VkImageSubresourceRange clearRange = vkinit::image_subresource_range(VK_IMAGE_ASPECT_COLOR_BIT);
+		const VkImage images[] = {
+			illumination.image, prevIllumination.image, illuminationBlend.image,
+			historyLength.image, prevHistoryLength.image, moments.image, prevMoments.image,
+			packedDepthNormal.image, prevPackedDepthNormal.image
+		};
+		for (VkImage image : images) {
+			vkutil::transition_image(cmd, image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
+			vkCmdClearColorImage(cmd, image, VK_IMAGE_LAYOUT_GENERAL, &clearValue, 1, &clearRange);
+			vkutil::transition_image(cmd, image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_ASPECT_COLOR_BIT);
+		}
+		initialized = true;
+	}
 
 	vkCmdWriteTimestamp(cmd, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, engine->_timestampQueryPool, engine->get_current_frame()._depthNormalStart);
 
@@ -725,6 +756,8 @@ void SVGFHandler::Execute(VkCommandBuffer cmd, VulkanEngine *engine) {
 
 	Modulate(cmd, engine);
 	vkCmdWriteTimestamp(cmd, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, engine->_timestampQueryPool, engine->get_current_frame()._modulateEnd);
+	std::swap(historyLength, prevHistoryLength);
+	std::swap(moments, prevMoments);
 
 }
 

@@ -25,10 +25,11 @@ float shiftDigits(float value, int shift) {
 }
 
 float manualFwidth(sampler2D depth, ivec2 coord) {
-    float right  = float(LinearizeDepth(texelFetch(depth, coord + ivec2(1, 0), 0).r));
-    float left   = float(LinearizeDepth(texelFetch(depth, coord + ivec2(-1, 0), 0).r));
-    float up     = float(LinearizeDepth(texelFetch(depth, coord + ivec2(0, 1), 0).r));
-    float down   = float(LinearizeDepth(texelFetch(depth, coord + ivec2(0, -1), 0).r));
+    const ivec2 maxCoord = textureSize(depth, 0) - 1;
+    float right  = float(LinearizeDepth(texelFetch(depth, clamp(coord + ivec2(1, 0), ivec2(0), maxCoord), 0).r));
+    float left   = float(LinearizeDepth(texelFetch(depth, clamp(coord + ivec2(-1, 0), ivec2(0), maxCoord), 0).r));
+    float up     = float(LinearizeDepth(texelFetch(depth, clamp(coord + ivec2(0, 1), ivec2(0), maxCoord), 0).r));
+    float down   = float(LinearizeDepth(texelFetch(depth, clamp(coord + ivec2(0, -1), ivec2(0), maxCoord), 0).r));
 
 
     float dx = abs(right - left) * 0.5;
@@ -40,6 +41,8 @@ float manualFwidth(sampler2D depth, ivec2 coord) {
 
 void main(){
     ivec2 pixelCoord = ivec2(gl_GlobalInvocationID.xy);
+
+    if (any(greaterThanEqual(pixelCoord, imageSize(packedNormalDepth)))) return;
 
     vec4 normalFwidthZwidth = imageLoad(NormalFWidthZWidth, pixelCoord);
     vec2 packedNormal = normalFwidthZwidth.xy;
