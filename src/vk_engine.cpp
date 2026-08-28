@@ -73,7 +73,6 @@ void VulkanEngine::init(std::string scene_path)
         _windowExtent.width,
         _windowExtent.height,
         window_flags);
-	//SDL_Renderer* renderer = SDL_CreateRenderer(_window, "vulkan");
 	
 	
 	//SDL_SetWindowFullscreen(_window, 0);
