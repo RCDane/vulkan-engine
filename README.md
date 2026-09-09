@@ -2,23 +2,17 @@
 This project is for a special course in Computer Graphics, focused on implementing Raytracing using C++ and Vulkan.
 
 Features:
-- Simple Blinn-Phong shading.
-- GLTF model loading using FastGLTF.
-- Frustum Culling.
-- Directional Light.
-- Directional Shadow Mapping.
-- Hardware Accelerated Raytracing.
-- Raytraced Shadows.
-
-Planned Features
-- Raytraced Ambient Occlusion.
-- Raytraced Reflections.
-
-
-Sponza scene with DamagedHelmet. Showcasing Directional lighting and shadows. 
-![image](https://github.com/user-attachments/assets/b0b2e1eb-cbb5-40ef-bd41-79c862b1f56c)
-
-
+- glTF 2.0 scene loading with FastGLTF.
+- Deferred rasterization with G-buffer outputs for albedo, normals, metallic/roughness, emissive data, and depth.
+- glTF metallic-roughness PBR materials with base-color, normal, metallic-roughness, and emissive textures.
+- Cook-Torrance shading using GGX, Smith visibility, and Schlick Fresnel.
+- Hardware-accelerated Vulkan ray tracing with BLAS/TLAS acceleration structures and a shader binding table.
+- Ray-traced direct lighting, environment-map misses, and visibility-tested shadows.
+- Stochastic indirect-light sampling with cosine-hemisphere and GGX VNDF strategies.
+- Optional progressive accumulation, reset when the camera moves.
+- SVGF-inspired denoising: temporal reprojection/history validation, luminance moments, edge-aware filtering, and multi-scale à-trous wavelet passes.
+- Albedo remodulation after denoising, plus timestamp profiling for the filter stages.
+- Frustum culling, directional lighting, directional shadow mapping, environment rendering, and tone mapping.
 
 
 
